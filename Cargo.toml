@@ -4,10 +4,21 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-axum = "0.7"
-http = "0.2"
+#序列化与反序列化
+serde = { version = "1.0", features = ["derive"] }
+
+#axum基于tokio构建
+tokio = { version = "1.46", features = ["full"] }
+
+#日志依赖
 tracing = "0.1"
 tracing-subscriber = "0.3"
-tokio = { version = "1.0", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.138"
+
+#数据库驱动
+sqlx = { version = "0.7", features = ["mysql", "runtime-tokio", "tls-native-tls"] }
+
+#读取环境变量
+dotenv = "0.15"
+
+#Axum框架
+axum = "0.8.4"

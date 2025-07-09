@@ -1,57 +1,39 @@
-use axum::{
-    routing::{get, post},
-    http::StatusCode,
-    Json, Router,
-};
-use serde::{Deserialize, Serialize};
+// src/main.rs
+mod handlers;
+mod routes;
+mod state;
+
+// 库模块导入
+use axum::Router;
+use tokio::net::TcpListener;
+use tracing_subscriber::fmt;
+use sqlx::MySqlPool;
+
+// 分离模块导入
+use routes::create_routes;
+use state::AppState;
 
 #[tokio::main]
 async fn main() {
-    // initialize tracing
-    tracing_subscriber::fmt::init();
+    // 加载.env文件
+    dotenv::dotenv().ok();
+    let db_url = std::env::var("DATABASE_URL")
+        .expect("DATABASE_URL must be set in .env");
 
-    // build our application with a route
-    let app = Router::new()
-        // `GET /` goes to `root`
-        .route("/", get(root))
-        // `POST /users` goes to `create_user`
-        .route("/users", post(create_user));
+    // 初始化日志
+    fmt::init();
 
-    // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    // 创建 MySQL 连接池
+    let db_pool = MySqlPool::connect(&db_url)
+        .await
+        .expect("Failed to create MySQL pool");
+
+    let state = AppState::new(db_pool);
+
+    // 构建路由(注入状态)
+    let app = create_routes().with_state(state);
+
+    // 启动服务器
+    let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
-}
-
-// basic handler that responds with a static string
-async fn root() -> &'static str {
-    "Hello, World!"
-}
-
-async fn create_user(
-    // this argument tells axum to parse the request body
-    // as JSON into a `CreateUser` type
-    Json(payload): Json<CreateUser>,
-) -> (StatusCode, Json<User>) {
-    // insert your application logic here
-    let user = User {
-        id: 1337,
-        username: payload.username,
-    };
-
-    // this will be converted into a JSON response
-    // with a status code of `201 Created`
-    (StatusCode::CREATED, Json(user))
-}
-
-// the input to our `create_user` handler
-#[derive(Deserialize)]
-struct CreateUser {
-    username: String,
-}
-
-// the output to our `create_user` handler
-#[derive(Serialize)]
-struct User {
-    id: u64,
-    username: String,
 }
