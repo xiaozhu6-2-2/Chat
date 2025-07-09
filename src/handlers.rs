@@ -4,90 +4,141 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde::{Deserialize, Serialize};
 use axum::extract::State;
 use sqlx::MySqlPool;
 use std::error::Error;
+use argon2::{
+    password_hash::{PasswordHash, PasswordVerifier, SaltString},
+    Argon2, PasswordHasher
+};
+use rand_core::OsRng;
+use jsonwebtoken::{encode, EncodingKey, Header};
+use std::time::{SystemTime, UNIX_EPOCH};
+
 // 分离模块导入
-use crate::AppState;
+use crate::{models::{
+        RegisterRequest, 
+        RegisterResponse,
+        LoginRequest, 
+        LoginResponse, 
+        User,
+        Claims
+    }, state::AppState};
 
 
-// 定义登录/响应请求结构体
-#[derive(Deserialize)]
-pub struct LoginRequest {
-    pub account: String,
-    pub password: String,
-}
 
-#[derive(Serialize)]
-pub struct LoginResponse {
-    pub username: String,
-}
 
 // 根路径处理函数
 pub async fn root() -> &'static str {
     "Hello, World!"
 }
 
+// 注册处理函数
+pub async fn register(
+    State(state): State<AppState>,// 注入状态
+    Json(payload): Json<RegisterRequest>,// 解析为请求结构体
+) -> Result<Json<RegisterResponse>, StatusCode> {
+    // 生成随机盐值
+    let salt = SaltString::generate(&mut OsRng);
+    
+    // 配置Argon2参数
+    let argon2 = Argon2::default();
+    
+    // 生成密码哈希
+    let password_hash = argon2
+        .hash_password(payload.password.as_bytes(), &salt)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .to_string();
+
+    // 存储到数据库 (替换原有的明文存储)
+    sqlx::query!(
+        "INSERT INTO user_info (account, password, username) VALUES (?, ?, ?)",
+        payload.account,
+        password_hash,
+        payload.username,
+    )
+    .execute(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(RegisterResponse { success: true }))
+}
+
 // 登录处理函数
 pub async fn login(
-    State(state): State<AppState>, // 注入状态
-    Json(payload): Json<LoginRequest>, // 解析为请求结构体
+    State(state): State<AppState>,
+    Json(payload): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
-    // 1. 验证账号密码是否正确
     match validate_credentials(&state.db_pool, &payload.account, &payload.password).await {
         Ok(Some(username)) => {
-            // 2. 验证成功，生成响应结构体
+            // 生成JWT令牌
+            let token = generate_jwt(&payload.account)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                
             Ok(Json(LoginResponse {
                 username,
+                token,
             }))
         }
-        Ok(None) => {
-            // 3. 验证失败，返回 401
-            Err(StatusCode::UNAUTHORIZED)
-        }
-        Err(_) => {
-            // 4. 数据库错误，返回 500
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
+        Ok(None) => Err(StatusCode::UNAUTHORIZED), // 认证失败， 返回401
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),// 服务器内部错误， 返回500
     }
 }
 
+// 登录验证逻辑函数
 async fn validate_credentials(
     db_pool: &MySqlPool,
     account: &str,
     password: &str,
 ) -> Result<Option<String>, Box<dyn Error>> {
-    // 从数据库中查询对应用户账号的用户信息
-    let user = sqlx::query!(
-        "SELECT * FROM user_info WHERE account = ?",
-        account
+    // 从数据库中查询用户信息
+    let user = sqlx::query_as::<_, User>(
+        "SELECT * FROM user_info WHERE account = ?"
     )
-    .fetch_one(db_pool)
-    .await;
+    .bind(account)
+    .fetch_optional(db_pool)
+    .await?;
 
     match user {
-        Ok(user) => {
-            // 验证密码
-            if let Some(user_password) = &user.password {
-                if password == user_password {
-                    Ok(Some(user.username.expect("用户ID未找到")))
-                } else {
-                    // 密码不匹配时的处理逻辑
-                    Err("密码不匹配".to_string().into())
-                }
-            } else {
-                // user.password 是 None 时的处理逻辑
-                Err("用户密码未找到".to_string().into())
+        Some(user) => {
+            // 验证密码哈希
+            let parsed_hash = PasswordHash::new(&user.password)
+                .map_err(|_| "密码哈希解析失败")?;
+                
+            let argon2 = Argon2::default();
+            match argon2.verify_password(password.as_bytes(), &parsed_hash) {
+                Ok(_) => Ok(user.username), // 验证成功
+                Err(_) => Ok(None),         // 密码不匹配
             }
         }
-        Err(sqlx::Error::RowNotFound) => {
-            // 用户不存在
-            Ok(None)
-        }
-        Err(e) => {
-            // 其他数据库错误
-            Err(e.into())
-        }
+        None => Ok(None), // 用户不存在
     }
+}
+
+// JWT生成函数
+fn generate_jwt(account: &str) -> Result<String, Box<dyn Error>> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)?
+        .as_secs() as usize;
+    
+    let exp = now + 3600; // 1小时有效期
+    
+    let claims = Claims {
+        sub: account.to_string(),
+        exp,
+        iat: now,
+    };
+    
+    let token = encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(std::env::var("JWT_SECRET")?.as_ref())
+    )?;
+    
+    Ok(token)
+}
+
+// 保护处理函数
+pub async fn protected() -> &'static str {
+    "Protected content!"
 }

@@ -1,95 +1,43 @@
-// src/handlers.rs
+// src/main.rs
+mod handlers;
+mod models;
+mod routes;
+mod state;
+mod middleware;
+
 // 库模块导入
-use axum::{
-    http::StatusCode,
-    Json,
-};
-use serde::{Deserialize, Serialize};
-use axum::extract::State;
+use axum::Router;
+use tokio::net::TcpListener;
+use tracing_subscriber::fmt;
 use sqlx::MySqlPool;
-use std::error::Error;
+
 // 分离模块导入
-use crate::AppState;
+use routes::create_routes;
+use state::AppState;
 
+#[tokio::main]
+async fn main() {
+    // 加载.env文件
+    dotenv::dotenv().ok();
+    let db_url = std::env::var("DATABASE_URL")
+        .expect("DATABASE_URL must be set in .env");
 
-// 定义登录/响应请求结构体
-#[derive(Deserialize)]
-pub struct LoginRequest {
-    pub account: String,
-    pub password: String,
-}
+    // 初始化日志
+    fmt::init();
 
-#[derive(Serialize)]
-pub struct LoginResponse {
-    pub username: String,
-}
+    // 创建 MySQL 连接池
+    let db_pool = MySqlPool::connect(&db_url)
+        .await
+        .expect("Failed to create MySQL pool");
 
-// 根路径处理函数
-pub async fn root() -> &'static str {
-    "Hello, World!"
-}
+    let state = AppState::new(db_pool);
 
-// 登录处理函数
-pub async fn login(
-    State(state): State<AppState>, // 注入状态
-    Json(payload): Json<LoginRequest>, // 解析为请求结构体
-) -> Result<Json<LoginResponse>, StatusCode> {
-    // 1. 验证账号密码是否正确
-    match validate_credentials(&state.db_pool, &payload.account, &payload.password).await {
-        Ok(Some(username)) => {
-            // 2. 验证成功，生成响应结构体
-            Ok(Json(LoginResponse {
-                username,
-            }))
-        }
-        Ok(None) => {
-            // 3. 验证失败，返回 401
-            Err(StatusCode::UNAUTHORIZED)
-        }
-        Err(_) => {
-            // 4. 数据库错误，返回 500
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
-}
+    // 构建路由(注入状态)
+    let app = create_routes().with_state(state);
 
-async fn validate_credentials(
-    db_pool: &MySqlPool,
-    account: &str,
-    password: &str,
-) -> Result<Option<String>, Box<dyn Error>> {
-    // 从数据库中查询对应用户账号的用户信息
-    let user = sqlx::query!(
-        "SELECT * FROM user_info WHERE account = ?",
-        account
-    )
-    .fetch_one(db_pool)
-    .await;
-
-    match user {
-        Ok(user) => {
-            // 验证密码
-            if let Some(user_password) = &user.password {
-                if password == user_password {
-                    Ok(Some(user.username.expect("用户ID未找到")))
-                } else {
-                    // 密码不匹配时的处理逻辑
-                    Err("密码不匹配".to_string().into())
-                }
-            } else {
-                // user.password 是 None 时的处理逻辑
-                Err("用户密码未找到".to_string().into())
-            }
-        }
-        Err(sqlx::Error::RowNotFound) => {
-            // 用户不存在
-            Ok(None)
-        }
-        Err(e) => {
-            // 其他数据库错误
-            Err(e.into())
-        }
-    }
+    // 启动服务器
+    let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 }
 // src/state.rs
 use sqlx::MySqlPool;
@@ -117,23 +65,34 @@ impl AppState {
 // 库模块导入
 use axum::{routing::{get, post}, Router};
 use tower_http::cors::{CorsLayer, Any};
-use http::{Method, header};
+use axum::http::{Method, HeaderName};
 
 // 分离模块导入
 use super::handlers;
+use crate::middleware::auth_middleware;
 use crate::state::AppState;
+
 
 // 构建路由并返回 Router 实例
 pub fn create_routes() -> Router<AppState> {
     // CORS 中间件
     let cors = CorsLayer::new()
         .allow_origin(Any)
-        .allow_methods([Method::GET, Method::POST])
-        .allow_headers([header::CONTENT_TYPE]);
+        .allow_methods(vec![Method::GET, Method::POST])
+        .allow_headers(vec![HeaderName::from_static("content-type")]); 
+
+    let public_routes = Router::new()
+        .route("/", get(handlers::root))
+        .route("/register", post(handlers::register))
+        .route("/login", post(handlers::login));
+    
+    // let protected_routes = Router::new() // 被保护的路由
+    //     .route("/protected", get(handlers::protected))
+    //     .route_layer(middleware::from_fn(auth_middleware));
 
     Router::new()
-        .route("/", get(handlers::root))
-        .route("/login", post(handlers::login))
+        .merge(public_routes)
+        // .merge(protected_routes)
         .layer(cors)
 }
 // src/handlers.rs
@@ -146,89 +105,210 @@ use serde::{Deserialize, Serialize};
 use axum::extract::State;
 use sqlx::MySqlPool;
 use std::error::Error;
+use argon2::{
+    password_hash::{PasswordHash, PasswordVerifier, SaltString},
+    Argon2, PasswordHasher
+};
+use rand_core::OsRng;
+use jsonwebtoken::{encode, EncodingKey, Header};
+use std::time::{SystemTime, UNIX_EPOCH};
+
 // 分离模块导入
-use crate::AppState;
+use crate::{models::{
+        RegisterRequest, 
+        RegisterResponse,
+        LoginRequest, 
+        LoginResponse, 
+        User,
+        Claims
+    }, state::AppState};
 
 
-// 定义登录/响应请求结构体
-#[derive(Deserialize)]
-pub struct LoginRequest {
-    pub account: String,
-    pub password: String,
-}
 
-#[derive(Serialize)]
-pub struct LoginResponse {
-    pub username: String,
-}
 
 // 根路径处理函数
 pub async fn root() -> &'static str {
     "Hello, World!"
 }
 
+// 注册处理函数
+pub async fn register(
+    State(state): State<AppState>,// 注入状态
+    Json(payload): Json<RegisterRequest>,// 解析为请求结构体
+) -> Result<Json<RegisterResponse>, StatusCode> {
+    // 生成随机盐值
+    let salt = SaltString::generate(&mut OsRng);
+    
+    // 配置Argon2参数
+    let argon2 = Argon2::default();
+    
+    // 生成密码哈希
+    let password_hash = argon2
+        .hash_password(payload.password.as_bytes(), &salt)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .to_string();
+
+    // 存储到数据库 (替换原有的明文存储)
+    sqlx::query!(
+        "INSERT INTO user_info (account, password, username) VALUES (?, ?, ?)",
+        payload.account,
+        password_hash,
+        payload.username,
+    )
+    .execute(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(RegisterResponse { success: true }))
+}
+
 // 登录处理函数
 pub async fn login(
-    State(state): State<AppState>, // 注入状态
-    Json(payload): Json<LoginRequest>, // 解析为请求结构体
+    State(state): State<AppState>,
+    Json(payload): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
-    // 1. 验证账号密码是否正确
     match validate_credentials(&state.db_pool, &payload.account, &payload.password).await {
         Ok(Some(username)) => {
-            // 2. 验证成功，生成响应结构体
+            // 生成JWT令牌
+            let token = generate_jwt(&payload.account)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                
             Ok(Json(LoginResponse {
                 username,
+                token,
             }))
         }
-        Ok(None) => {
-            // 3. 验证失败，返回 401
-            Err(StatusCode::UNAUTHORIZED)
-        }
-        Err(_) => {
-            // 4. 数据库错误，返回 500
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
+        Ok(None) => Err(StatusCode::UNAUTHORIZED),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 
+// 登录验证逻辑函数
 async fn validate_credentials(
     db_pool: &MySqlPool,
     account: &str,
     password: &str,
 ) -> Result<Option<String>, Box<dyn Error>> {
-    // 从数据库中查询对应用户账号的用户信息
-    let user = sqlx::query!(
-        "SELECT * FROM user_info WHERE account = ?",
-        account
+    // 从数据库中查询用户信息
+    let user = sqlx::query_as::<_, User>(
+        "SELECT * FROM user_info WHERE account = ?"
     )
-    .fetch_one(db_pool)
-    .await;
+    .bind(account)
+    .fetch_optional(db_pool)
+    .await?;
 
     match user {
-        Ok(user) => {
-            // 验证密码
-            if let Some(user_password) = &user.password {
-                if password == user_password {
-                    Ok(Some(user.username.expect("用户ID未找到")))
-                } else {
-                    // 密码不匹配时的处理逻辑
-                    Err("密码不匹配".to_string().into())
-                }
-            } else {
-                // user.password 是 None 时的处理逻辑
-                Err("用户密码未找到".to_string().into())
+        Some(user) => {
+            // 验证密码哈希
+            let parsed_hash = PasswordHash::new(&user.password)
+                .map_err(|_| "密码哈希解析失败")?;
+                
+            let argon2 = Argon2::default();
+            match argon2.verify_password(password.as_bytes(), &parsed_hash) {
+                Ok(_) => Ok(user.username), // 验证成功
+                Err(_) => Ok(None),         // 密码不匹配
             }
         }
-        Err(sqlx::Error::RowNotFound) => {
-            // 用户不存在
-            Ok(None)
-        }
-        Err(e) => {
-            // 其他数据库错误
-            Err(e.into())
-        }
+        None => Ok(None), // 用户不存在
     }
 }
+
+// JWT生成函数
+fn generate_jwt(account: &str) -> Result<String, Box<dyn Error>> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)?
+        .as_secs() as usize;
+    
+    let exp = now + 3600; // 1小时有效期
+    
+    let claims = Claims {
+        sub: account.to_string(),
+        exp,
+        iat: now,
+    };
+    
+    let token = encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(std::env::var("JWT_SECRET")?.as_ref())
+    )?;
+    
+    Ok(token)
+}
+// src/models.rs
+// 库模块导入
+use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+
+// 用户表模型
+#[derive(Debug, Deserialize, Serialize, FromRow)]
+pub struct User {
+    pub account: String,          // 主键 + 非空
+    pub password: String,          // 非空
+    pub username: Option<String>,  // 允许为空，保留Option
+}
+
+// 注册请求结构体
+#[derive(Deserialize)]
+pub struct RegisterRequest {
+    pub account: String,
+    pub password: String,
+    pub username: String,
+}
+
+// 注册响应结构体
+#[derive(Serialize)]
+pub struct RegisterResponse {
+    pub success: bool,
+}
+
+// 登录请求模型
+#[derive(Deserialize)]
+pub struct LoginRequest {
+    pub account: String,
+    pub password: String,
+}
+
+// 登录响应模型
+#[derive(Serialize)]
+pub struct LoginResponse {
+    pub username: String, 
+    pub token: String,     // JWT令牌
+}
+
+// JWT
+#[derive(Serialize)]
+pub struct Claims {
+    sub: String,   // 用户账号
+    exp: usize,    // 过期时间
+    iat: usize,    // 签发时间
+}
+// src/middleware.rs
+use axum::{http::Request, middleware::Next, response::Response, http::StatusCode};
+use jsonwebtoken::{decode, DecodingKey, Validation};
+use crate::models::Claims;
+
+pub async fn auth_middleware<B>(
+    request: Request<B>,
+    next: Next<B>,
+) -> Result<Response, StatusCode> {
+    let token = request.headers()
+        .get("Authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "));
+    
+    let token = token.ok_or(StatusCode::UNAUTHORIZED)?;
+    
+    decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(std::env::var("JWT_SECRET").unwrap().as_ref()),
+        &Validation::default()
+    ).map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    Ok(next.run(request).await)
+}
+# src/Cargo.toml
+
 [package]
 name = "chat"
 version = "0.1.0"
@@ -246,7 +326,7 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 
 #数据库驱动
-sqlx = { version = "0.7", features = ["mysql", "runtime-tokio", "tls-native-tls"] }
+sqlx = { version = "0.7", features = ["mysql", "runtime-tokio", "tls-native-tls", "macros"] }
 
 #读取环境变量
 dotenv = "0.15"
@@ -254,6 +334,15 @@ dotenv = "0.15"
 #跨域中间件
 tower-http = { version = "0.5.0", features = ["cors"] }
 http = "0.2"
+
+#密码哈希
+argon2 = "0.5.3"
+
+#用户认证和授权
+jsonwebtoken = "9.0"
+
+#随机数
+rand_core = { version = "0.6", features = ["std"] }
 
 #Axum框架
 axum = "0.8.4"
