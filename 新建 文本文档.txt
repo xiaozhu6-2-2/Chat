@@ -1,0 +1,259 @@
+// src/handlers.rs
+// 库模块导入
+use axum::{
+    http::StatusCode,
+    Json,
+};
+use serde::{Deserialize, Serialize};
+use axum::extract::State;
+use sqlx::MySqlPool;
+use std::error::Error;
+// 分离模块导入
+use crate::AppState;
+
+
+// 定义登录/响应请求结构体
+#[derive(Deserialize)]
+pub struct LoginRequest {
+    pub account: String,
+    pub password: String,
+}
+
+#[derive(Serialize)]
+pub struct LoginResponse {
+    pub username: String,
+}
+
+// 根路径处理函数
+pub async fn root() -> &'static str {
+    "Hello, World!"
+}
+
+// 登录处理函数
+pub async fn login(
+    State(state): State<AppState>, // 注入状态
+    Json(payload): Json<LoginRequest>, // 解析为请求结构体
+) -> Result<Json<LoginResponse>, StatusCode> {
+    // 1. 验证账号密码是否正确
+    match validate_credentials(&state.db_pool, &payload.account, &payload.password).await {
+        Ok(Some(username)) => {
+            // 2. 验证成功，生成响应结构体
+            Ok(Json(LoginResponse {
+                username,
+            }))
+        }
+        Ok(None) => {
+            // 3. 验证失败，返回 401
+            Err(StatusCode::UNAUTHORIZED)
+        }
+        Err(_) => {
+            // 4. 数据库错误，返回 500
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+async fn validate_credentials(
+    db_pool: &MySqlPool,
+    account: &str,
+    password: &str,
+) -> Result<Option<String>, Box<dyn Error>> {
+    // 从数据库中查询对应用户账号的用户信息
+    let user = sqlx::query!(
+        "SELECT * FROM user_info WHERE account = ?",
+        account
+    )
+    .fetch_one(db_pool)
+    .await;
+
+    match user {
+        Ok(user) => {
+            // 验证密码
+            if let Some(user_password) = &user.password {
+                if password == user_password {
+                    Ok(Some(user.username.expect("用户ID未找到")))
+                } else {
+                    // 密码不匹配时的处理逻辑
+                    Err("密码不匹配".to_string().into())
+                }
+            } else {
+                // user.password 是 None 时的处理逻辑
+                Err("用户密码未找到".to_string().into())
+            }
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            // 用户不存在
+            Ok(None)
+        }
+        Err(e) => {
+            // 其他数据库错误
+            Err(e.into())
+        }
+    }
+}
+// src/state.rs
+use sqlx::MySqlPool;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub db_pool: MySqlPool,
+}
+
+impl AppState {
+    /// 创建带数据库连接池的应用状态
+    pub fn new(db_pool: MySqlPool) -> Self {
+        Self { db_pool }
+    }
+    
+    /// 从环境变量初始化（高级用法）
+    pub async fn from_env() -> sqlx::Result<Self> {
+        let db_url = std::env::var("DATABASE_URL")
+            .expect("DATABASE_URL must be set");
+        let pool = MySqlPool::connect(&db_url).await?;
+        Ok(Self::new(pool))
+    }
+}
+// src/routes.rs
+// 库模块导入
+use axum::{routing::{get, post}, Router};
+use tower_http::cors::{CorsLayer, Any};
+use http::{Method, header};
+
+// 分离模块导入
+use super::handlers;
+use crate::state::AppState;
+
+// 构建路由并返回 Router 实例
+pub fn create_routes() -> Router<AppState> {
+    // CORS 中间件
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers([header::CONTENT_TYPE]);
+
+    Router::new()
+        .route("/", get(handlers::root))
+        .route("/login", post(handlers::login))
+        .layer(cors)
+}
+// src/handlers.rs
+// 库模块导入
+use axum::{
+    http::StatusCode,
+    Json,
+};
+use serde::{Deserialize, Serialize};
+use axum::extract::State;
+use sqlx::MySqlPool;
+use std::error::Error;
+// 分离模块导入
+use crate::AppState;
+
+
+// 定义登录/响应请求结构体
+#[derive(Deserialize)]
+pub struct LoginRequest {
+    pub account: String,
+    pub password: String,
+}
+
+#[derive(Serialize)]
+pub struct LoginResponse {
+    pub username: String,
+}
+
+// 根路径处理函数
+pub async fn root() -> &'static str {
+    "Hello, World!"
+}
+
+// 登录处理函数
+pub async fn login(
+    State(state): State<AppState>, // 注入状态
+    Json(payload): Json<LoginRequest>, // 解析为请求结构体
+) -> Result<Json<LoginResponse>, StatusCode> {
+    // 1. 验证账号密码是否正确
+    match validate_credentials(&state.db_pool, &payload.account, &payload.password).await {
+        Ok(Some(username)) => {
+            // 2. 验证成功，生成响应结构体
+            Ok(Json(LoginResponse {
+                username,
+            }))
+        }
+        Ok(None) => {
+            // 3. 验证失败，返回 401
+            Err(StatusCode::UNAUTHORIZED)
+        }
+        Err(_) => {
+            // 4. 数据库错误，返回 500
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+async fn validate_credentials(
+    db_pool: &MySqlPool,
+    account: &str,
+    password: &str,
+) -> Result<Option<String>, Box<dyn Error>> {
+    // 从数据库中查询对应用户账号的用户信息
+    let user = sqlx::query!(
+        "SELECT * FROM user_info WHERE account = ?",
+        account
+    )
+    .fetch_one(db_pool)
+    .await;
+
+    match user {
+        Ok(user) => {
+            // 验证密码
+            if let Some(user_password) = &user.password {
+                if password == user_password {
+                    Ok(Some(user.username.expect("用户ID未找到")))
+                } else {
+                    // 密码不匹配时的处理逻辑
+                    Err("密码不匹配".to_string().into())
+                }
+            } else {
+                // user.password 是 None 时的处理逻辑
+                Err("用户密码未找到".to_string().into())
+            }
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            // 用户不存在
+            Ok(None)
+        }
+        Err(e) => {
+            // 其他数据库错误
+            Err(e.into())
+        }
+    }
+}
+[package]
+name = "chat"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+#序列化与反序列化
+serde = { version = "1.0", features = ["derive"] }
+
+#axum基于tokio构建
+tokio = { version = "1.46", features = ["full"] }
+
+#日志依赖
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+#数据库驱动
+sqlx = { version = "0.7", features = ["mysql", "runtime-tokio", "tls-native-tls"] }
+
+#读取环境变量
+dotenv = "0.15"
+
+#跨域中间件
+tower-http = { version = "0.5.0", features = ["cors"] }
+http = "0.2"
+
+#Axum框架
+axum = "0.8.4"
