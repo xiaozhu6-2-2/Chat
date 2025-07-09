@@ -1,0 +1,12 @@
+D:\Project\WorkSpace\rust\chat\target\debug\deps\pkcs8-5ad870f9ba956945.d: C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\lib.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\error.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\private_key_info.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\traits.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\version.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\../README.md
+
+D:\Project\WorkSpace\rust\chat\target\debug\deps\libpkcs8-5ad870f9ba956945.rlib: C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\lib.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\error.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\private_key_info.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\traits.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\version.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\../README.md
+
+D:\Project\WorkSpace\rust\chat\target\debug\deps\libpkcs8-5ad870f9ba956945.rmeta: C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\lib.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\error.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\private_key_info.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\traits.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\version.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\../README.md
+
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\lib.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\error.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\private_key_info.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\traits.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\version.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pkcs8-0.10.2\src\../README.md:

@@ -1,0 +1,12 @@
+D:\Project\WorkSpace\rust\chat\target\debug\deps\spki-78a2c9131c4c74ae.d: C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\lib.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\algorithm.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\error.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\spki.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\traits.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\../README.md
+
+D:\Project\WorkSpace\rust\chat\target\debug\deps\libspki-78a2c9131c4c74ae.rlib: C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\lib.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\algorithm.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\error.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\spki.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\traits.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\../README.md
+
+D:\Project\WorkSpace\rust\chat\target\debug\deps\libspki-78a2c9131c4c74ae.rmeta: C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\lib.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\algorithm.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\error.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\spki.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\traits.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\../README.md
+
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\lib.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\algorithm.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\error.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\spki.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\traits.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\spki-0.7.3\src\../README.md:

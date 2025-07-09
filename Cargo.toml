@@ -1,3 +1,5 @@
+# src/Cargo.toml
+
 [package]
 name = "chat"
 version = "0.1.0"
@@ -15,7 +17,7 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 
 #数据库驱动
-sqlx = { version = "0.7", features = ["mysql", "runtime-tokio", "tls-native-tls"] }
+sqlx = { version = "0.7", features = ["mysql", "runtime-tokio", "tls-native-tls", "macros"] }
 
 #读取环境变量
 dotenv = "0.15"
@@ -23,6 +25,15 @@ dotenv = "0.15"
 #跨域中间件
 tower-http = { version = "0.5.0", features = ["cors"] }
 http = "0.2"
+
+#密码哈希
+argon2 = "0.5.3"
+
+#用户认证和授权
+jsonwebtoken = "9.0"
+
+#随机数
+rand_core = { version = "0.6", features = ["std"] }
 
 #Axum框架
 axum = "0.8.4"

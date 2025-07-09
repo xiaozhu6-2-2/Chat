@@ -1,1 +1,1 @@
-D:\Project\WorkSpace\rust\chat\target\debug\chat.exe: D:\Project\WorkSpace\rust\chat\src\handlers.rs D:\Project\WorkSpace\rust\chat\src\main.rs D:\Project\WorkSpace\rust\chat\src\routes.rs D:\Project\WorkSpace\rust\chat\src\state.rs
+D:\Project\WorkSpace\rust\chat\target\debug\chat.exe: D:\Project\WorkSpace\rust\chat\src\handlers.rs D:\Project\WorkSpace\rust\chat\src\main.rs D:\Project\WorkSpace\rust\chat\src\middleware.rs D:\Project\WorkSpace\rust\chat\src\models.rs D:\Project\WorkSpace\rust\chat\src\routes.rs D:\Project\WorkSpace\rust\chat\src\state.rs
