@@ -13,5 +13,5 @@ use crate::state::AppState;
 pub fn create_routes() -> Router<AppState> {
     Router::new()
         .route("/", get(handlers::root))
-        .route("/users", post(handlers::create_user))
+        .route("/login", post(handlers::login))
 }
