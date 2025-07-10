@@ -462,23 +462,34 @@ async fn broadcast_online_list(
     room_id: u32,
     state: &AppState,
 ) {
-    let online_map = state.online_users.lock().await;
-    if let Some(users) = online_map.get(&room_id) {
-        let msg = WsMessage {
-            id: 0,
-            account: "system".to_string(),
-            username: "System".to_string(),
-            content: serde_json::to_string(&*users).unwrap(),
-            send_at: chrono::Utc::now(),
-            message_type: "online_list".to_string(),
-        };
-        
-        // 需要先获取chat_rooms的锁
-        let chat_rooms = state.chat_rooms.lock().await;
+    let account_set = {
+        let online_map = state.online_users.lock().await;
+        online_map.get(&room_id)
+            .cloned()
+            .unwrap_or_default()
+    };
 
-        if let Some(tx) = chat_rooms.get(&room_id) {
-            let _ = tx.send(msg);
+    // 获取用户名列表
+    let mut username_list = Vec::new();
+    for account in &account_set {
+        if let Some(username) = get_username(&state.db_pool, account).await {
+            username_list.push(username);
         }
+    }
+
+    // 广播用户名列表
+    let msg = WsMessage {
+        id: 0,
+        account: "system".to_string(),
+        username: "System".to_string(),
+        content: serde_json::to_string(&username_list).unwrap(),
+        send_at: chrono::Utc::now(),
+        message_type: "online_list".to_string(),
+    };
+
+    let chat_rooms = state.chat_rooms.lock().await;
+    if let Some(tx) = chat_rooms.get(&room_id) {
+        let _ = tx.send(msg);
     }
 }
 
@@ -487,10 +498,22 @@ pub async fn get_online_users(
     Path(room_id): Path<u32>,
     State(state): State<AppState>,
 ) -> Json<Vec<String>> {
-    let online_map = state.online_users.lock().await;
-    let users = online_map.get(&room_id)
-        .map(|set| set.iter().cloned().collect())
-        .unwrap_or_else(Vec::new);
+    // 获取在线账号列表
+    let account_set = {
+        let online_map = state.online_users.lock().await;
+        online_map.get(&room_id)
+            .cloned()
+            .unwrap_or_default()
+    };
+
+    // 转换为用户名列表
+    let mut username_list = Vec::new();
     
-    Json(users)
+    for account in account_set {
+        if let Some(username) = get_username(&state.db_pool, &account).await {
+            username_list.push(username);
+        }
+    }
+    
+    Json(username_list)
 }
