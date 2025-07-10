@@ -352,11 +352,16 @@ pub async fn handle_websocket(
                 .execute(&db_pool)
                 .await {
                     let message_id = result.last_insert_id() as u64;
-                    
+                    let username = match get_username(&state.db_pool, &account).await {
+                        Some(name) => name,
+                        None => account.clone(), // 如果查询失败，使用account作为回退
+                    };
+
                     // 广播消息
                     let ws_msg = WsMessage {
                         id: message_id,
-                        sender: account.clone(),
+                        account: account.clone(),
+                        username: username.clone(),
                         content: text.to_string(),
                         send_at: now,
                     };
@@ -378,4 +383,16 @@ pub async fn handle_websocket(
     }
     
     info!("WebSocket disconnected: {}", account);
+}
+
+// 查询用户名
+async fn get_username(db_pool: &MySqlPool, account: &str) -> Option<String> {
+    sqlx::query_scalar!(
+        "SELECT username FROM user_info WHERE account = ?",
+        account
+    )
+    .fetch_optional(db_pool)
+    .await
+    .unwrap_or(None)
+    .flatten()
 }

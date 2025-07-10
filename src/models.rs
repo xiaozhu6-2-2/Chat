@@ -96,7 +96,8 @@ pub struct ChatroomResponse {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WsMessage {
     pub id: u64,
-    pub sender: String,
+    pub account: String, 
+    pub username: String,
     pub content: String,
     pub send_at: chrono::DateTime<chrono::Utc>,
 }

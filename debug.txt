@@ -124,7 +124,6 @@ pub fn create_routes() -> Router<AppState> {
         .merge(ws_route)
         .layer(cors)
 }
-
 // src/middleware.rs
 use axum::{
     body::Body,
@@ -186,18 +185,6 @@ pub async fn ws_auth_middleware(
     
     Ok(next.run(request).await)
 }
-
-// // WebSocket升级处理
-// pub async fn upgrade_websocket(
-//     ws: WebSocket,
-//     claims: Claims,
-// ) -> WebSocket {
-//     // 将claims存储到WebSocket扩展中
-//     ws.on_upgrade(move |mut socket| async move {
-//         // 将claims存储到socket的data中
-//         socket.extensions_mut().insert(claims.clone());
-//     })
-// }
 // src/handlers.rs
 // 库模块导入
 use axum::{
@@ -733,4 +720,3 @@ futures = "0.3"
 
 #Axum框架
 axum = { version = "0.8.4", features = ["ws", "macros"] }
-
