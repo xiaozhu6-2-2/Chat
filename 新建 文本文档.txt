@@ -38,28 +38,6 @@ async fn main() {
     let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
-// src/state.rs
-use sqlx::MySqlPool;
-
-#[derive(Clone)]
-pub struct AppState {
-    pub db_pool: MySqlPool,
-}
-
-impl AppState {
-    /// 创建带数据库连接池的应用状态
-    pub fn new(db_pool: MySqlPool) -> Self {
-        Self { db_pool }
-    }
-    
-    /// 从环境变量初始化（高级用法）
-    pub async fn from_env() -> sqlx::Result<Self> {
-        let db_url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set");
-        let pool = MySqlPool::connect(&db_url).await?;
-        Ok(Self::new(pool))
-    }
-}
 // src/routes.rs
 // 库模块导入
 use axum::{routing::{get, post}, Router, middleware};
@@ -128,6 +106,28 @@ pub async fn auth_middleware(
 
     Ok(next.run(request).await)
 }
+// src/state.rs
+use sqlx::MySqlPool;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub db_pool: MySqlPool,
+}
+
+impl AppState {
+    /// 创建带数据库连接池的应用状态
+    pub fn new(db_pool: MySqlPool) -> Self {
+        Self { db_pool }
+    }
+    
+    /// 从环境变量初始化（高级用法）
+    pub async fn from_env() -> sqlx::Result<Self> {
+        let db_url = std::env::var("DATABASE_URL")
+            .expect("DATABASE_URL must be set");
+        let pool = MySqlPool::connect(&db_url).await?;
+        Ok(Self::new(pool))
+    }
+}
 // src/handlers.rs
 // 库模块导入
 use axum::{
@@ -157,7 +157,7 @@ use crate::{models::{
     }, state::AppState};
 
 use crate::models::{CreateChatroomRequest, JoinChatroomRequest, LeaveChatroomRequest, 
-                   ChatroomResponse, Chatroom, ChatroomMember};
+                   ChatroomResponse};
 
 
 // 根路径处理函数
@@ -501,3 +501,46 @@ pub struct ChatroomResponse {
     pub chatroom_id: Option<u32>,
     pub message: Option<String>,
 }
+# src/Cargo.toml
+
+[package]
+name = "chat"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+#序列化与反序列化
+serde = { version = "1.0", features = ["derive"] }
+
+#axum基于tokio构建
+tokio = { version = "1.46", features = ["full"] }
+
+#日志依赖
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+#数据库驱动
+sqlx = { version = "0.7", features = ["mysql", "runtime-tokio", "tls-native-tls", "macros"] }
+
+#读取环境变量
+dotenv = "0.15"
+
+#跨域中间件
+tower-http = { version = "0.5.0", features = ["cors"] }
+http = "0.2"
+
+#密码哈希
+argon2 = "0.5.3"
+
+#用户认证和授权
+jsonwebtoken = "9.0"
+
+#随机数
+rand_core = { version = "0.6", features = ["std"] }
+
+# 添加chrono时间处理库
+chrono = { version = "0.4", features = ["serde"] }
+
+#Axum框架
+axum = { version = "0.8.4", features = ["macros"] } 
+// sec/.evn
