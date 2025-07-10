@@ -30,7 +30,7 @@ CREATE TABLE `chatrooms` (
   PRIMARY KEY (`chatroom_id`),
   KEY `fk_creator_idx` (`created_by`),
   CONSTRAINT `fk_creator` FOREIGN KEY (`created_by`) REFERENCES `user_info` (`account`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -39,7 +39,7 @@ CREATE TABLE `chatrooms` (
 
 LOCK TABLES `chatrooms` WRITE;
 /*!40000 ALTER TABLE `chatrooms` DISABLE KEYS */;
-INSERT INTO `chatrooms` VALUES (1,'测试','17329720396','2025-07-10 06:01:58'),(2,'测试','17329720396','2025-07-10 06:04:01');
+INSERT INTO `chatrooms` VALUES (1,'测试','17329720396','2025-07-10 06:01:58'),(2,'测试','17329720396','2025-07-10 06:04:01'),(3,'消息测试','17329720396','2025-07-10 08:15:29'),(4,'消息测试','17896541128','2025-07-10 12:25:49');
 /*!40000 ALTER TABLE `chatrooms` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -52,4 +52,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-07-10 14:23:42
+-- Dump completed on 2025-07-11  0:51:49

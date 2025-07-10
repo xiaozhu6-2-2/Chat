@@ -76,6 +76,7 @@ use axum::{
 use tower_http::cors::{CorsLayer, Any};
 use axum::http::{Method, HeaderName};
 use axum::extract::ws::WebSocketUpgrade;
+use axum::routing::delete;
 
 // 分离模块导入
 use super::handlers;
@@ -85,7 +86,6 @@ use crate::{
     handlers::handle_websocket,
     models::Claims
 };
-
 
 // 构建路由并返回 Router 实例
 pub fn create_routes() -> Router<AppState> {
@@ -106,6 +106,12 @@ pub fn create_routes() -> Router<AppState> {
         .route("/chatrooms/join", post(handlers::join_chatroom))
         .route("/chatrooms/leave", post(handlers::leave_chatroom))
         .route("/online-users/{:room_id}", get(handlers::get_online_users))
+
+        .route("/friend-requests", post(handlers::send_friend_request))
+        .route("/friend-requests", get(handlers::list_friend_requests))
+        .route("/friend-requests/respond", post(handlers::respond_friend_request))
+        .route("/friends", get(handlers::list_friends))
+        .route("/friends/:friend_account", delete(handlers::remove_friend))
         .route_layer(middleware::from_fn(auth_middleware));
 
     let ws_route = Router::new().route(
@@ -227,7 +233,10 @@ use crate::{models::{
 
 use crate::models::{CreateChatroomRequest, JoinChatroomRequest, LeaveChatroomRequest, 
                    ChatroomResponse};
-
+use crate::models::{
+    SendFriendRequest, FriendRequestInfo, FriendRequest, RespondToFriendRequest, FriendRequestStatus,
+    FriendInfo, 
+};
 use crate::{state::AppState, models::WsMessage};
 
 // 根路径处理函数
@@ -652,23 +661,34 @@ async fn broadcast_online_list(
     room_id: u32,
     state: &AppState,
 ) {
-    let online_map = state.online_users.lock().await;
-    if let Some(users) = online_map.get(&room_id) {
-        let msg = WsMessage {
-            id: 0,
-            account: "system".to_string(),
-            username: "System".to_string(),
-            content: serde_json::to_string(&*users).unwrap(),
-            send_at: chrono::Utc::now(),
-            message_type: "online_list".to_string(),
-        };
-        
-        // 需要先获取chat_rooms的锁
-        let chat_rooms = state.chat_rooms.lock().await;
+    let account_set = {
+        let online_map = state.online_users.lock().await;
+        online_map.get(&room_id)
+            .cloned()
+            .unwrap_or_default()
+    };
 
-        if let Some(tx) = chat_rooms.get(&room_id) {
-            let _ = tx.send(msg);
+    // 获取用户名列表
+    let mut username_list = Vec::new();
+    for account in &account_set {
+        if let Some(username) = get_username(&state.db_pool, account).await {
+            username_list.push(username);
         }
+    }
+
+    // 广播用户名列表
+    let msg = WsMessage {
+        id: 0,
+        account: "system".to_string(),
+        username: "System".to_string(),
+        content: serde_json::to_string(&username_list).unwrap(),
+        send_at: chrono::Utc::now(),
+        message_type: "online_list".to_string(),
+    };
+
+    let chat_rooms = state.chat_rooms.lock().await;
+    if let Some(tx) = chat_rooms.get(&room_id) {
+        let _ = tx.send(msg);
     }
 }
 
@@ -677,12 +697,252 @@ pub async fn get_online_users(
     Path(room_id): Path<u32>,
     State(state): State<AppState>,
 ) -> Json<Vec<String>> {
-    let online_map = state.online_users.lock().await;
-    let users = online_map.get(&room_id)
-        .map(|set| set.iter().cloned().collect())
-        .unwrap_or_else(Vec::new);
+    // 获取在线账号列表
+    let account_set = {
+        let online_map = state.online_users.lock().await;
+        online_map.get(&room_id)
+            .cloned()
+            .unwrap_or_default()
+    };
+
+    // 转换为用户名列表
+    let mut username_list = Vec::new();
     
-    Json(users)
+    for account in account_set {
+        if let Some(username) = get_username(&state.db_pool, &account).await {
+            username_list.push(username);
+        }
+    }
+    
+    Json(username_list)
+}
+
+// 发送好友请求
+pub async fn send_friend_request(
+    Extension(claims): Extension<Claims>,
+    State(state): State<AppState>,
+    Json(payload): Json<SendFriendRequest>,
+) -> Result<Json<RegisterResponse>, StatusCode> {
+    let sender_account = claims.sub;
+    let receiver_account = payload.receiver_account;
+
+    // 不能添加自己为好友
+    if sender_account == receiver_account {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // 检查是否已是好友
+    let is_friend: Option<i64> = sqlx::query_scalar!(
+        r#"SELECT 1 FROM friends 
+           WHERE (user_a = ? AND user_b = ?) 
+           OR (user_a = ? AND user_b = ?)"#,
+        sender_account,
+        receiver_account,
+        receiver_account,
+        sender_account
+    )
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if is_friend.is_some() {
+        return Ok(Json(RegisterResponse { success: false }));
+    }
+
+    // 检查是否已有待处理请求
+    let existing_request: Option<i64> = sqlx::query_scalar!(
+        r#"SELECT 1 FROM friend_requests 
+           WHERE sender_account = ? AND receiver_account = ? AND status = 'PENDING'"#,
+        sender_account,
+        receiver_account
+    )
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if existing_request.is_some() {
+        return Ok(Json(RegisterResponse { success: false }));
+    }
+
+    // 插入新请求
+    sqlx::query!(
+        r#"INSERT INTO friend_requests 
+           (sender_account, receiver_account, status) 
+           VALUES (?, ?, 'PENDING')"#,
+        sender_account,
+        receiver_account
+    )
+    .execute(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(RegisterResponse { success: true }))
+}
+
+// 列出好友请求（接收和发送的）
+pub async fn list_friend_requests(
+    Extension(claims): Extension<Claims>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<FriendRequestInfo>>, StatusCode> {
+    let account = claims.sub;
+
+    // 查询所有相关请求
+    let requests = sqlx::query!(
+        r#"SELECT 
+            id, 
+            sender_account, 
+            receiver_account, 
+            status as "status: FriendRequestStatus",  // 添加类型注解
+            created_at 
+        FROM friend_requests 
+        WHERE sender_account = ? OR receiver_account = ?"#,
+        account,
+        account
+    )
+    .fetch_all(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // 获取用户名信息
+    let mut result = Vec::new();
+    for req in requests {
+        let sender_username = get_username(&state.db_pool, &req.sender_account)
+            .await
+            .unwrap_or_default();
+
+        result.push(FriendRequestInfo {
+            id: req.id,
+            sender_account: req.sender_account.clone(),
+            sender_username,
+            status: req.status,
+            created_at: req.created_at,
+        });
+    }
+
+    Ok(Json(result))
+}
+
+// 响应好友请求
+pub async fn respond_friend_request(
+    Extension(claims): Extension<Claims>,
+    State(state): State<AppState>,
+    Json(payload): Json<RespondToFriendRequest>,
+) -> Result<Json<RegisterResponse>, StatusCode> {
+    let account = claims.sub;
+    
+    // 获取请求
+     let mut request = sqlx::query!(
+        r#"SELECT 
+            id, 
+            sender_account, 
+            receiver_account, 
+            status as "status: FriendRequestStatus",  // 添加类型注解
+            created_at 
+        FROM friend_requests WHERE id = ?"#,
+        payload.request_id
+    )
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .ok_or(StatusCode::NOT_FOUND)?;
+
+    // 验证请求接收者
+    if request.receiver_account != account {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // 更新请求状态
+    sqlx::query!(
+        "UPDATE friend_requests SET status = ? WHERE id = ?",
+        payload.status.to_string(),
+        payload.request_id
+    )
+    .execute(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // 如果接受请求，添加好友关系
+    if payload.status == FriendRequestStatus::ACCEPTED {
+        // 确保顺序：user_a < user_b
+        let (user_a, user_b) = if request.sender_account < request.receiver_account {
+            (request.sender_account.clone(), request.receiver_account.clone())
+        } else {
+            (request.receiver_account.clone(), request.sender_account.clone())
+        };
+
+        // 添加好友关系
+        sqlx::query!(
+            "INSERT INTO friends (user_a, user_b) VALUES (?, ?)",
+            user_a,
+            user_b
+        )
+        .execute(&state.db_pool)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    Ok(Json(RegisterResponse { success: true }))
+}
+
+// 列出所有好友
+pub async fn list_friends(
+    Extension(claims): Extension<Claims>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<FriendInfo>>, StatusCode> {
+    let account = claims.sub;
+
+    // 查询好友
+    let friends = sqlx::query_as!(
+        FriendInfo,
+        r#"SELECT 
+            CASE 
+                WHEN user_a = ? THEN user_b 
+                ELSE user_a 
+            END AS account,
+            u.username
+           FROM friends f
+           JOIN user_info u ON 
+                (f.user_a = u.account OR f.user_b = u.account) AND u.account != ?
+           WHERE user_a = ? OR user_b = ?"#,
+        account,
+        account,
+        account,
+        account
+    )
+    .fetch_all(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(friends))
+}
+
+// 删除好友
+pub async fn remove_friend(
+    Extension(claims): Extension<Claims>,
+    State(state): State<AppState>,
+    Path(friend_account): Path<String>,
+) -> Result<Json<RegisterResponse>, StatusCode> {
+    let account = claims.sub;
+
+    // 删除好友关系
+    let result = sqlx::query!(
+        r#"DELETE FROM friends 
+           WHERE (user_a = ? AND user_b = ?)
+           OR (user_a = ? AND user_b = ?)"#,
+        account,
+        friend_account,
+        friend_account,
+        account
+    )
+    .execute(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if result.rows_affected() > 0 {
+        Ok(Json(RegisterResponse { success: true }))
+    } else {
+        Ok(Json(RegisterResponse { success: false }))
+    }
 }
 // src/models.rs
 // 库模块导入
@@ -690,6 +950,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use tokio::sync::broadcast;
 use std::sync::Arc;
+use chrono::{DateTime, Utc};
 
 // 用户表模型
 #[derive(Debug, Deserialize, Serialize, FromRow)]
@@ -794,6 +1055,69 @@ pub struct WsConnection {
     pub sender: broadcast::Sender<WsMessage>,
     pub connections: Arc<tokio::sync::RwLock<Vec<broadcast::Sender<WsMessage>>>>,
 }
+
+// 好友请求状态枚举
+#[derive(Debug, Serialize, Deserialize)]
+#[derive(sqlx::Type)]
+#[sqlx(rename_all = "UPPERCASE")]
+#[sqlx(transparent)]
+#[derive(PartialEq)]
+pub enum FriendRequestStatus {
+    PENDING,
+    ACCEPTED,
+    REJECTED,
+}
+
+impl std::fmt::Display for FriendRequestStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            FriendRequestStatus::PENDING => write!(f, "PENDING"),
+            FriendRequestStatus::ACCEPTED => write!(f, "ACCEPTED"),
+            FriendRequestStatus::REJECTED => write!(f, "REJECTED"),
+        }
+    }
+}
+
+// 好友请求模型
+#[derive(Debug, Deserialize, Serialize, FromRow)]
+pub struct FriendRequest {
+    pub id: i64,
+    pub sender_account: String,
+    pub receiver_account: String,
+    pub status: FriendRequestStatus,
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+// 好友请求发送模型
+#[derive(Deserialize)]
+pub struct SendFriendRequest {
+    pub receiver_account: String,
+}
+
+// 好友请求响应模型
+#[derive(Deserialize)]
+pub struct RespondToFriendRequest {
+    pub request_id: i64,
+    pub status: FriendRequestStatus, // 接受或拒绝
+}
+
+// 好友信息模型
+#[derive(Serialize, FromRow)]
+pub struct FriendInfo {
+    pub account: Option<String>,
+    pub username: Option<String>,
+}
+
+// 好友请求信息模型
+#[derive(Serialize)]
+pub struct FriendRequestInfo {
+    pub id: i64,
+    pub sender_account: String,
+    pub sender_username: String,
+    pub status: FriendRequestStatus,
+    pub created_at: Option<DateTime<Utc>>,
+}
 # src/Cargo.toml
 
 [package]
@@ -833,7 +1157,7 @@ jsonwebtoken = "9.0"
 rand_core = { version = "0.6", features = ["std"] }
 
 #添加chrono时间处理库
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { version = "0.4", features = ["serde", "clock"] }
 
 #异步原语
 futures = "0.3"

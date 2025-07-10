@@ -37,7 +37,7 @@ jsonwebtoken = "9.0"
 rand_core = { version = "0.6", features = ["std"] }
 
 #添加chrono时间处理库
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { version = "0.4", features = ["serde", "clock"] }
 
 #异步原语
 futures = "0.3"

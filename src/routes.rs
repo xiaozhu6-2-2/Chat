@@ -10,6 +10,7 @@ use axum::{
 use tower_http::cors::{CorsLayer, Any};
 use axum::http::{Method, HeaderName};
 use axum::extract::ws::WebSocketUpgrade;
+use axum::routing::delete;
 
 // 分离模块导入
 use super::handlers;
@@ -19,7 +20,6 @@ use crate::{
     handlers::handle_websocket,
     models::Claims
 };
-
 
 // 构建路由并返回 Router 实例
 pub fn create_routes() -> Router<AppState> {
@@ -40,6 +40,12 @@ pub fn create_routes() -> Router<AppState> {
         .route("/chatrooms/join", post(handlers::join_chatroom))
         .route("/chatrooms/leave", post(handlers::leave_chatroom))
         .route("/online-users/{:room_id}", get(handlers::get_online_users))
+
+        .route("/friend-requests", post(handlers::send_friend_request))
+        .route("/friend-requests", get(handlers::list_friend_requests))
+        .route("/friend-requests/respond", post(handlers::respond_friend_request))
+        .route("/friends", get(handlers::list_friends))
+        .route("/friends/{:friend_account}", delete(handlers::remove_friend))
         .route_layer(middleware::from_fn(auth_middleware));
 
     let ws_route = Router::new().route(

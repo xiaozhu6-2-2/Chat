@@ -27,6 +27,7 @@ CREATE TABLE `chatroom_members` (
   `account` varchar(45) NOT NULL,
   `joined_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `last_seen` timestamp NULL DEFAULT NULL,
+  `is_online` tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`chatroom_id`,`account`),
   KEY `fk_member_account_idx` (`account`),
   CONSTRAINT `fk_member_account` FOREIGN KEY (`account`) REFERENCES `user_info` (`account`) ON DELETE CASCADE,
@@ -40,7 +41,7 @@ CREATE TABLE `chatroom_members` (
 
 LOCK TABLES `chatroom_members` WRITE;
 /*!40000 ALTER TABLE `chatroom_members` DISABLE KEYS */;
-INSERT INTO `chatroom_members` VALUES (1,'17329720396','2025-07-10 06:01:58',NULL),(2,'17329720396','2025-07-10 06:04:01',NULL);
+INSERT INTO `chatroom_members` VALUES (1,'17329720396','2025-07-10 06:01:58',NULL,0),(2,'17329720396','2025-07-10 06:04:01',NULL,0),(3,'17896541128','2025-07-10 08:30:20',NULL,0),(4,'17329720396','2025-07-10 12:26:33',NULL,1),(4,'17896541128','2025-07-10 12:25:49',NULL,1);
 /*!40000 ALTER TABLE `chatroom_members` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -53,4 +54,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-07-10 14:23:42
+-- Dump completed on 2025-07-11  0:51:50

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use tokio::sync::broadcast;
 use std::sync::Arc;
+use chrono::{DateTime, Utc};
 
 // 用户表模型
 #[derive(Debug, Deserialize, Serialize, FromRow)]
@@ -107,4 +108,64 @@ pub struct WsMessage {
 pub struct WsConnection {
     pub sender: broadcast::Sender<WsMessage>,
     pub connections: Arc<tokio::sync::RwLock<Vec<broadcast::Sender<WsMessage>>>>,
+}
+
+// 好友请求状态枚举
+#[derive(Debug, Serialize, Deserialize, PartialEq, sqlx::Type)]
+#[sqlx(rename_all = "UPPERCASE")]
+pub enum FriendRequestStatus {
+    PENDING,
+    ACCEPTED,
+    REJECTED,
+}
+
+impl std::fmt::Display for FriendRequestStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            FriendRequestStatus::PENDING => write!(f, "PENDING"),
+            FriendRequestStatus::ACCEPTED => write!(f, "ACCEPTED"),
+            FriendRequestStatus::REJECTED => write!(f, "REJECTED"),
+        }
+    }
+}
+
+// 好友请求模型
+#[derive(Debug, Deserialize, Serialize, FromRow)]
+pub struct FriendRequest {
+    pub id: i64,
+    pub sender_account: String,
+    pub receiver_account: String,
+    pub status: FriendRequestStatus,
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+// 好友请求发送模型
+#[derive(Deserialize)]
+pub struct SendFriendRequest {
+    pub receiver_account: String,
+}
+
+// 好友请求响应模型
+#[derive(Deserialize)]
+pub struct RespondToFriendRequest {
+    pub request_id: i64,
+    pub status: FriendRequestStatus, // 接受或拒绝
+}
+
+// 好友信息模型
+#[derive(Serialize, FromRow)]
+pub struct FriendInfo {
+    pub account: Option<String>,
+    pub username: Option<String>,
+}
+
+// 好友请求信息模型
+#[derive(Serialize)]
+pub struct FriendRequestInfo {
+    pub id: i64,
+    pub sender_account: String,
+    pub sender_username: String,
+    pub status: FriendRequestStatus,
+    pub created_at: Option<DateTime<Utc>>,
 }
