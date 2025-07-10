@@ -39,6 +39,7 @@ pub fn create_routes() -> Router<AppState> {
         .route("/chatrooms/create", post(handlers::create_chatroom))
         .route("/chatrooms/join", post(handlers::join_chatroom))
         .route("/chatrooms/leave", post(handlers::leave_chatroom))
+        .route("/online-users/{:room_id}", get(handlers::get_online_users))
         .route_layer(middleware::from_fn(auth_middleware));
 
     let ws_route = Router::new().route(

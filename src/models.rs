@@ -100,6 +100,7 @@ pub struct WsMessage {
     pub username: String,
     pub content: String,
     pub send_at: chrono::DateTime<chrono::Utc>,
+    pub message_type: String,
 }
 
 // WebSocket连接状态

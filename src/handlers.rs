@@ -23,6 +23,7 @@ use tokio::sync::broadcast;
 use tracing::info;
 use futures::stream::StreamExt;
 use futures::SinkExt;
+use std::collections::HashSet;
 
 // 分离模块导入
 use crate::{models::{
@@ -248,6 +249,9 @@ pub async fn join_chatroom(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    // 广播在线列表更新
+    broadcast_online_list(chatroom_id, &state).await;
+
     Ok(Json(ChatroomResponse {
         success: true,
         chatroom_id: Some(chatroom_id),
@@ -283,6 +287,26 @@ pub async fn leave_chatroom(
         }));
     }
 
+    // 更新在线状态
+    sqlx::query!(
+        "UPDATE chatroom_members SET is_online = false 
+         WHERE chatroom_id = ? AND account = ?",
+        chatroom_id,
+        account
+    )
+    .execute(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    // 更新内存状态
+    let mut online_map = state.online_users.lock().await;
+    if let Some(users) = online_map.get_mut(&chatroom_id) {
+        users.remove(&account);
+    }
+
+    // 广播在线列表更新
+    broadcast_online_list(chatroom_id, &state).await;
+    
     Ok(Json(ChatroomResponse {
         success: true,
         chatroom_id: Some(chatroom_id),
@@ -293,12 +317,15 @@ pub async fn leave_chatroom(
 // WebSocket消息处理
 pub async fn handle_websocket(
     Path(room_id): Path<u32>,
-    mut socket: WebSocket,
+    socket: WebSocket,
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>, 
 ) {
     let account = claims.sub;
     
+    // 用户上线
+    update_online_status(&state, account.clone(), room_id, true).await;
+
     info!("WebSocket connected: {}", account);
     
     // 获取或创建聊天室频道
@@ -315,10 +342,14 @@ pub async fn handle_websocket(
     // 分离读写端
     let (mut sender_ws, mut receiver_ws) = socket.split();
 
+    // 提前获取用户名
+    let username = match get_username(&state.db_pool, &account).await {
+        Some(name) => name,
+        None => account.clone(), // 如果查询失败，使用account作为回退
+    };
+
     // 消息发送任务
     let send_task = tokio::spawn({
-        let account = account.clone();
-        
         async move {
             while let Ok(msg) = rx.recv().await {
                 let json = serde_json::to_string(&msg).unwrap();
@@ -333,6 +364,7 @@ pub async fn handle_websocket(
     // 消息接收任务
     let recv_task = tokio::spawn({
         let account = account.clone();
+        let username = username.clone();
         let db_pool = state.db_pool.clone();
         let tx = tx.clone();
         
@@ -352,10 +384,6 @@ pub async fn handle_websocket(
                 .execute(&db_pool)
                 .await {
                     let message_id = result.last_insert_id() as u64;
-                    let username = match get_username(&state.db_pool, &account).await {
-                        Some(name) => name,
-                        None => account.clone(), // 如果查询失败，使用account作为回退
-                    };
 
                     // 广播消息
                     let ws_msg = WsMessage {
@@ -364,6 +392,7 @@ pub async fn handle_websocket(
                         username: username.clone(),
                         content: text.to_string(),
                         send_at: now,
+                        message_type: "text".to_string(),
                     };
                     
                     if let Err(e) = tx.send(ws_msg) {
@@ -383,6 +412,9 @@ pub async fn handle_websocket(
     }
     
     info!("WebSocket disconnected: {}", account);
+
+     // 连接结束时用户下线
+    update_online_status(&state, account.clone(), room_id, false).await;
 }
 
 // 查询用户名
@@ -395,4 +427,70 @@ async fn get_username(db_pool: &MySqlPool, account: &str) -> Option<String> {
     .await
     .unwrap_or(None)
     .flatten()
+}
+
+// 更新在线状态
+async fn update_online_status(
+    state: &AppState,
+    account: String,
+    room_id: u32,
+    is_online: bool,
+) {
+    // 更新数据库
+    let _ = sqlx::query!(
+        "UPDATE chatroom_members SET is_online = ? 
+         WHERE chatroom_id = ? AND account = ?",
+        is_online,
+        room_id,
+        account
+    )
+    .execute(&state.db_pool)
+    .await;
+
+    // 更新内存状态
+    let mut online_map = state.online_users.lock().await;
+    let users = online_map.entry(room_id).or_insert_with(HashSet::new);
+    
+    if is_online {
+        users.insert(account);
+    } else {
+        users.remove(&account);
+    }
+}
+
+async fn broadcast_online_list(
+    room_id: u32,
+    state: &AppState,
+) {
+    let online_map = state.online_users.lock().await;
+    if let Some(users) = online_map.get(&room_id) {
+        let msg = WsMessage {
+            id: 0,
+            account: "system".to_string(),
+            username: "System".to_string(),
+            content: serde_json::to_string(&*users).unwrap(),
+            send_at: chrono::Utc::now(),
+            message_type: "online_list".to_string(),
+        };
+        
+        // 需要先获取chat_rooms的锁
+        let chat_rooms = state.chat_rooms.lock().await;
+
+        if let Some(tx) = chat_rooms.get(&room_id) {
+            let _ = tx.send(msg);
+        }
+    }
+}
+
+// 更新在线用户列表
+pub async fn get_online_users(
+    Path(room_id): Path<u32>,
+    State(state): State<AppState>,
+) -> Json<Vec<String>> {
+    let online_map = state.online_users.lock().await;
+    let users = online_map.get(&room_id)
+        .map(|set| set.iter().cloned().collect())
+        .unwrap_or_else(Vec::new);
+    
+    Json(users)
 }
