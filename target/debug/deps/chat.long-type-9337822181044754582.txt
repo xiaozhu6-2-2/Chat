@@ -1,0 +1,2 @@
+fn(axum::extract::Path<u32>, WebSocket, axum::extract::State<AppState>, Extension<Claims>) -> impl Future<Output = ()> {handle_websocket}
+fn(axum::extract::Path<u32>, WebSocket, axum::extract::State<AppState>, Extension<Claims>) -> impl Future<Output = ()> {handle_websocket}: Handler<_, _>

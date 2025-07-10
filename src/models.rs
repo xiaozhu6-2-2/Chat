@@ -2,6 +2,8 @@
 // 库模块导入
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use tokio::sync::broadcast;
+use std::sync::Arc;
 
 // 用户表模型
 #[derive(Debug, Deserialize, Serialize, FromRow)]
@@ -88,4 +90,19 @@ pub struct ChatroomResponse {
     pub success: bool,
     pub chatroom_id: Option<u32>,
     pub message: Option<String>,
+}
+
+// WebSocket消息结构
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WsMessage {
+    pub id: u64,
+    pub sender: String,
+    pub content: String,
+    pub send_at: chrono::DateTime<chrono::Utc>,
+}
+
+// WebSocket连接状态
+pub struct WsConnection {
+    pub sender: broadcast::Sender<WsMessage>,
+    pub connections: Arc<tokio::sync::RwLock<Vec<broadcast::Sender<WsMessage>>>>,
 }

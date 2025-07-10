@@ -1,22 +1,24 @@
 // src/state.rs
+// 库模块导入
 use sqlx::MySqlPool;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::{Mutex, broadcast};
+
+// 模块分离导入
+use crate::models::WsMessage;
 
 #[derive(Clone)]
 pub struct AppState {
     pub db_pool: MySqlPool,
+    pub chat_rooms: Arc<Mutex<HashMap<u32, broadcast::Sender<WsMessage>>>>,
 }
 
 impl AppState {
-    /// 创建带数据库连接池的应用状态
     pub fn new(db_pool: MySqlPool) -> Self {
-        Self { db_pool }
-    }
-    
-    /// 从环境变量初始化（高级用法）
-    pub async fn from_env() -> sqlx::Result<Self> {
-        let db_url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set");
-        let pool = MySqlPool::connect(&db_url).await?;
-        Ok(Self::new(pool))
+        Self {
+            db_pool,
+            chat_rooms: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 }

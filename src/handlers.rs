@@ -4,7 +4,11 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use axum::extract::State;
+use axum::{
+    extract::ws::{WebSocket, Message},
+    extract::State,
+    extract::Path
+};
 use axum::Extension;
 use sqlx::MySqlPool;
 use std::error::Error;
@@ -15,6 +19,10 @@ use argon2::{
 use rand_core::OsRng;
 use jsonwebtoken::{encode, EncodingKey, Header};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::sync::broadcast;
+use tracing::info;
+use futures::stream::StreamExt;
+use futures::SinkExt;
 
 // 分离模块导入
 use crate::{models::{
@@ -24,11 +32,12 @@ use crate::{models::{
         LoginResponse, 
         User,
         Claims
-    }, state::AppState};
+    }};
 
 use crate::models::{CreateChatroomRequest, JoinChatroomRequest, LeaveChatroomRequest, 
                    ChatroomResponse};
 
+use crate::{state::AppState, models::WsMessage};
 
 // 根路径处理函数
 pub async fn root() -> &'static str {
@@ -279,4 +288,94 @@ pub async fn leave_chatroom(
         chatroom_id: Some(chatroom_id),
         message: Some("已退出聊天室".into()),
     }))
+}
+
+// WebSocket消息处理
+pub async fn handle_websocket(
+    Path(room_id): Path<u32>,
+    mut socket: WebSocket,
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>, 
+) {
+    let account = claims.sub;
+    
+    info!("WebSocket connected: {}", account);
+    
+    // 获取或创建聊天室频道
+    let tx = {
+        let mut rooms = state.chat_rooms.lock().await;
+        rooms.entry(room_id)
+            .or_insert_with(|| broadcast::channel(100).0)
+            .clone()
+    };
+    
+    // 创建接收器
+    let mut rx = tx.subscribe();
+    
+    // 分离读写端
+    let (mut sender_ws, mut receiver_ws) = socket.split();
+
+    // 消息发送任务
+    let send_task = tokio::spawn({
+        let account = account.clone();
+        
+        async move {
+            while let Ok(msg) = rx.recv().await {
+                let json = serde_json::to_string(&msg).unwrap();
+                if let Err(e) = sender_ws.send(Message::Text(json.into())).await {
+                    eprintln!("WebSocket send error: {}", e);
+                    break;
+                }
+            }
+        }
+    });
+    
+    // 消息接收任务
+    let recv_task = tokio::spawn({
+        let account = account.clone();
+        let db_pool = state.db_pool.clone();
+        let tx = tx.clone();
+        
+        async move {
+            while let Some(Ok(Message::Text(text))) = receiver_ws.next().await {
+                // 解析消息
+                let now = chrono::Utc::now();
+                
+                // 存储到数据库
+                if let Ok(result) = sqlx::query!(
+                    "INSERT INTO chat_messages (chatroom_id, sender_account, content, send_at) VALUES (?, ?, ?, ?)",
+                    room_id,
+                    account,
+                    text.to_string(),
+                    now.naive_utc()
+                )
+                .execute(&db_pool)
+                .await {
+                    let message_id = result.last_insert_id() as u64;
+                    
+                    // 广播消息
+                    let ws_msg = WsMessage {
+                        id: message_id,
+                        sender: account.clone(),
+                        content: text.to_string(),
+                        send_at: now,
+                    };
+                    
+                    if let Err(e) = tx.send(ws_msg) {
+                        eprintln!("Broadcast error: {}", e);
+                    }
+                } else {
+                    eprintln!("Failed to save message to database");
+                }
+            }
+        }
+    });
+    
+    // 等待任意任务结束
+    tokio::select! {
+        _ = send_task => {}
+        _ = recv_task => {}
+    }
+    
+    info!("WebSocket disconnected: {}", account);
 }

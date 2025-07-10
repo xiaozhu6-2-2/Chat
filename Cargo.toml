@@ -8,16 +8,17 @@ edition = "2024"
 [dependencies]
 #序列化与反序列化
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 #axum基于tokio构建
-tokio = { version = "1.46", features = ["full"] }
+tokio = { version = "1.46", features = ["full", "rt-multi-thread", "sync"] }
 
 #日志依赖
 tracing = "0.1"
 tracing-subscriber = "0.3"
 
 #数据库驱动
-sqlx = { version = "0.7", features = ["mysql", "runtime-tokio", "tls-native-tls", "macros"] }
+sqlx = { version = "0.7", features = ["mysql", "runtime-tokio", "tls-native-tls", "macros", "chrono"] }
 
 #读取环境变量
 dotenv = "0.15"
@@ -35,8 +36,12 @@ jsonwebtoken = "9.0"
 #随机数
 rand_core = { version = "0.6", features = ["std"] }
 
-# 添加chrono时间处理库
+#添加chrono时间处理库
 chrono = { version = "0.4", features = ["serde"] }
 
+#异步原语
+futures = "0.3"
+
 #Axum框架
-axum = { version = "0.8.4", features = ["macros"] } 
+axum = { version = "0.8.4", features = ["ws", "macros"] }
+
