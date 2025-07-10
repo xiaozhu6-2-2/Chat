@@ -1,0 +1,2 @@
+fn({type error}, State<AppState>, axum::Json<JoinChatroomRequest>) -> impl Future<Output = Result<axum::Json<ChatroomResponse>, axum::http::StatusCode>> {join_chatroom}
+fn({type error}, State<AppState>, axum::Json<JoinChatroomRequest>) -> impl Future<Output = Result<axum::Json<ChatroomResponse>, axum::http::StatusCode>> {join_chatroom}: Handler<_, _>

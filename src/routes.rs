@@ -25,6 +25,9 @@ pub fn create_routes() -> Router<AppState> {
     
     let protected_routes = Router::new() // 被保护的路由
         .route("/protected", get(handlers::protected))
+        .route("/chatrooms/create", post(handlers::create_chatroom))
+        .route("/chatrooms/join", post(handlers::join_chatroom))
+        .route("/chatrooms/leave", post(handlers::leave_chatroom))
         .route_layer(middleware::from_fn(auth_middleware));
 
     Router::new()

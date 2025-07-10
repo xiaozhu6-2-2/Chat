@@ -35,5 +35,8 @@ jsonwebtoken = "9.0"
 #随机数
 rand_core = { version = "0.6", features = ["std"] }
 
+# 添加chrono时间处理库
+chrono = { version = "0.4", features = ["serde"] }
+
 #Axum框架
-axum = "0.8.4"
+axum = { version = "0.8.4", features = ["macros"] } 

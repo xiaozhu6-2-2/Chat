@@ -6,7 +6,6 @@ mod state;
 mod middleware;
 
 // 库模块导入
-use axum::Router;
 use tokio::net::TcpListener;
 use tracing_subscriber::fmt;
 use sqlx::MySqlPool;
@@ -63,7 +62,7 @@ impl AppState {
 }
 // src/routes.rs
 // 库模块导入
-use axum::{routing::{get, post}, Router};
+use axum::{routing::{get, post}, Router, middleware};
 use tower_http::cors::{CorsLayer, Any};
 use axum::http::{Method, HeaderName};
 
@@ -86,14 +85,48 @@ pub fn create_routes() -> Router<AppState> {
         .route("/register", post(handlers::register))
         .route("/login", post(handlers::login));
     
-    // let protected_routes = Router::new() // 被保护的路由
-    //     .route("/protected", get(handlers::protected))
-    //     .route_layer(middleware::from_fn(auth_middleware));
+    let protected_routes = Router::new() // 被保护的路由
+        .route("/protected", get(handlers::protected))
+        .route("/chatrooms/create", post(handlers::create_chatroom))
+        .route("/chatrooms/join", post(handlers::join_chatroom))
+        .route("/chatrooms/leave", post(handlers::leave_chatroom))
+        .route_layer(middleware::from_fn(auth_middleware));
 
     Router::new()
         .merge(public_routes)
-        // .merge(protected_routes)
+        .merge(protected_routes)
         .layer(cors)
+}
+// src/middleware.rs
+use axum::{
+    body::Body,
+    http::{Request, StatusCode},
+    middleware::Next,
+    response::Response,
+};
+use jsonwebtoken::{decode, DecodingKey, Validation};
+use crate::models::Claims;
+
+pub async fn auth_middleware(
+    mut request: Request<Body>,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let token = request.headers()
+        .get("Authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "));
+    
+    let token = token.ok_or(StatusCode::UNAUTHORIZED)?;
+    
+    let token_data = decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(std::env::var("JWT_SECRET").unwrap().as_ref()),
+        &Validation::default()
+    ).map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    request.extensions_mut().insert(token_data.claims);
+
+    Ok(next.run(request).await)
 }
 // src/handlers.rs
 // 库模块导入
@@ -101,8 +134,8 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde::{Deserialize, Serialize};
 use axum::extract::State;
+use axum::Extension;
 use sqlx::MySqlPool;
 use std::error::Error;
 use argon2::{
@@ -123,7 +156,8 @@ use crate::{models::{
         Claims
     }, state::AppState};
 
-
+use crate::models::{CreateChatroomRequest, JoinChatroomRequest, LeaveChatroomRequest, 
+                   ChatroomResponse, Chatroom, ChatroomMember};
 
 
 // 根路径处理函数
@@ -178,8 +212,8 @@ pub async fn login(
                 token,
             }))
         }
-        Ok(None) => Err(StatusCode::UNAUTHORIZED),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Ok(None) => Err(StatusCode::UNAUTHORIZED), // 认证失败， 返回401
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),// 服务器内部错误， 返回500
     }
 }
 
@@ -235,6 +269,147 @@ fn generate_jwt(account: &str) -> Result<String, Box<dyn Error>> {
     
     Ok(token)
 }
+
+// 保护处理函数
+pub async fn protected() -> &'static str {
+    "Protected content!"
+}
+
+
+// 创建聊天室
+#[axum::debug_handler]
+pub async fn create_chatroom(
+    Extension(claims): Extension<Claims>,
+    State(state): State<AppState>,
+    Json(payload): Json<CreateChatroomRequest>,
+) -> Result<Json<ChatroomResponse>, StatusCode> {
+    let account = claims.sub;
+
+    // 插入聊天室记录
+    let result = sqlx::query!(
+        "INSERT INTO chatrooms (name, created_by) VALUES (?, ?)",
+        payload.name,
+        account
+    )
+    .execute(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let chatroom_id = result.last_insert_id() as u32;
+
+    // 自动将创建者加入聊天室
+    sqlx::query!(
+        "INSERT INTO chatroom_members (chatroom_id, account) VALUES (?, ?)",
+        chatroom_id,
+        account
+    )
+    .execute(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ChatroomResponse {
+        success: true,
+        chatroom_id: Some(chatroom_id),
+        message: Some("聊天室创建成功".into()),
+    }))
+}
+
+// 加入聊天室处理函数
+#[axum::debug_handler]
+pub async fn join_chatroom(
+    Extension(claims): Extension<Claims>,
+    State(state): State<AppState>,
+    Json(payload): Json<JoinChatroomRequest>,
+) -> Result<Json<ChatroomResponse>, StatusCode> {
+    let account = claims.sub;
+    let chatroom_id = payload.chatroom_id;
+
+    // 检查聊天室是否存在
+    let chatroom_exists: Option<i64> = sqlx::query_scalar!(
+        "SELECT 1 FROM chatrooms WHERE chatroom_id = ?",
+        chatroom_id
+    )
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if chatroom_exists.is_none() {
+        return Ok(Json(ChatroomResponse {
+            success: false,
+            chatroom_id: None,
+            message: Some("聊天室不存在".into()),
+        }));
+    }
+
+    // 检查是否已是成员
+    let is_member: Option<i64> = sqlx::query_scalar!(
+        "SELECT 1 FROM chatroom_members WHERE chatroom_id = ? AND account = ?",
+        chatroom_id,
+        account
+    )
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if is_member.is_some() {
+        return Ok(Json(ChatroomResponse {
+            success: false,
+            chatroom_id: Some(chatroom_id),
+            message: Some("您已是该聊天室成员".into()),
+        }));
+    }
+
+    // 加入聊天室
+    sqlx::query!(
+        "INSERT INTO chatroom_members (chatroom_id, account) VALUES (?, ?)",
+        chatroom_id,
+        account
+    )
+    .execute(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ChatroomResponse {
+        success: true,
+        chatroom_id: Some(chatroom_id),
+        message: Some("成功加入聊天室".into()),
+    }))
+}
+
+// 退出聊天室处理函数
+#[axum::debug_handler]
+pub async fn leave_chatroom(
+    Extension(claims): Extension<Claims>,
+    State(state): State<AppState>,
+    Json(payload): Json<LeaveChatroomRequest>,
+) -> Result<Json<ChatroomResponse>, StatusCode> {
+    let account = claims.sub;
+    let chatroom_id = payload.chatroom_id;
+
+    // 退出聊天室
+    let result = sqlx::query!(
+        "DELETE FROM chatroom_members WHERE chatroom_id = ? AND account = ?",
+        chatroom_id,
+        account
+    )
+    .execute(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if result.rows_affected() == 0 {
+        return Ok(Json(ChatroomResponse {
+            success: false,
+            chatroom_id: Some(chatroom_id),
+            message: Some("您不在该聊天室中".into()),
+        }));
+    }
+
+    Ok(Json(ChatroomResponse {
+        success: true,
+        chatroom_id: Some(chatroom_id),
+        message: Some("已退出聊天室".into()),
+    }))
+}
 // src/models.rs
 // 库模块导入
 use serde::{Deserialize, Serialize};
@@ -277,72 +452,52 @@ pub struct LoginResponse {
 }
 
 // JWT
-#[derive(Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
-    sub: String,   // 用户账号
-    exp: usize,    // 过期时间
-    iat: usize,    // 签发时间
+    pub sub: String,   // 用户账号
+    pub exp: usize,    // 过期时间
+    pub iat: usize,    // 签发时间
 }
-// src/middleware.rs
-use axum::{http::Request, middleware::Next, response::Response, http::StatusCode};
-use jsonwebtoken::{decode, DecodingKey, Validation};
-use crate::models::Claims;
 
-pub async fn auth_middleware<B>(
-    request: Request<B>,
-    next: Next<B>,
-) -> Result<Response, StatusCode> {
-    let token = request.headers()
-        .get("Authorization")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.strip_prefix("Bearer "));
-    
-    let token = token.ok_or(StatusCode::UNAUTHORIZED)?;
-    
-    decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(std::env::var("JWT_SECRET").unwrap().as_ref()),
-        &Validation::default()
-    ).map_err(|_| StatusCode::UNAUTHORIZED)?;
-
-    Ok(next.run(request).await)
+// 聊天室模型
+#[derive(Debug, Deserialize, Serialize, FromRow)]
+pub struct Chatroom {
+    pub chatroom_id: u32,
+    pub name: String,
+    pub created_by: String, // 创建者账号
+    pub created_at: chrono::DateTime<chrono::Utc>,
 }
-# src/Cargo.toml
 
-[package]
-name = "chat"
-version = "0.1.0"
-edition = "2024"
+// 聊天室成员模型
+#[derive(Debug, Deserialize, Serialize, FromRow)]
+pub struct ChatroomMember {
+    pub chatroom_id: u32,
+    pub account: String,
+    pub joined_at: chrono::DateTime<chrono::Utc>,
+}
 
-[dependencies]
-#序列化与反序列化
-serde = { version = "1.0", features = ["derive"] }
+// 创建聊天室请求
+#[derive(Deserialize)]
+pub struct CreateChatroomRequest {
+    pub name: String,
+}
 
-#axum基于tokio构建
-tokio = { version = "1.46", features = ["full"] }
+// 加入聊天室请求
+#[derive(Deserialize)]
+pub struct JoinChatroomRequest {
+    pub chatroom_id: u32,
+}
 
-#日志依赖
-tracing = "0.1"
-tracing-subscriber = "0.3"
+// 退出聊天室请求
+#[derive(Deserialize)]
+pub struct LeaveChatroomRequest {
+    pub chatroom_id: u32,
+}
 
-#数据库驱动
-sqlx = { version = "0.7", features = ["mysql", "runtime-tokio", "tls-native-tls", "macros"] }
-
-#读取环境变量
-dotenv = "0.15"
-
-#跨域中间件
-tower-http = { version = "0.5.0", features = ["cors"] }
-http = "0.2"
-
-#密码哈希
-argon2 = "0.5.3"
-
-#用户认证和授权
-jsonwebtoken = "9.0"
-
-#随机数
-rand_core = { version = "0.6", features = ["std"] }
-
-#Axum框架
-axum = "0.8.4"
+// 聊天室响应结构
+#[derive(Serialize)]
+pub struct ChatroomResponse {
+    pub success: bool,
+    pub chatroom_id: Option<u32>,
+    pub message: Option<String>,
+}

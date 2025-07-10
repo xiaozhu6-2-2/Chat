@@ -9,7 +9,7 @@ use jsonwebtoken::{decode, DecodingKey, Validation};
 use crate::models::Claims;
 
 pub async fn auth_middleware(
-    request: Request<Body>,
+    mut request: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
     let token = request.headers()
@@ -19,11 +19,13 @@ pub async fn auth_middleware(
     
     let token = token.ok_or(StatusCode::UNAUTHORIZED)?;
     
-    decode::<Claims>(
+    let token_data = decode::<Claims>(
         token,
         &DecodingKey::from_secret(std::env::var("JWT_SECRET").unwrap().as_ref()),
         &Validation::default()
     ).map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    request.extensions_mut().insert(token_data.claims);
 
     Ok(next.run(request).await)
 }
