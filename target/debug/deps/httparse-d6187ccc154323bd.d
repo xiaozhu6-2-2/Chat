@@ -1,0 +1,12 @@
+D:\Project\WorkSpace\rust\chat\target\debug\deps\httparse-d6187ccc154323bd.d: C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\lib.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\iter.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\macros.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\simd\mod.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\simd\swar.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\simd\sse42.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\simd\avx2.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\simd\runtime.rs
+
+D:\Project\WorkSpace\rust\chat\target\debug\deps\libhttparse-d6187ccc154323bd.rmeta: C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\lib.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\iter.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\macros.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\simd\mod.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\simd\swar.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\simd\sse42.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\simd\avx2.rs C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\simd\runtime.rs
+
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\lib.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\iter.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\macros.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\simd\mod.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\simd\swar.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\simd\sse42.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\simd\avx2.rs:
+C:\Users\32064\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\httparse-1.10.1\src\simd\runtime.rs:

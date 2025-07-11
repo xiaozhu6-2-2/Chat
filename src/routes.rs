@@ -26,7 +26,7 @@ pub fn create_routes() -> Router<AppState> {
     // CORS 中间件
     let cors = CorsLayer::new()
         .allow_origin(Any)
-        .allow_methods(vec![Method::GET, Method::POST])
+        .allow_methods(Any)
         .allow_headers(Any); 
 
     let public_routes = Router::new()
