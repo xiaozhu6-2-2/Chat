@@ -5,6 +5,7 @@ use sqlx::FromRow;
 use tokio::sync::broadcast;
 use std::sync::Arc;
 use chrono::{DateTime, Utc};
+use chrono::NaiveDateTime;
 
 // 用户表模型
 #[derive(Debug, Deserialize, Serialize, FromRow)]
@@ -190,4 +191,14 @@ pub struct PrivateSessionResponse {
     pub session_id: u64,
     pub friend_account: String,
     pub friend_username: String,
+}
+
+// 聊天室列表响应模型
+#[derive(Serialize)]
+pub struct JoinedChatroomInfo {
+    pub chatroom_id: i64,
+    pub name: String,
+    pub created_by: Option<String>,
+    pub creator_username: Option<String>,
+    pub created_at: Option<DateTime<Utc>>
 }

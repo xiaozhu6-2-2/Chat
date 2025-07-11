@@ -26,8 +26,8 @@ use futures::SinkExt;
 use std::collections::HashSet;
 use axum::extract::ws::WebSocketUpgrade;
 use axum::response::IntoResponse;
-use chrono::Utc;
 use chrono::DateTime;
+use chrono::{TimeZone, Utc};
 
 // 分离模块导入
 use crate::{models::{
@@ -36,7 +36,8 @@ use crate::{models::{
         LoginRequest, 
         LoginResponse, 
         User,
-        Claims
+        Claims,
+        JoinedChatroomInfo
     }};
 
 use crate::models::{CreateChatroomRequest, JoinChatroomRequest, LeaveChatroomRequest, 
@@ -988,4 +989,45 @@ pub async fn get_private_chat_history(
     }).collect();
 
     Ok(Json(messages))
+}
+
+// 聊天室列表处理函数
+pub async fn get_joined_chatrooms(
+    Extension(claims): Extension<Claims>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<JoinedChatroomInfo>>, StatusCode> {
+    let account = claims.sub;
+    
+    // 查询用户加入的所有聊天室
+    let records = sqlx::query!(
+        r#"
+        SELECT 
+            c.chatroom_id,
+            c.name,
+            c.created_by,
+            u.username AS creator_username,
+            c.created_at
+        FROM chatroom_members cm
+        INNER JOIN chatrooms c ON cm.chatroom_id = c.chatroom_id
+        LEFT JOIN user_info u ON c.created_by = u.account
+        WHERE cm.account = ?
+        ORDER BY cm.joined_at DESC
+        "#,
+        account
+    )
+    .fetch_all(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let chatrooms = records.into_iter().map(|r| {
+        JoinedChatroomInfo {
+            chatroom_id: r.chatroom_id,
+            name: r.name,
+            created_by: r.created_by,
+            creator_username: r.creator_username,
+            created_at: r.created_at,
+        }
+    }).collect();
+
+    Ok(Json(chatrooms))
 }
