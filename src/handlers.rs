@@ -24,6 +24,10 @@ use tracing::info;
 use futures::stream::StreamExt;
 use futures::SinkExt;
 use std::collections::HashSet;
+use axum::extract::ws::WebSocketUpgrade;
+use axum::response::IntoResponse;
+use chrono::Utc;
+use chrono::DateTime;
 
 // 分离模块导入
 use crate::{models::{
@@ -38,10 +42,11 @@ use crate::{models::{
 use crate::models::{CreateChatroomRequest, JoinChatroomRequest, LeaveChatroomRequest, 
                    ChatroomResponse};
 use crate::models::{
-    SendFriendRequest, FriendRequestInfo, FriendRequest, RespondToFriendRequest, FriendRequestStatus,
+    SendFriendRequest, FriendRequestInfo, RespondToFriendRequest, FriendRequestStatus,
     FriendInfo, 
 };
 use crate::{state::AppState, models::WsMessage};
+use crate::models::{StartPrivateChatRequest, PrivateSessionResponse, PrivateMessage};
 
 // 根路径处理函数
 pub async fn root() -> &'static str {
@@ -635,7 +640,7 @@ pub async fn respond_friend_request(
     let account = claims.sub;
     
     // 获取请求
-     let mut request = sqlx::query!(
+     let request = sqlx::query!(
         r#"SELECT 
             id, 
             sender_account, 
@@ -747,4 +752,240 @@ pub async fn remove_friend(
     } else {
         Ok(Json(RegisterResponse { success: false }))
     }
+}
+
+// 创建私聊
+pub async fn start_private_chat(
+    Extension(claims): Extension<Claims>,
+    State(state): State<AppState>,
+    Json(payload): Json<StartPrivateChatRequest>,
+) -> Result<Json<PrivateSessionResponse>, StatusCode> {
+    let user_account = claims.sub;
+    let friend_account = payload.friend_account;
+
+    // 验证是否为好友关系
+    let is_friend = sqlx::query_scalar!(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM friends 
+            WHERE (user_a = ? AND user_b = ?) 
+            OR (user_a = ? AND user_b = ?)
+        )"#,
+        user_account,
+        friend_account,
+        friend_account,
+        user_account
+    )
+    .fetch_one(&state.db_pool)
+    .await
+    .map(|exists: i64| exists > 0)
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if !is_friend {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // 获取好友用户名
+    let friend_username = get_username(&state.db_pool, &friend_account)
+        .await
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let friend_account_clone = friend_account.clone();
+
+    // 创建或获取私聊会话
+    let (user1, user2) = if user_account < friend_account {
+        (user_account, friend_account_clone)
+    } else {
+        (friend_account_clone, user_account)
+    };
+
+    let session = sqlx::query!(
+        r#"INSERT INTO private_chat_sessions (user1_account, user2_account)
+           VALUES (?, ?)
+           ON DUPLICATE KEY UPDATE session_id=LAST_INSERT_ID(session_id)"#,
+        user1,
+        user2
+    )
+    .execute(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let session_id = session.last_insert_id() as u64;
+
+    // 初始化广播通道
+    {
+        let mut sessions = state.private_sessions.lock().await;
+        sessions.entry(session_id).or_insert_with(|| broadcast::channel(100).0);
+    }
+
+    Ok(Json(PrivateSessionResponse {
+        session_id,
+        friend_account,
+        friend_username,
+    }))
+}
+
+
+// 私聊会话
+pub async fn handle_private_websocket(
+    Path(session_id): Path<u64>,
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+) -> impl IntoResponse {
+    let user_account = claims.sub.clone();
+    
+    ws.on_upgrade(move |socket| async move {
+        // 验证用户是否有权访问此会话
+        let is_valid = sqlx::query_scalar!(
+            r#"SELECT EXISTS(
+                SELECT 1 FROM private_chat_sessions 
+                WHERE session_id = ? 
+                AND (user1_account = ? OR user2_account = ?)
+            )"#,
+            session_id,
+            user_account,
+            user_account
+        )
+        .fetch_one(&state.db_pool)
+        .await
+        .map(|exists: i64| exists > 0)
+        .unwrap_or(false);
+
+        if !is_valid {
+            return;
+        }
+
+        // 获取或创建广播通道
+        let tx = {
+            let mut sessions = state.private_sessions.lock().await;
+            sessions.entry(session_id)
+                .or_insert_with(|| broadcast::channel(100).0)
+                .clone()
+        };
+
+        let mut rx = tx.subscribe();
+        let (mut sender, mut receiver) = socket.split();
+
+        // 消息接收任务
+        let send_task = tokio::spawn(async move {
+            while let Ok(msg) = rx.recv().await {
+                let json = serde_json::to_string(&msg).unwrap();
+                if sender.send(Message::Text(json.into())).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        // 消息发送任务
+        let recv_task = tokio::spawn({
+            let state = state.clone();
+            let user_account = claims.sub.clone();
+            async move {
+                while let Some(Ok(Message::Text(text))) = receiver.next().await {
+                    // 存储私聊消息
+                    let now = Utc::now();
+                    let result = sqlx::query!(
+                        "INSERT INTO private_messages (session_id, sender_account, content)
+                         VALUES (?, ?, ?)",
+                        session_id,
+                        user_account,
+                        text.to_string()
+                    )
+                    .execute(&state.db_pool)
+                    .await;
+
+                    if let Ok(result) = result {
+                        let message_id = result.last_insert_id() as u64;
+                        
+                        // 获取用户名
+                        let username = get_username(&state.db_pool, &user_account)
+                            .await
+                            .unwrap_or_else(|| user_account.clone());
+
+                        // 广播消息
+                        let private_msg = PrivateMessage {
+                            message_id: message_id as i64,
+                            session_id: session_id as i64,
+                            sender_account: user_account.clone(),
+                            sender_username: username,
+                            content: text.to_string(),
+                            sent_at: now,
+                        };
+
+                        if let Some(tx) = state.private_sessions.lock().await.get(&session_id) {
+                            let _ = tx.send(private_msg);
+                        }
+                    }
+                }
+            }
+        });
+
+        tokio::select! {
+            _ = send_task => {}
+            _ = recv_task => {}
+        }
+    })
+}
+
+// 获取私聊历史信息
+pub async fn get_private_chat_history(
+    Path(session_id): Path<u64>,
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+) -> Result<Json<Vec<PrivateMessage>>, StatusCode> {
+    let user_account = claims.sub;
+
+    // 验证会话访问权限
+    let has_access = sqlx::query_scalar!(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM private_chat_sessions 
+            WHERE session_id = ? 
+            AND (user1_account = ? OR user2_account = ?)
+        )"#,
+        session_id,
+        user_account,
+        user_account
+    )
+    .fetch_one(&state.db_pool)
+    .await
+    .map(|exists: i64| exists > 0)
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if !has_access {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // 获取历史消息
+    type PrivateMessageRow = (i64, i64, String, Option<String>, String, DateTime<Utc>);
+
+    let rows = sqlx::query_as::<_, PrivateMessageRow>(
+        r#"SELECT 
+            pm.message_id,
+            pm.session_id,
+            pm.sender_account,
+            ui.username AS sender_username,
+            pm.content,
+            pm.sent_at
+        FROM private_messages pm
+        JOIN user_info ui ON pm.sender_account = ui.account
+        WHERE pm.session_id = ?
+        ORDER BY pm.sent_at ASC"#
+    )
+    .bind(session_id)
+    .fetch_all(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let messages = rows.into_iter().map(|row| {
+        PrivateMessage {
+            message_id: row.0,
+            session_id: row.1,
+            sender_account: row.2.clone(),
+            sender_username: row.3.unwrap_or(row.2.clone()),
+            content: row.4,
+            sent_at: row.5,
+        }
+    }).collect();
+
+    Ok(Json(messages))
 }

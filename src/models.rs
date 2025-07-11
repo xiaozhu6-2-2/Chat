@@ -169,3 +169,25 @@ pub struct FriendRequestInfo {
     pub status: FriendRequestStatus,
     pub created_at: Option<DateTime<Utc>>,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PrivateMessage {
+    pub message_id: i64,
+    pub session_id: i64, 
+    pub sender_account: String,
+    pub sender_username: String,
+    pub content: String,
+    pub sent_at: DateTime<Utc>,
+}
+
+#[derive(Deserialize)]
+pub struct StartPrivateChatRequest {
+    pub friend_account: String,
+}
+
+#[derive(Serialize)]
+pub struct PrivateSessionResponse {
+    pub session_id: u64,
+    pub friend_account: String,
+    pub friend_username: String,
+}

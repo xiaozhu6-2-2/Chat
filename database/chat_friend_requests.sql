@@ -34,7 +34,7 @@ CREATE TABLE `friend_requests` (
   KEY `fk_request_receiver_idx` (`receiver_account`),
   CONSTRAINT `fk_request_receiver` FOREIGN KEY (`receiver_account`) REFERENCES `user_info` (`account`) ON DELETE CASCADE,
   CONSTRAINT `fk_request_sender_idx` FOREIGN KEY (`sender_account`) REFERENCES `user_info` (`account`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -43,7 +43,7 @@ CREATE TABLE `friend_requests` (
 
 LOCK TABLES `friend_requests` WRITE;
 /*!40000 ALTER TABLE `friend_requests` DISABLE KEYS */;
-INSERT INTO `friend_requests` VALUES (1,'17329720396','17896541128','ACCEPTED','2025-07-10 16:39:59','2025-07-10 16:39:59');
+INSERT INTO `friend_requests` VALUES (1,'17329720396','17896541128','ACCEPTED','2025-07-10 16:39:59','2025-07-10 16:39:59'),(2,'17329720396','17896541128','ACCEPTED','2025-07-11 06:17:48','2025-07-11 06:17:48');
 /*!40000 ALTER TABLE `friend_requests` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -56,4 +56,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-07-11  0:51:50
+-- Dump completed on 2025-07-11 14:55:25

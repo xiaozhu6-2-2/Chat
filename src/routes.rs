@@ -46,6 +46,9 @@ pub fn create_routes() -> Router<AppState> {
         .route("/friend-requests/respond", post(handlers::respond_friend_request))
         .route("/friends", get(handlers::list_friends))
         .route("/friends/{:friend_account}", delete(handlers::remove_friend))
+
+        .route("/private-chat/start", post(handlers::start_private_chat))
+        .route("/private-chat/history/{:session_id}", get(handlers::get_private_chat_history))
         .route_layer(middleware::from_fn(auth_middleware));
 
     let ws_route = Router::new().route(
@@ -61,9 +64,15 @@ pub fn create_routes() -> Router<AppState> {
         .route_layer(middleware::from_fn(ws_auth_middleware))
     );
 
+    let private_ws_route = Router::new().route(
+        "/private-chat/ws/{:session_id}",
+        get(handlers::handle_private_websocket)
+    ).route_layer(middleware::from_fn(ws_auth_middleware));
+
     Router::new()
         .merge(public_routes)
         .merge(protected_routes)
         .merge(ws_route)
+        .merge(private_ws_route)
         .layer(cors)
 }
