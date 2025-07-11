@@ -48,7 +48,7 @@ use crate::models::{
     FriendInfo, 
 };
 use crate::{state::AppState, models::WsMessage};
-use crate::models::{StartPrivateChatRequest, PrivateSessionResponse, PrivateMessage};
+use crate::models::{StartPrivateChatRequest, PrivateSessionResponse, PrivateMessage, UserOnline};
 
 // 根路径处理函数
 pub async fn root() -> &'static str {
@@ -511,7 +511,7 @@ async fn broadcast_online_list(
 pub async fn get_online_users(
     Path(room_id): Path<u32>,
     State(state): State<AppState>,
-) -> Json<Vec<String>> {
+) -> Json<Vec<UserOnline>> {
     // 获取在线账号列表
     let account_set = {
         let online_map = state.online_users.lock().await;
@@ -520,16 +520,19 @@ pub async fn get_online_users(
             .unwrap_or_default()
     };
 
-    // 转换为用户名列表
-    let mut username_list = Vec::new();
-    
+    // 转换为用户名和账号的列表
+    let mut user_list = Vec::new();
+
     for account in account_set {
         if let Some(username) = get_username(&state.db_pool, &account).await {
-            username_list.push(username);
+            user_list.push(UserOnline {
+                account: account.to_string(),
+                username,
+            });
         }
     }
-    
-    Json(username_list)
+
+    Json(user_list)
 }
 
 // 发送好友请求

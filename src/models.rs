@@ -14,6 +14,13 @@ pub struct User {
     pub password: String,          // 非空
     pub username: Option<String>,  // 允许为空，保留Option
 }
+// 在线用户模型
+#[derive(Serialize, Deserialize)]
+pub struct UserOnline {
+    pub account: String,
+    pub username: String,
+}
+
 
 // 注册请求结构体
 #[derive(Deserialize)]
