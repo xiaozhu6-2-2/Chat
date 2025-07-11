@@ -96,7 +96,7 @@ pub fn create_routes() -> Router<AppState> {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(vec![Method::GET, Method::POST])
-        .allow_headers(vec![HeaderName::from_static("content-type")]); 
+        .allow_headers(Any); 
 
     let public_routes = Router::new()
         .route("/", get(handlers::root))
@@ -108,7 +108,6 @@ pub fn create_routes() -> Router<AppState> {
         .route("/chatrooms/create", post(handlers::create_chatroom))
         .route("/chatrooms/join", post(handlers::join_chatroom))
         .route("/chatrooms/leave", post(handlers::leave_chatroom))
-        .route("/chatrooms/joined", get(handlers::get_joined_chatrooms))
         .route("/online-users/{:room_id}", get(handlers::get_online_users))
 
         .route("/friend-requests", post(handlers::send_friend_request))
@@ -237,6 +236,7 @@ use axum::extract::ws::WebSocketUpgrade;
 use axum::response::IntoResponse;
 use chrono::DateTime;
 use chrono::{TimeZone, Utc};
+use axum::http::Method;
 
 // 分离模块导入
 use crate::{models::{
@@ -261,6 +261,10 @@ use crate::models::{StartPrivateChatRequest, PrivateSessionResponse, PrivateMess
 // 根路径处理函数
 pub async fn root() -> &'static str {
     "Hello, World!"
+}
+
+pub async fn handle_options() -> (StatusCode, &'static str) {
+    (StatusCode::NO_CONTENT, "")
 }
 
 // 注册处理函数
