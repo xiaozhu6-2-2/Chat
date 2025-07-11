@@ -28,6 +28,7 @@ use axum::extract::ws::WebSocketUpgrade;
 use axum::response::IntoResponse;
 use chrono::DateTime;
 use chrono::{TimeZone, Utc};
+use axum::http::Method;
 
 // 分离模块导入
 use crate::{models::{
@@ -52,6 +53,10 @@ use crate::models::{StartPrivateChatRequest, PrivateSessionResponse, PrivateMess
 // 根路径处理函数
 pub async fn root() -> &'static str {
     "Hello, World!"
+}
+
+pub async fn handle_options() -> (StatusCode, &'static str) {
+    (StatusCode::NO_CONTENT, "")
 }
 
 // 注册处理函数

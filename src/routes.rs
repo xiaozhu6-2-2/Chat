@@ -27,7 +27,7 @@ pub fn create_routes() -> Router<AppState> {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(vec![Method::GET, Method::POST])
-        .allow_headers(vec![HeaderName::from_static("content-type")]); 
+        .allow_headers(Any); 
 
     let public_routes = Router::new()
         .route("/", get(handlers::root))
@@ -39,7 +39,6 @@ pub fn create_routes() -> Router<AppState> {
         .route("/chatrooms/create", post(handlers::create_chatroom))
         .route("/chatrooms/join", post(handlers::join_chatroom))
         .route("/chatrooms/leave", post(handlers::leave_chatroom))
-        .route("/chatrooms/joined", get(handlers::get_joined_chatrooms))
         .route("/online-users/{:room_id}", get(handlers::get_online_users))
 
         .route("/friend-requests", post(handlers::send_friend_request))
