@@ -2,10 +2,7 @@
 // 库模块导入
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use tokio::sync::broadcast;
-use std::sync::Arc;
 use chrono::{DateTime, Utc};
-use chrono::NaiveDateTime;
 
 // 用户表模型
 #[derive(Debug, Deserialize, Serialize, FromRow)]
@@ -110,12 +107,6 @@ pub struct WsMessage {
     pub content: String,
     pub send_at: chrono::DateTime<chrono::Utc>,
     pub message_type: String,
-}
-
-// WebSocket连接状态
-pub struct WsConnection {
-    pub sender: broadcast::Sender<WsMessage>,
-    pub connections: Arc<tokio::sync::RwLock<Vec<broadcast::Sender<WsMessage>>>>,
 }
 
 // 好友请求状态枚举

@@ -27,8 +27,9 @@ use std::collections::HashSet;
 use axum::extract::ws::WebSocketUpgrade;
 use axum::response::IntoResponse;
 use chrono::DateTime;
-use chrono::{TimeZone, Utc};
-use axum::http::Method;
+use chrono::Utc;
+use rsa::pkcs1::EncodeRsaPublicKey;
+
 
 // 分离模块导入
 use crate::{models::{
@@ -53,10 +54,6 @@ use crate::models::{StartPrivateChatRequest, PrivateSessionResponse, PrivateMess
 // 根路径处理函数
 pub async fn root() -> &'static str {
     "Hello, World!"
-}
-
-pub async fn handle_options() -> (StatusCode, &'static str) {
-    (StatusCode::NO_CONTENT, "")
 }
 
 // 注册处理函数
@@ -139,6 +136,18 @@ async fn validate_credentials(
         }
         None => Ok(None), // 用户不存在
     }
+}
+
+// 公钥获取函数
+pub async fn get_session_key(
+    State(state) : State<AppState>
+) -> Result<Json<String>, StatusCode> {
+    let public_key = &state.session_key.1;
+    let pk = public_key
+        .to_pkcs1_pem(rsa::pkcs1::LineEnding::LF)
+        .unwrap()
+        .to_string();
+    Ok(Json(pk))
 }
 
 // JWT生成函数

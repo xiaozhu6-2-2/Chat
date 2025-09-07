@@ -1,0 +1,1 @@
+fn() -> Result<std::string::String, Box<(dyn StdError + 'static)>> {session_key}: Handler<_, _>

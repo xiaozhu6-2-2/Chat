@@ -42,6 +42,9 @@ chrono = { version = "0.4", features = ["serde", "clock"] }
 #异步原语
 futures = "0.3"
 
+#Rsa库
+rsa = "0.9"
+
 #Axum框架
 axum = { version = "0.8.4", features = ["ws", "macros"] }
 

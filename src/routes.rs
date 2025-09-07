@@ -8,7 +8,6 @@ use axum::{
     Extension
 };
 use tower_http::cors::{CorsLayer, Any};
-use axum::http::{Method, HeaderName};
 use axum::extract::ws::WebSocketUpgrade;
 use axum::routing::delete;
 
@@ -32,7 +31,8 @@ pub fn create_routes() -> Router<AppState> {
     let public_routes = Router::new()
         .route("/", get(handlers::root))
         .route("/register", post(handlers::register))
-        .route("/login", post(handlers::login));
+        .route("/login", post(handlers::login))
+        .route("/auth/session-key", get(handlers::get_session_key));
     
     let protected_routes = Router::new() // 被保护的路由
         .route("/protected", get(handlers::protected))

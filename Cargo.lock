@@ -252,6 +252,7 @@ dependencies = [
  "http 0.2.12",
  "jsonwebtoken",
  "rand_core 0.6.4",
+ "rsa",
  "serde",
  "serde_json",
  "sqlx",

@@ -1,0 +1,13 @@
+{
+  "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
+    "@vue/runtime-dom": "^3.5.18",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.8.3",
+    "vue-tsc": "^3.0.4"
+  },
+  "dependencies": {
+    "crypto-js": "^4.2.0",
+    "jsencrypt": "^3.3.2"
+  }
+}
