@@ -47,6 +47,12 @@ pub struct LoginResponse {
     pub token: String,     // JWT令牌
 }
 
+// 会话响应模型
+#[derive(Serialize)]
+pub struct SessionKeyRespone {
+    pub public_key : String
+}
+
 // JWT
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {

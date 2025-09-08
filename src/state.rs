@@ -26,7 +26,7 @@ impl AppState {
             chat_rooms: Arc::new(Mutex::new(HashMap::new())),
             online_users : Arc::new(Mutex::new(HashMap::new())), 
             private_sessions: Arc::new(Mutex::new(HashMap::new())),
-            session_key : generate_keys(3072)
+            session_key : generate_keys(2048)
         }
     }
 }

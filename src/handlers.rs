@@ -10,6 +10,7 @@ use axum::{
     extract::Path
 };
 use axum::Extension;
+use rsa::traits::PublicKeyParts;
 use sqlx::MySqlPool;
 use std::error::Error;
 use argon2::{
@@ -29,7 +30,10 @@ use axum::response::IntoResponse;
 use chrono::DateTime;
 use chrono::Utc;
 use rsa::pkcs1::EncodeRsaPublicKey;
-
+use rsa::Pkcs1v15Encrypt;
+use rsa::RsaPrivateKey;
+use base64::engine::general_purpose;
+use base64::Engine;
 
 // 分离模块导入
 use crate::{models::{
@@ -37,13 +41,13 @@ use crate::{models::{
         RegisterResponse,
         LoginRequest, 
         LoginResponse, 
+        SessionKeyRespone,
         User,
         Claims,
         JoinedChatroomInfo
     }};
 
-use crate::models::{CreateChatroomRequest, JoinChatroomRequest, LeaveChatroomRequest, 
-                   ChatroomResponse};
+use crate::models::{ChatroomResponse, CreateChatroomRequest, JoinChatroomRequest, LeaveChatroomRequest};
 use crate::models::{
     SendFriendRequest, FriendRequestInfo, RespondToFriendRequest, FriendRequestStatus,
     FriendInfo, 
@@ -92,10 +96,19 @@ pub async fn login(
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
-    match validate_credentials(&state.db_pool, &payload.account, &payload.password).await {
+    // 获取私钥
+    let private_key = &state.session_key.0;
+
+    // 解密账号和密码
+    let account = private_key_decrypt(&private_key, &payload.account).await?;
+    let password = private_key_decrypt(&private_key, &payload.password).await?;
+
+    info!("解密后账号如下：{}", account);
+
+    match validate_credentials(&state.db_pool, &account, &password).await {
         Ok(Some(username)) => {
             // 生成JWT令牌
-            let token = generate_jwt(&payload.account)
+            let token = generate_jwt(&account)
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
                 
             Ok(Json(LoginResponse {
@@ -138,16 +151,41 @@ async fn validate_credentials(
     }
 }
 
+// 私钥解密函数
+async fn private_key_decrypt(private_key : &RsaPrivateKey, data : &str) -> Result<String, StatusCode> {
+    // 计算模数(字节)
+    let key_size_bytes = private_key.n().to_bytes_be().len();
+
+    // 填充方案
+    let padding = Pkcs1v15Encrypt;
+
+    // 将加密字符串转化为BASE64格式
+    let ciphertext = general_purpose::STANDARD.decode(&data)
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    // 验证密文长度是否是模数的倍数
+    if key_size_bytes != ciphertext.len() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // 解密密文
+    let plain_data = private_key.decrypt(padding, &ciphertext)
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    String::from_utf8(plain_data)
+        .map_err(|_| StatusCode::BAD_REQUEST)
+} 
+
 // 公钥获取函数
 pub async fn get_session_key(
     State(state) : State<AppState>
-) -> Result<Json<String>, StatusCode> {
+) -> Result<Json<SessionKeyRespone>, StatusCode> {
     let public_key = &state.session_key.1;
     let pk = public_key
         .to_pkcs1_pem(rsa::pkcs1::LineEnding::LF)
         .unwrap()
         .to_string();
-    Ok(Json(pk))
+    Ok(Json(SessionKeyRespone { public_key: pk }))
 }
 
 // JWT生成函数

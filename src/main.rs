@@ -5,9 +5,9 @@ mod routes;
 mod state;
 mod middleware;
 
+use log::info;
 // 库模块导入
 use tokio::net::TcpListener;
-use tracing_subscriber::fmt;
 use sqlx::MySqlPool;
 
 // 分离模块导入
@@ -22,7 +22,10 @@ async fn main() {
         .expect("DATABASE_URL must be set in .env");
 
     // 初始化日志
-    fmt::init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .format_timestamp(None)
+        .init();
+    info!("Application starting");
 
     // 创建 MySQL 连接池
     let db_pool = MySqlPool::connect(&db_url)
