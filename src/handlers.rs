@@ -65,6 +65,16 @@ pub async fn register(
     State(state): State<AppState>,// 注入状态
     Json(payload): Json<RegisterRequest>,// 解析为请求结构体
 ) -> Result<Json<RegisterResponse>, StatusCode> {
+    // 获取私钥
+    let private_key = &state.session_key.0;
+
+    // 解密账号密码
+    let account = private_key_decrypt(private_key, &payload.account).await?;
+    let password = private_key_decrypt(private_key, &payload.password).await?;
+    
+    info!("解密前账号：{}", payload.account);
+    info!("解密后账号：{}", account);
+
     // 生成随机盐值
     let salt = SaltString::generate(&mut OsRng);
     
@@ -73,14 +83,14 @@ pub async fn register(
     
     // 生成密码哈希
     let password_hash = argon2
-        .hash_password(payload.password.as_bytes(), &salt)
+        .hash_password(password.as_bytes(), &salt)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .to_string();
 
-    // 存储到数据库 (替换原有的明文存储)
+    // 存储到数据库
     sqlx::query!(
         "INSERT INTO user_info (account, password, username) VALUES (?, ?, ?)",
-        payload.account,
+        account,
         password_hash,
         payload.username,
     )
