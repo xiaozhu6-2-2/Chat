@@ -1,2 +1,0 @@
-fn(axum::extract::State<AppState>) -> impl futures::Future<Output = Result<axum::Json<SessionKeyRespone>, axum::http::StatusCode>> {get_session_key}
-fn(axum::extract::State<AppState>) -> impl futures::Future<Output = Result<axum::Json<SessionKeyRespone>, axum::http::StatusCode>> {get_session_key}: Handler<_, _>

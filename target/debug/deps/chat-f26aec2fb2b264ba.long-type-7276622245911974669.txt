@@ -1,2 +1,0 @@
-fn(axum::extract::State<AppState>, axum::Json<LoginRequest>) -> impl futures::Future<Output = Result<axum::Json<LoginResponse>, axum::http::StatusCode>> {login}
-fn(axum::extract::State<AppState>, axum::Json<LoginRequest>) -> impl futures::Future<Output = Result<axum::Json<LoginResponse>, axum::http::StatusCode>> {login}: Handler<_, _>

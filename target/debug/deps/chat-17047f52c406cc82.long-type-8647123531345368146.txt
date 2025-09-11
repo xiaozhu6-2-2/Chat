@@ -1,2 +1,0 @@
-fn(axum::extract::State<AppState>, axum::Json<RegisterRequest>) -> impl futures::Future<Output = Result<axum::Json<RegisterResponse>, axum::http::StatusCode>> {handlers::auth::register}
-fn(axum::extract::State<AppState>, axum::Json<RegisterRequest>) -> impl futures::Future<Output = Result<axum::Json<RegisterResponse>, axum::http::StatusCode>> {handlers::auth::register}: Handler<_, _>

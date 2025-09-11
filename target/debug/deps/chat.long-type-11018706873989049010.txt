@@ -1,2 +1,0 @@
-fn(Extension<Claims>, State<AppState>, axum::Json<LeaveChatroomRequest>) -> impl Future<Output = Result<axum::Json<ChatroomResponse>, axum::http::StatusCode>> {leave_chatroom}
-fn(Extension<Claims>, State<AppState>, axum::Json<LeaveChatroomRequest>) -> impl Future<Output = Result<axum::Json<ChatroomResponse>, axum::http::StatusCode>> {leave_chatroom}: Handler<_, _>

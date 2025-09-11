@@ -1,1 +1,0 @@
-fn() -> Result<axum::Json<std::string::String>, axum::http::StatusCode> {session_key}: Handler<_, _>

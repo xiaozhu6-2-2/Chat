@@ -1,1 +1,55 @@
-node_modules
+# 核心：Rust 编译输出目录
+/target/
+**/*.rs.bk
+
+# 核心：Node.js 依赖目录
+/node_modules/
+
+# Rust 编译缓存和诊断文件
+Cargo.lock
+*.pdb
+*.d
+*.so
+*.dylib
+*.dll
+*.rlib
+*.lib
+
+# Rust 分析器和 IDE 数据
+/rust-analyzer/
+/.idea/
+/.vscode/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志文件
+*.log
+/logs/
+
+# 环境变量文件
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 备份文件
+*.backup
+*.bak
+
+# 大型文档文件
+*.docx
+*.pdf
+
+# 文本文件
+*.txt
+
+# 其他生成文件
+/dist/
+/build/
+/out/
