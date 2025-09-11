@@ -16,8 +16,7 @@ use super::handlers;
 use crate::{
     middleware::{auth_middleware, ws_auth_middleware},
     state::AppState,
-    handlers::handle_websocket,
-    models::Claims
+    models::others::Claims
 };
 
 // 构建路由并返回 Router 实例
@@ -29,33 +28,32 @@ pub fn create_routes() -> Router<AppState> {
         .allow_headers(Any); 
 
     let public_routes = Router::new()
-        .route("/", get(handlers::root))
-        .route("/register", post(handlers::register))
-        .route("/login", post(handlers::login))
-        .route("/auth/session-key", get(handlers::get_session_key));
+        .route("/", get(handlers::auth::login))
+        .route("/register", post(handlers::auth::register))
+        .route("/login", post(handlers::auth::login))
+        .route("/auth/session-key", get(handlers::auth::get_session_key));
     
     let protected_routes = Router::new() // 被保护的路由
-        .route("/protected", get(handlers::protected))
-        .route("/chatrooms/create", post(handlers::create_chatroom))
-        .route("/chatrooms/join", post(handlers::join_chatroom))
-        .route("/chatrooms/leave", post(handlers::leave_chatroom))
-        .route("/chatrooms/joined", get(handlers::get_joined_chatrooms))
-        .route("/online-users/{:room_id}", get(handlers::get_online_users))
+        .route("/chatrooms/create", post(handlers::other::create_chatroom))
+        .route("/chatrooms/join", post(handlers::other::join_chatroom))
+        .route("/chatrooms/leave", post(handlers::other::leave_chatroom))
+        .route("/chatrooms/joined", get(handlers::other::get_joined_chatrooms))
+        .route("/online-users/{:room_id}", get(handlers::other::get_online_users))
 
-        .route("/friend-requests", post(handlers::send_friend_request))
-        .route("/friend-requests", get(handlers::list_friend_requests))
-        .route("/friend-requests/respond", post(handlers::respond_friend_request))
-        .route("/friends", get(handlers::list_friends))
-        .route("/friends/{:friend_account}", delete(handlers::remove_friend))
+        .route("/friend-requests", post(handlers::other::send_friend_request))
+        .route("/friend-requests", get(handlers::other::list_friend_requests))
+        .route("/friend-requests/respond", post(handlers::other::respond_friend_request))
+        .route("/friends", get(handlers::other::list_friends))
+        .route("/friends/{:friend_account}", delete(handlers::other::remove_friend))
 
-        .route("/private-chat/start", post(handlers::start_private_chat))
-        .route("/private-chat/history/{:session_id}", get(handlers::get_private_chat_history))
+        .route("/private-chat/start", post(handlers::other::start_private_chat))
+        .route("/private-chat/history/{:session_id}", get(handlers::other::get_private_chat_history))
         .route_layer(middleware::from_fn(auth_middleware));
 
     let ws_route = Router::new().route(
         "/ws/{:room_id}",
         get(|ws: WebSocketUpgrade, Path(room_id): Path<u32>, State(state): State<AppState>, Extension(claims): Extension<Claims>| async move {
-            ws.on_upgrade(move |socket| handle_websocket(
+            ws.on_upgrade(move |socket| handlers::other::handle_websocket(
                 Path(room_id),
                 socket, 
                 State(state),
@@ -67,7 +65,7 @@ pub fn create_routes() -> Router<AppState> {
 
     let private_ws_route = Router::new().route(
         "/private-chat/ws/{:session_id}",
-        get(handlers::handle_private_websocket)
+        get(handlers::other::handle_private_websocket)
     ).route_layer(middleware::from_fn(ws_auth_middleware));
 
     Router::new()

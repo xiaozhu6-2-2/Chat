@@ -6,7 +6,7 @@ use axum::{
     response::Response,
 };
 use jsonwebtoken::{decode, DecodingKey, Validation};
-use crate::models::Claims;
+use crate::models::others::Claims;
 
 // JWT验证中间件
 pub async fn auth_middleware(

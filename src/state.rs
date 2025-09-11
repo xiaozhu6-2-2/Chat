@@ -7,8 +7,8 @@ use tokio::sync::{Mutex, broadcast};
 use rsa::{RsaPrivateKey, RsaPublicKey};
 use rand_core::OsRng;
 // 模块分离导入
-use crate::models::WsMessage;
-use crate::models::PrivateMessage;
+use crate::models::others::WsMessage;
+use crate::models::entities::PrivateMessage;
 
 #[derive(Clone)]
 pub struct AppState {
