@@ -6,7 +6,7 @@
 /node_modules/
 
 # rust-analyzer缓存
-src/target/
+/src/target/
 
 # Rust 编译缓存和诊断文件
 Cargo.lock
