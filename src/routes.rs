@@ -34,26 +34,26 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/session-key", get(handlers::auth::get_session_key));
     
     let protected_routes = Router::new() // 被保护的路由
-        .route("/chatrooms/create", post(handlers::other::create_chatroom))
-        .route("/chatrooms/join", post(handlers::other::join_chatroom))
-        .route("/chatrooms/leave", post(handlers::other::leave_chatroom))
-        .route("/chatrooms/joined", get(handlers::other::get_joined_chatrooms))
-        .route("/online-users/{:room_id}", get(handlers::other::get_online_users))
+        .route("/chatrooms/create", post(handlers::chatroom::create_chatroom))
+        .route("/chatrooms/join", post(handlers::chatroom::join_chatroom))
+        .route("/chatrooms/leave", post(handlers::chatroom::leave_chatroom))
+        .route("/chatrooms/joined", get(handlers::chatroom::get_joined_chatrooms))
+        .route("/online-users/{:room_id}", get(handlers::online_status::get_online_users))
 
-        .route("/friend-requests", post(handlers::other::send_friend_request))
-        .route("/friend-requests", get(handlers::other::list_friend_requests))
-        .route("/friend-requests/respond", post(handlers::other::respond_friend_request))
-        .route("/friends", get(handlers::other::list_friends))
-        .route("/friends/{:friend_account}", delete(handlers::other::remove_friend))
+        .route("/friend-requests", post(handlers::friends::send_friend_request))
+        .route("/friend-requests", get(handlers::friends::list_friend_requests))
+        .route("/friend-requests/respond", post(handlers::friends::respond_friend_request))
+        .route("/friends", get(handlers::friends::list_friends))
+        .route("/friends/{:friend_account}", delete(handlers::friends::remove_friend))
 
-        .route("/private-chat/start", post(handlers::other::start_private_chat))
-        .route("/private-chat/history/{:session_id}", get(handlers::other::get_private_chat_history))
+        .route("/private-chat/start", post(handlers::direct_conversation::start_private_chat))
+        .route("/private-chat/history/{:session_id}", get(handlers::direct_conversation::get_private_chat_history))
         .route_layer(middleware::from_fn(auth_middleware));
 
     let ws_route = Router::new().route(
         "/ws/{:room_id}",
         get(|ws: WebSocketUpgrade, Path(room_id): Path<u32>, State(state): State<AppState>, Extension(claims): Extension<Claims>| async move {
-            ws.on_upgrade(move |socket| handlers::other::handle_websocket(
+            ws.on_upgrade(move |socket| handlers::trans_logic::handle_websocket(
                 Path(room_id),
                 socket, 
                 State(state),
@@ -65,7 +65,7 @@ pub fn create_routes() -> Router<AppState> {
 
     let private_ws_route = Router::new().route(
         "/private-chat/ws/{:session_id}",
-        get(handlers::other::handle_private_websocket)
+        get(handlers::trans_logic::handle_private_websocket)
     ).route_layer(middleware::from_fn(ws_auth_middleware));
 
     Router::new()
