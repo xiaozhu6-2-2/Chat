@@ -5,6 +5,9 @@
 # 核心：Node.js 依赖目录
 /node_modules/
 
+# rust-analyzer缓存
+src/target/
+
 # Rust 编译缓存和诊断文件
 Cargo.lock
 *.pdb
