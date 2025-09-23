@@ -54,6 +54,9 @@ log = "0.4"
 #日志实现
 env_logger = "0.10"
 
+#thiserror库：简化自定义错误类型定义
+thiserror = "1.0"
+
 #Axum框架
 axum = { version = "0.8.4", features = ["ws", "macros"] }
 
