@@ -13,13 +13,16 @@ pub async fn auth_middleware(
     mut request: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    // 在请求头解析Authorization字段
     let token = request.headers()
         .get("Authorization")
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "));
     
+    // 查看该字段的值是否为空，是空的话就返回状态码401
     let token = token.ok_or(StatusCode::UNAUTHORIZED)?;
     
+    // 解析该token
     let token_data = decode::<Claims>(
         token,
         &DecodingKey::from_secret(std::env::var("JWT_SECRET").unwrap().as_ref()),

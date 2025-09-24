@@ -32,7 +32,7 @@ async fn main() {
         .await
         .expect("Failed to create MySQL pool");
 
-    let state = AppState::new(db_pool);
+    let state = AppState::new(db_pool).await.unwrap();
 
     // 构建路由(注入状态)
     let app = create_routes().with_state(state);
