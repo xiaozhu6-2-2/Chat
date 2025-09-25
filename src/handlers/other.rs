@@ -1,3 +1,7 @@
+// src/handlers/others.rs
+/*
+    这个模块是用来处理一些小请求
+*/
 // 库模块导入
 use sqlx::MySqlPool;
 

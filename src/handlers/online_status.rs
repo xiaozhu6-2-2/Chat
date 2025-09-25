@@ -1,3 +1,7 @@
+// src/handlers/online_status.rs
+/*
+    这个模块用于处理前端的修改在线状态的请求，例如隐身等
+*/
 // 库模块导入
 use axum::Json;
 use axum::{

@@ -14,9 +14,13 @@ use axum::routing::delete;
 // 分离模块导入
 use super::handlers;
 use crate::{
-    middleware::{auth_middleware, ws_auth_middleware},
-    state::AppState,
-    models::others::Claims
+    handlers::connections::websocket_handler, 
+    middleware::{
+        auth_middleware,
+        ws_auth_middleware
+    },
+    models::others::Claims,
+    state::AppState
 };
 
 // 构建路由并返回 Router 实例
@@ -50,28 +54,13 @@ pub fn create_routes() -> Router<AppState> {
         // .route("/private-chat/history/{:session_id}", get(handlers::direct_conversation::get_private_chat_history))
         .route_layer(middleware::from_fn(auth_middleware));
 
-    // let ws_route = Router::new().route(
-    //     "/ws/{:room_id}",
-    //     get(|ws: WebSocketUpgrade, Path(room_id): Path<u32>, State(state): State<AppState>, Extension(claims): Extension<Claims>| async move {
-    //         ws.on_upgrade(move |socket| handlers::trans_logic::handle_websocket(
-    //             Path(room_id),
-    //             socket, 
-    //             State(state),
-    //             Extension(claims)
-    //         ))
-    //     })
-    //     .route_layer(middleware::from_fn(ws_auth_middleware))
-    // );
-
-    // let private_ws_route = Router::new().route(
-    //     "/private-chat/ws/{:session_id}",
-    //     get(handlers::trans_logic::handle_private_websocket)
-    // ).route_layer(middleware::from_fn(ws_auth_middleware));
+    let ws_route: Router<AppState> = Router::new()
+        .route("/connection/ws",get(handlers::connections::websocket_handler))
+        .layer(middleware::from_fn(ws_auth_middleware));
 
     Router::new()
         .merge(public_routes)
         .merge(protected_routes)
-        // .merge(ws_route)
-        // .merge(private_ws_route)
+        .merge(ws_route)
         .layer(cors)
 }

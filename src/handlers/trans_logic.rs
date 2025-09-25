@@ -1,3 +1,9 @@
+// src/handlers/trans_logic.rs
+/* 
+    这个模块是用来处理前端通过websocket发来的不同类型的消息，例如私聊消息，群聊消息
+    以及后端要发送给前端的消息，例如广播群聊消息，好友上线消息
+*/
+
 // 库模块导入
 use axum::{
     extract::ws::{WebSocket, Message, WebSocketUpgrade},
@@ -123,104 +129,104 @@ pub async fn handle_websocket(
     update_online_status(&state, account.clone(), room_id, false).await;
 }
 
-// 私聊会话
-pub async fn handle_private_websocket(
-    Path(session_id): Path<u64>,
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
-) -> impl IntoResponse {
-    let user_account = claims.sub.clone();
+// // 私聊会话
+// pub async fn handle_private_websocket(
+//     Path(session_id): Path<u64>,
+//     ws: WebSocketUpgrade,
+//     State(state): State<AppState>,
+//     Extension(claims): Extension<Claims>,
+// ) -> impl IntoResponse {
+//     let user_account = claims.sub.clone();
     
-    ws.on_upgrade(move |socket| async move {
-        // 验证用户是否有权访问此会话
-        let is_valid = sqlx::query_scalar!(
-            r#"SELECT EXISTS(
-                SELECT 1 FROM private_chat_sessions 
-                WHERE session_id = ? 
-                AND (user1_account = ? OR user2_account = ?)
-            )"#,
-            session_id,
-            user_account,
-            user_account
-        )
-        .fetch_one(&state.db_pool)
-        .await
-        .map(|exists: i64| exists > 0)
-        .unwrap_or(false);
+//     ws.on_upgrade(move |socket| async move {
+//         // 验证用户是否有权访问此会话
+//         let is_valid = sqlx::query_scalar!(
+//             r#"SELECT EXISTS(
+//                 SELECT 1 FROM private_chat_sessions 
+//                 WHERE session_id = ? 
+//                 AND (user1_account = ? OR user2_account = ?)
+//             )"#,
+//             session_id,
+//             user_account,
+//             user_account
+//         )
+//         .fetch_one(&state.db_pool)
+//         .await
+//         .map(|exists: i64| exists > 0)
+//         .unwrap_or(false);
 
-        if !is_valid {
-            return;
-        }
+//         if !is_valid {
+//             return;
+//         }
 
-        // 获取或创建广播通道
-        let tx = {
-            let mut sessions = state.private_sessions.lock().await;
-            sessions.entry(session_id)
-                .or_insert_with(|| broadcast::channel(100).0)
-                .clone()
-        };
+//         // 获取或创建广播通道
+//         let tx = {
+//             let mut sessions = state.private_sessions.lock().await;
+//             sessions.entry(session_id)
+//                 .or_insert_with(|| broadcast::channel(100).0)
+//                 .clone()
+//         };
 
-        let mut rx = tx.subscribe();
-        let (mut sender, mut receiver) = socket.split();
+//         let mut rx = tx.subscribe();
+//         let (mut sender, mut receiver) = socket.split();
 
-        // 消息接收任务
-        let send_task = tokio::spawn(async move {
-            while let Ok(msg) = rx.recv().await {
-                let json = serde_json::to_string(&msg).unwrap();
-                if sender.send(Message::Text(json.into())).await.is_err() {
-                    break;
-                }
-            }
-        });
+//         // 消息接收任务
+//         let send_task = tokio::spawn(async move {
+//             while let Ok(msg) = rx.recv().await {
+//                 let json = serde_json::to_string(&msg).unwrap();
+//                 if sender.send(Message::Text(json.into())).await.is_err() {
+//                     break;
+//                 }
+//             }
+//         });
 
-        // 消息发送任务
-        let recv_task = tokio::spawn({
-            let state = state.clone();
-            let user_account = claims.sub.clone();
-            async move {
-                while let Some(Ok(Message::Text(text))) = receiver.next().await {
-                    // 存储私聊消息
-                    let now = Utc::now();
-                    let result = sqlx::query!(
-                        "INSERT INTO private_messages (session_id, sender_account, content)
-                         VALUES (?, ?, ?)",
-                        session_id,
-                        user_account,
-                        text.to_string()
-                    )
-                    .execute(&state.db_pool)
-                    .await;
+//         // 消息发送任务
+//         let recv_task = tokio::spawn({
+//             let state = state.clone();
+//             let user_account = claims.sub.clone();
+//             async move {
+//                 while let Some(Ok(Message::Text(text))) = receiver.next().await {
+//                     // 存储私聊消息
+//                     let now = Utc::now();
+//                     let result = sqlx::query!(
+//                         "INSERT INTO private_messages (session_id, sender_account, content)
+//                          VALUES (?, ?, ?)",
+//                         session_id,
+//                         user_account,
+//                         text.to_string()
+//                     )
+//                     .execute(&state.db_pool)
+//                     .await;
 
-                    if let Ok(result) = result {
-                        let message_id = result.last_insert_id() as u64;
+//                     if let Ok(result) = result {
+//                         let message_id = result.last_insert_id() as u64;
                         
-                        // 获取用户名
-                        let username = get_username(&state.db_pool, &user_account)
-                            .await
-                            .unwrap_or_else(|| user_account.clone());
+//                         // 获取用户名
+//                         let username = get_username(&state.db_pool, &user_account)
+//                             .await
+//                             .unwrap_or_else(|| user_account.clone());
 
-                        // 广播消息
-                        let private_msg = PrivateMessage {
-                            message_id: message_id as i64,
-                            session_id: session_id as i64,
-                            sender_account: user_account.clone(),
-                            sender_username: username,
-                            content: text.to_string(),
-                            sent_at: now,
-                        };
+//                         // 广播消息
+//                         let private_msg = PrivateMessage {
+//                             message_id: message_id as i64,
+//                             session_id: session_id as i64,
+//                             sender_account: user_account.clone(),
+//                             sender_username: username,
+//                             content: text.to_string(),
+//                             sent_at: now,
+//                         };
 
-                        if let Some(tx) = state.private_sessions.lock().await.get(&session_id) {
-                            let _ = tx.send(private_msg);
-                        }
-                    }
-                }
-            }
-        });
+//                         if let Some(tx) = state.private_sessions.lock().await.get(&session_id) {
+//                             let _ = tx.send(private_msg);
+//                         }
+//                     }
+//                 }
+//             }
+//         });
 
-        tokio::select! {
-            _ = send_task => {}
-            _ = recv_task => {}
-        }
-    })
-}
+//         tokio::select! {
+//             _ = send_task => {}
+//             _ = recv_task => {}
+//         }
+//     })
+// }

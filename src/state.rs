@@ -19,12 +19,13 @@ pub struct AppState {
     pub redis_pool: Pool<RedisConnectionManager>,
     pub chat_rooms: Arc<Mutex<HashMap<u32, broadcast::Sender<WsMessage>>>>,
     pub online_users: Arc<Mutex<HashMap<u32, HashSet<String>>>>,
-    pub private_sessions: Arc<Mutex<HashMap<u64, broadcast::Sender<PrivateMessage>>>>,
+    // pub private_sessions: Arc<Mutex<HashMap<u64, broadcast::Sender<PrivateMessage>>>>,
     pub session_key : (RsaPrivateKey, RsaPublicKey)
 }
 
 impl AppState {
     pub async fn new(db_pool: MySqlPool) -> AppResult<Self> {
+        // 构建redis连接池
         let manager = RedisConnectionManager::new("redis://localhost:6379")
             .map_err(|e| AppError::StateGenerationFailure(e.to_string()))?;
         let pool = Pool::builder()
@@ -33,12 +34,13 @@ impl AppState {
             .build(manager)
             .await
             .map_err(|e| AppError::StateGenerationFailure(e.to_string()))?;
+
         Ok(Self {
             db_pool,
             redis_pool: pool,
             chat_rooms: Arc::new(Mutex::new(HashMap::new())),
             online_users : Arc::new(Mutex::new(HashMap::new())), 
-            private_sessions: Arc::new(Mutex::new(HashMap::new())),
+            // private_sessions: Arc::new(Mutex::new(HashMap::new())),
             session_key : generate_keys(2048)
         })
     }

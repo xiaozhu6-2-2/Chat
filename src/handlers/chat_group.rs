@@ -1,3 +1,7 @@
+// src/handlers/chat_group.rs
+/*
+    这个模块是用于处理管理群聊的操作，例如创建、删除、修改群名称、添加群管理员等等
+*/
 // 库模块导入
 use axum::{
     http::StatusCode,
