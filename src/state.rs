@@ -1,26 +1,23 @@
 // src/state.rs
 // 库模块导入
+use axum::extract::ws::Message;
 use sqlx::MySqlPool;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{Mutex, broadcast};
+use tokio::sync::{RwLock, mpsc};
 use rsa::{RsaPrivateKey, RsaPublicKey};
 use rand_core::OsRng;
 use bb8_redis::bb8::Pool;
 use bb8_redis::RedisConnectionManager;
 // 模块分离导入
-use crate::models::others::WsMessage;
-use crate::models::entities::PrivateMessage;
 use crate::models::errors::{AppError, AppResult};
 
 #[derive(Clone)]
 pub struct AppState {
     pub db_pool: MySqlPool,
     pub redis_pool: Pool<RedisConnectionManager>,
-    pub chat_rooms: Arc<Mutex<HashMap<u32, broadcast::Sender<WsMessage>>>>,
-    pub online_users: Arc<Mutex<HashMap<u32, HashSet<String>>>>,
-    // pub private_sessions: Arc<Mutex<HashMap<u64, broadcast::Sender<PrivateMessage>>>>,
-    pub session_key : (RsaPrivateKey, RsaPublicKey)
+    pub session_key: (RsaPrivateKey, RsaPublicKey),
+    pub connection_pool: Arc<RwLock<HashMap<String, mpsc::UnboundedSender<Message>>>>,
 }
 
 impl AppState {
@@ -38,10 +35,8 @@ impl AppState {
         Ok(Self {
             db_pool,
             redis_pool: pool,
-            chat_rooms: Arc::new(Mutex::new(HashMap::new())),
-            online_users : Arc::new(Mutex::new(HashMap::new())), 
-            // private_sessions: Arc::new(Mutex::new(HashMap::new())),
-            session_key : generate_keys(2048)
+            session_key: generate_keys(2048),
+            connection_pool: Arc::new(RwLock::new(HashMap::new())), 
         })
     }
 }

@@ -4,22 +4,16 @@ use axum::{
     routing::{get, post}, 
     Router, 
     middleware,
-    extract::{Path, State},
-    Extension
 };
 use tower_http::cors::{CorsLayer, Any};
-use axum::extract::ws::WebSocketUpgrade;
-use axum::routing::delete;
 
 // 分离模块导入
 use super::handlers;
 use crate::{
-    handlers::connections::websocket_handler, 
     middleware::{
         auth_middleware,
         ws_auth_middleware
     },
-    models::others::Claims,
     state::AppState
 };
 
