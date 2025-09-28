@@ -14,6 +14,8 @@ struct ErrorResponse {
 
 #[derive(Error, Debug)]
 pub enum AppError {
+    #[error("应用状态实例创建失败")]
+    StateGenerationFailure(String),
     #[error("解密失败:{0}")]
     DecryptionFailure(String),
     #[error("密码哈希失败:{0}")]
@@ -34,6 +36,7 @@ pub enum AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, message, details) = match self {
+            Self::StateGenerationFailure(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("应用状态实例创建失败:{}", fault), None),
             Self::DecryptionFailure(fault) => (StatusCode::BAD_REQUEST, format!("解密失败:{}", fault), None),
             Self::HashFailure(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("密码哈希失败{}", fault), None),
             Self::DatabaseFailure(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("数据库操作失败{}", e), None),

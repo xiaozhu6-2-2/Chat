@@ -57,6 +57,12 @@ env_logger = "0.10"
 #thiserror库：简化自定义错误类型定义
 thiserror = "1.0"
 
+#redis
+redis = "0.23.0"
+
+#连接池管理
+bb8-redis = "0.9"
+
 #Axum框架
 axum = { version = "0.8.4", features = ["ws", "macros"] }
 
