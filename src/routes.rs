@@ -31,7 +31,7 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/session-key", get(handlers::auth::get_session_key));
     
     // 需要token认证的路由
-    let protected_routes = Router::new()
+    let protected_routes = Router::new();
         // .route("/chatrooms/create", post(handlers::chatroom::create_chatroom))
         // .route("/chatrooms/join", post(handlers::chatroom::join_chatroom))
         // .route("/chatrooms/leave", post(handlers::chatroom::leave_chatroom))
@@ -46,7 +46,7 @@ pub fn create_routes() -> Router<AppState> {
 
         // .route("/private-chat/start", post(handlers::direct_conversation::start_private_chat))
         // .route("/private-chat/history/{:session_id}", get(handlers::direct_conversation::get_private_chat_history))
-        .route_layer(middleware::from_fn(auth_middleware));
+        // .route_layer(middleware::from_fn(auth_middleware));
 
     let ws_route: Router<AppState> = Router::new()
         .route("/connection/ws",get(handlers::connections::websocket_handler))

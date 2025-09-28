@@ -6,18 +6,22 @@ use serde_json::Value;
 #[serde(tag = "type", content = "payload")]
 pub enum ClientMessage {
     // 心跳请求
-    ping {
+    Ping {
         #[serde(skip_serializing_if = "Option::is_none")]
         timestamp: Option<i64>,
         #[serde(skip_serializing_if = "Option::is_none")]
         data: Option<Value>
     },
     // 心跳响应
-    pong {
+    Pong {
         #[serde(skip_serializing_if = "Option::is_none")]
         timestamp: Option<i64>,
         #[serde(skip_serializing_if = "Option::is_none")]
         data: Option<Value>
+    },
+    // 关闭帧
+    Close {
+
     }
 }
 
@@ -26,17 +30,21 @@ pub enum ClientMessage {
 #[serde(tag = "type", content = "payload")]
 pub enum ServerMessage {
 // 心跳请求
-    ping {
+    Ping {
         #[serde(skip_serializing_if = "Option::is_none")]
         timestamp: Option<i64>,
         #[serde(skip_serializing_if = "Option::is_none")]
         data: Option<Value>
     },
     // 心跳响应
-    pong {
+    Pong {
         #[serde(skip_serializing_if = "Option::is_none")]
         timestamp: Option<i64>,
         #[serde(skip_serializing_if = "Option::is_none")]
         data: Option<Value>
+    },
+    // 关闭帧
+    Close {
+        
     }
 }
