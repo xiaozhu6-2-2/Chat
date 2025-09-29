@@ -4,3 +4,12 @@
 //     以及后端要发送给前端的消息，例如广播群聊消息，好友上线消息
 // */
 // 库模块导入
+
+// 分离模块导入
+use crate::models::errors::AppResult;
+
+pub async fn handle_private_chat(
+
+) -> AppResult<()> {
+    Ok(())
+}
