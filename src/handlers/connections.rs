@@ -9,20 +9,16 @@ use axum::{
     Extension,
 };
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, RwLock};
 use tokio::time::{Duration, interval, Instant};
-use futures::{SinkExt, StreamExt};
-use log::info;
+use futures::{stream::{SplitSink, SplitStream}, SinkExt, StreamExt};
+use log::{info, error};
 use serde_json::json;
 // 模块分离导入
 use crate::{
-    models::{
-        errors::AppResult,
-        others::Claims,
-        msg_websocket::ServerMessage,
-        msg_websocket::ClientMessage,
-    },
-    state::AppState
+    handlers::trans_logic::{send_close, send_pong}, models::{
+        errors::AppResult, msg_websocket::{ClientMessage, ServerMessage}, others::Claims
+    }, state::{self, AppState}
 };
 
 // 用于建立WebSocket连接
@@ -37,16 +33,22 @@ pub async fn websocket_handler(
     Ok(ws.on_upgrade(move |socket| handle_websocket(socket, claims, state)))
 }
 
-// 用于处理WebSocket通信
+// 用于处理WebSocket通信(错误不再继续传播)
 async fn handle_websocket(
     mut socket: WebSocket,
     claims: Claims,
     state: AppState
-) {
+)-> () {
     // 连接者账号
     let account = claims.sub.clone();
+    let account_for_send = account.clone();
+    let account_for_recv = account.clone();
+    let account_for_timeout = account.clone();
 
-    info!("{}连接成功", account);
+    // 状态
+    let state_for_send = state.clone();
+    let state_for_recv = state.clone();
+    let state_for_timeout = account.clone();
 
     // 将WebSocket分为读写端
     let (mut sender, mut receiver) = socket.split();
@@ -54,13 +56,13 @@ async fn handle_websocket(
     // 创建mpsc信道的读写端
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    // 
     // 将tx存入连接池(花括号是为了释放锁)
     {
         let mut pool = state.connection_pool.write().await;
         // 将账号和写端绑定
         pool.insert(claims.sub.clone(), tx);
     }
+    info!("{}连接成功", account);
 
     // 记录最后一次心跳的时间，用于超时判断
     let last_activity = Arc::new(tokio::sync::RwLock::new(Instant::now())); 
@@ -70,104 +72,18 @@ async fn handle_websocket(
     let last_activity_for_timeout = Arc::clone(&last_activity);
 
     // WebSocket写任务(监听专用信道，并向 WebSocket 发送消息)
-    let send_task = tokio::spawn(async move{
-        // 心跳计时器，每30s发送一次ping
-        let mut heartbeat_interval = interval(Duration::from_secs(30));
-
-        loop {
-            tokio::select! {
-                // 从mpsc信道收到发送任务，执行发送任务
-                // 如果是close帧，发送后立刻跳出循环...
-                msg = rx.recv() => {
-                    if let Some(msg) = msg {
-                        if sender.send(msg).await.is_err() {
-                            // 发送失败就断开连接
-                            break;
-                        }
-                    }
-                    else{
-                        // mpsc信道关闭，退出循环
-                        break;
-                    }
-                },
-                _ = heartbeat_interval.tick() => {
-                    // 创建自定义的ping消息
-                    let ping_msg = ServerMessage::Ping{
-                        timestamp: Some(chrono::Utc::now().timestamp()),
-                        data: Some(json!({"source": "server"}))
-                    };
-
-                    // 转换为JSON字符串，再包装为WebSocket Message
-                    let ws_msg = Message::Text(serde_json::to_string(&ping_msg).unwrap().into());
-
-                    if sender.send(ws_msg).await.is_err() {
-                        // 发送失败就断开连接
-                        break;
-                    }
-                }
-            }
-        }
+    let send_task = tokio::spawn(async move {
+        send_task_spawn(rx, sender).await
     });
 
     // WebSocket读任务(监听 WebSocket 接收消息)
     let recv_tack = tokio::spawn(async move{
-        while let Some(Ok(msg)) = receiver.next().await {
-            // 根据帧类型处理消息
-            match msg {
-                // 文本消息
-                Message::Text(text) => {
-                    match serde_json::from_str::<ClientMessage>(&text) {
-                        // 心跳响应消息
-                        Ok(ClientMessage::Pong { timestamp, data }) => {
-                            // 更新时间
-                            let mut last_activity = last_activity_for_recv.write().await;
-                            *last_activity = Instant::now();
-                        },
-                        // 心跳请求消息
-                        Ok(ClientMessage::Ping { timestamp, data }) => {
-                            // 更新时间
-                            let mut last_activity = last_activity_for_recv.write().await;
-                            *last_activity = Instant::now();
-                            // 回复ping的任务...
-                        },
-                        _ => {
-
-                        }
-                    }
-                },
-                // 关闭帧
-                Message::Close(_) => {
-                    // 发送close帧...
-                    // 关闭连接
-                    break;
-                },
-                _ => {
-
-                }
-            }
-        }
+        recv_tack_spawn(receiver, last_activity_for_recv, state_for_recv, account_for_recv).await
     });
 
     // 超时机制
     let timeout_task = tokio::spawn(async move{
-        // 10秒检测一次
-        let mut check_interval = interval(Duration::from_secs(10));
-
-        loop {
-            // 等待定时器触发
-            check_interval.tick().await;
-
-            // 获取读者锁
-            let last_activity = last_activity_for_timeout.read().await;
-
-            // 超过90秒无活动
-            if last_activity.elapsed() > Duration::from_secs(90) {
-                // 自动断开连接
-                info!("连接{}心跳超时", account);
-                // 发送close帧...
-                break;
-            }
-        }
+        timeout_task_spawn(last_activity_for_timeout, account_for_timeout).await
     });
 
     // 结束连接:当读任务或者写任务任意一个结束时，结束连接
@@ -183,4 +99,124 @@ async fn handle_websocket(
 
     // 日志
     info!("用户{}断开连接", claims.sub);
+}
+
+// WebSocket发送任务
+async fn send_task_spawn(
+    mut rx : mpsc::UnboundedReceiver<Message>,
+    mut sender: SplitSink<WebSocket, Message>,
+) {
+    // 心跳计时器，每30s发送一次ping
+    let mut heartbeat_interval = interval(Duration::from_secs(30));
+
+    loop {
+        tokio::select! {
+            // 从mpsc信道收到发送任务，执行发送任务
+            // 如果是close帧，发送后立刻跳出循环...
+            msg = rx.recv() => {
+                if let Some(msg) = msg {
+                    if sender.send(msg).await.is_err() {
+                        // 发送失败就断开连接，并记录日志
+                        error!("WebSocket发送信息失败");
+                        break;
+                    }
+                }
+                else{
+                    // mpsc信道关闭，退出循环
+                    error!("mpsc信道关闭");
+                    break;
+                }
+            },
+            _ = heartbeat_interval.tick() => {
+                // 创建自定义的ping消息
+                let ping_msg = ServerMessage::Ping{
+                    timestamp: Some(chrono::Utc::now().timestamp()),
+                    data: Some(json!({"source": "server"}))
+                };
+
+                // 转换为JSON字符串，再包装为WebSocket Message
+                let ws_msg = Message::Text(serde_json::to_string(&ping_msg).unwrap().into());
+
+                if sender.send(ws_msg).await.is_err() {
+                    // 发送失败就断开连接
+                    error!("ping消息发送失败");
+                    break;
+                }
+            }
+        }
+    }
+}
+
+// WebSocket接收任务
+async fn recv_tack_spawn(
+    mut receiver: SplitStream<WebSocket>,
+    last_activity_for_recv: Arc<RwLock<Instant>>,
+    state: AppState,
+    account: String
+) {
+    // 从websocket中获取消息
+    while let Some(Ok(msg)) = receiver.next().await {
+        // 根据帧类型处理消息
+        match msg {
+            // 文本消息
+            Message::Text(text) => {
+                match serde_json::from_str::<ClientMessage>(&text) {
+                    // 心跳响应消息
+                    Ok(ClientMessage::Pong { timestamp, data }) => {
+                        // 更新时间
+                        let mut last_activity = last_activity_for_recv.write().await;
+                        *last_activity = Instant::now();
+                    },
+                    // 心跳请求消息
+                    Ok(ClientMessage::Ping { timestamp, data }) => {
+                        // 更新时间
+                        let mut last_activity = last_activity_for_recv.write().await;
+                        *last_activity = Instant::now();
+                        // 回复pong(注：这里需要错误处理)
+                        let _ = send_pong(account.clone(), state.clone()).await;
+                    },
+                    _ => {
+
+                    }
+                }
+            },
+            // 关闭帧
+            Message::Close(msg) => {
+                // 发送close帧(注：这里需要错误处理)
+                let _ = send_close().await;
+                // 关闭连接
+                info!("客户端发来关闭帧:{:?}，关闭连接", msg);
+                break;
+            },
+            _ => {
+
+            }
+        }
+    }
+}
+
+// WebSocket超时任务
+async fn timeout_task_spawn(
+    last_activity_for_timeout: Arc<RwLock<Instant>>,
+    account: String
+) {
+    // 10秒检测一次
+    let mut check_interval = interval(Duration::from_secs(10));
+
+    loop {
+        // 等待定时器触发
+        check_interval.tick().await;
+
+        // 获取读者锁
+        let last_activity = last_activity_for_timeout.read().await;
+
+        // 超过90秒无活动
+        if last_activity.elapsed() > Duration::from_secs(90) {
+            // 自动断开连接
+            error!("连接{}心跳超时", account);
+            // 发送close帧(注：这里需要错误处理)
+            let _ = send_close().await;
+            break;
+        }
+    }
 }
