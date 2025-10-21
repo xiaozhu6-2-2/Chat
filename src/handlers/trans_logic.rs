@@ -1,11 +1,10 @@
-use axum::extract::ws::Message;
 // // src/handlers/trans_logic.rs
 // /* 
 //     这个模块是用来处理前端通过websocket发来的不同类型的消息，例如私聊消息，群聊消息
 //     以及后端要发送给前端的消息，例如广播群聊消息，好友上线消息
 // */
 // 库模块导入
-use axum::extract::State;
+use axum::extract::ws::{close_code, CloseFrame, Message};
 use log::{info, warn};
 use serde_json::json;
 // 分离模块导入
@@ -43,8 +42,26 @@ pub async fn send_pong(
 
 // 发送close
 pub async fn send_close(
-
+    account: String,
+    state: AppState
 ) -> AppResult<()> {
+    // 构建WebSocket关闭帧消息
+    let ws_close = Message::Close(Some(CloseFrame {
+        code: close_code::NORMAL,
+        reason: "Null".to_string().into()
+    }));
+
+    // 获取连接池
+    let pool = state.connection_pool.read();
+
+    // 找到对应连接
+    if let Some(tx) = pool.await.get(&account) {
+        tx.send(ws_close).map_err(|e| AppError::MpcsSenderFailure(e.to_string()))?;
+        info!("成功发送close到{}", account);
+    } else {
+        warn!("{}账号没有连接", account);
+    }
+    
     Ok(())
 }
 

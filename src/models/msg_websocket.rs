@@ -21,7 +21,25 @@ pub enum ClientMessage {
     },
     // 关闭帧
     Close {
-
+        details: Option<String>,
+    },
+    // 群聊
+    MesGroup {
+        messageId: Option<String>,
+        timestamp: Option<i64>,
+        senderId: Option<String>,
+        receiverId: Option<String>,
+        chatType: Option<String>,
+        details: Option<String>,
+    },
+    // 私聊 
+    MesPrivate {
+        messageId: Option<String>,
+        timestamp: Option<i64>,
+        senderId: Option<String>,
+        receiverId: Option<String>,
+        chatType: Option<String>,
+        details: Option<String>,
     }
 }
 
@@ -46,5 +64,23 @@ pub enum ServerMessage {
     // 关闭帧
     Close {
         
+    },
+    // 群聊
+    MesGroup {
+        messageId: Option<String>,
+        timestamp: Option<i64>,
+        senderId: Option<String>,
+        receiverId: Option<String>,
+        chatType: Option<String>,
+        details: Option<String>,
+    },
+    // 私聊 
+    MesPrivate {
+        messageId: Option<String>,
+        timestamp: Option<i64>,
+        senderId: Option<String>,
+        receiverId: Option<String>,
+        chatType: Option<String>,
+        details: Option<String>,
     }
 }

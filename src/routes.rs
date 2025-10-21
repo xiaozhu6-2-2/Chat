@@ -26,9 +26,9 @@ pub fn create_routes() -> Router<AppState> {
         .allow_headers(Any); 
 
     let public_routes = Router::new()
-        .route("/auth/register", post(handlers::auth::register))
-        .route("/auth/login", post(handlers::auth::login))
-        .route("/auth/session-key", get(handlers::auth::get_session_key));
+        .route("/register", post(handlers::auth::register))
+        .route("/login", post(handlers::auth::login))
+        .route("/session-key", get(handlers::auth::get_session_key));
     
     // 需要token认证的路由
     let protected_routes = Router::new();
@@ -49,7 +49,7 @@ pub fn create_routes() -> Router<AppState> {
         // .route_layer(middleware::from_fn(auth_middleware));
 
     let ws_route: Router<AppState> = Router::new()
-        .route("/connection/ws",get(handlers::connections::websocket_handler))
+        .route("/auth/connection/ws",get(handlers::connections::websocket_handler))
         .layer(middleware::from_fn(ws_auth_middleware));
 
     Router::new()

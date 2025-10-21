@@ -16,7 +16,7 @@ use log::{info, error};
 use serde_json::json;
 // 模块分离导入
 use crate::{
-    handlers::trans_logic::{send_close, send_pong}, models::{
+    handlers::trans_logic::{handle_group_chat, handle_private_chat, send_close, send_pong}, models::{
         errors::AppResult, msg_websocket::{ClientMessage, ServerMessage}, others::Claims
     }, state::{self, AppState}
 };
@@ -48,7 +48,7 @@ async fn handle_websocket(
     // 状态
     let state_for_send = state.clone();
     let state_for_recv = state.clone();
-    let state_for_timeout = account.clone();
+    let state_for_timeout = state.clone();
 
     // 将WebSocket分为读写端
     let (mut sender, mut receiver) = socket.split();
@@ -83,7 +83,7 @@ async fn handle_websocket(
 
     // 超时机制
     let timeout_task = tokio::spawn(async move{
-        timeout_task_spawn(last_activity_for_timeout, account_for_timeout).await
+        timeout_task_spawn(last_activity_for_timeout, account_for_timeout, state_for_timeout).await
     });
 
     // 结束连接:当读任务或者写任务任意一个结束时，结束连接
@@ -175,6 +175,22 @@ async fn recv_tack_spawn(
                         // 回复pong(注：这里需要错误处理)
                         let _ = send_pong(account.clone(), state.clone()).await;
                     },
+                    // 私聊消息
+                    Ok(ClientMessage::MesPrivate { messageId, timestamp, senderId, receiverId, chatType, details }) => {
+                        // 更新时间
+                        let mut last_activity = last_activity_for_recv.write().await;
+                        *last_activity = Instant::now();
+                        // 处理私聊消息(注：这里需要错误处理)
+                        let _ = handle_private_chat().await;
+                    },
+                    // 群聊消息
+                    Ok(ClientMessage::MesGroup { messageId, timestamp, senderId, receiverId, chatType, details }) => {
+                        // 更新时间
+                        let mut last_activity = last_activity_for_recv.write().await;
+                        *last_activity = Instant::now();
+                        // 处理群聊消息(注：这里需要错误处理)
+                        let _ = handle_group_chat().await;
+                    },
                     _ => {
 
                     }
@@ -183,7 +199,7 @@ async fn recv_tack_spawn(
             // 关闭帧
             Message::Close(msg) => {
                 // 发送close帧(注：这里需要错误处理)
-                let _ = send_close().await;
+                let _ = send_close(account.clone(), state.clone()).await;
                 // 关闭连接
                 info!("客户端发来关闭帧:{:?}，关闭连接", msg);
                 break;
@@ -198,7 +214,8 @@ async fn recv_tack_spawn(
 // WebSocket超时任务
 async fn timeout_task_spawn(
     last_activity_for_timeout: Arc<RwLock<Instant>>,
-    account: String
+    account: String,
+    state: AppState
 ) {
     // 10秒检测一次
     let mut check_interval = interval(Duration::from_secs(10));
@@ -215,7 +232,7 @@ async fn timeout_task_spawn(
             // 自动断开连接
             error!("连接{}心跳超时", account);
             // 发送close帧(注：这里需要错误处理)
-            let _ = send_close().await;
+            let _ = send_close(account.clone(), state.clone()).await;
             break;
         }
     }
