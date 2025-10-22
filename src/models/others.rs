@@ -1,7 +1,11 @@
 // src/models.rs
 // 库模块导入
 use serde::{Deserialize, Serialize};
-
+use tokio::sync::broadcast;
+use std::sync::atomic::{AtomicUsize};
+use std::sync::Arc;
+// 分离模块导入
+use crate::models::msg_websocket::ClientMessage;
 // JWT
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
@@ -10,15 +14,11 @@ pub struct Claims {
     pub iat: usize,    // 签发时间
 }
 
-// WebSocket消息结构
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct WsMessage {
-    pub id: u64,
-    pub account: String, 
-    pub username: String,
-    pub content: String,
-    pub send_at: chrono::DateTime<chrono::Utc>,
-    pub message_type: String,
+// 广播通道结构
+pub struct GroupBroadcastChannel {
+    pub tx: broadcast::Sender<ClientMessage>,
+    pub created_at: tokio::time::Instant,
+    pub subscriber_count: Arc<AtomicUsize>
 }
 
 // 好友请求状态枚举

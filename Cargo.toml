@@ -63,6 +63,9 @@ redis = "0.23.0"
 #连接池管理
 bb8-redis = "0.9"
 
+#分段锁
+dashmap = "6.1"
+
 #Axum框架
 axum = { version = "0.8.4", features = ["ws", "macros"] }
 

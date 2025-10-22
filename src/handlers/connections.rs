@@ -176,7 +176,7 @@ async fn recv_tack_spawn(
                         let _ = send_pong(account.clone(), state.clone()).await;
                     },
                     // 私聊消息
-                    Ok(ClientMessage::MesPrivate { messageId, timestamp, senderId, receiverId, chatType, details }) => {
+                    Ok(ClientMessage::MesPrivate (payload )) => {
                         // 更新时间
                         let mut last_activity = last_activity_for_recv.write().await;
                         *last_activity = Instant::now();
@@ -184,7 +184,7 @@ async fn recv_tack_spawn(
                         let _ = handle_private_chat().await;
                     },
                     // 群聊消息
-                    Ok(ClientMessage::MesGroup { messageId, timestamp, senderId, receiverId, chatType, details }) => {
+                    Ok(ClientMessage::MesGroup (payload)) => {
                         // 更新时间
                         let mut last_activity = last_activity_for_recv.write().await;
                         *last_activity = Instant::now();
