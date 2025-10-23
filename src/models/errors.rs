@@ -34,6 +34,10 @@ pub enum AppError {
     TokenGenerationFailure(String),
     #[error("mpcs sender发送失败")]
     MpcsSenderFailure(String),
+    #[error("消息未指定接收者")]
+    RecipientNotFound(String),
+    #[error("序列化错误")]
+    SerializeFailure(String),
 }
 
 // 实现AppError转化为HTTP响应
@@ -49,6 +53,8 @@ impl IntoResponse for AppError {
             Self::InvalidPassword => (StatusCode::UNAUTHORIZED, format!("密码错误"), None),
             Self::TokenGenerationFailure(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("JWT令牌生成失败:{}", fault), None),
             Self::MpcsSenderFailure(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("mpcs sender发送失败:{}", fault), None),
+            Self::RecipientNotFound(fault) => (StatusCode::BAD_REQUEST, format!("消息未指定接收者:{}", fault), None),
+            Self::SerializeFailure(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("序列化失败:{}", fault), None),
         };
 
         let error_response = ErrorResponse {

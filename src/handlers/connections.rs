@@ -176,7 +176,7 @@ async fn recv_tack_spawn(
                         let mut last_activity = last_activity_for_recv.write().await;
                         *last_activity = Instant::now();
                         // 处理私聊消息(注：这里需要错误处理)
-                        let _ = handle_private_chat().await;
+                        let _ = handle_private_chat(payload, state.clone()).await;
                     },
                     // 群聊消息
                     Ok(ClientMessage::MesGroup (payload)) => {

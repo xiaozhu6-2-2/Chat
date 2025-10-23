@@ -1,3 +1,5 @@
+use std::sync::mpsc::Receiver;
+
 // src::models::msg_websocket.rs
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -10,6 +12,12 @@ pub struct MesPayload {
     receiverId: Option<String>,
     chatType: Option<String>,
     details: Option<String>,
+}
+// 实现类方法
+impl MesPayload {
+    pub fn get_receiverId(&self)-> Option<&String>{
+        self.receiverId.as_ref()
+    }
 }
 
 // 客户端发给服务端的消息结构
