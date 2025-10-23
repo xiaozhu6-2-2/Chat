@@ -18,7 +18,7 @@ pub struct AppState {
     pub db_pool: MySqlPool,// 数据库的连接池
     pub redis_pool: Pool<RedisConnectionManager>,// redis的连接池
     pub session_key: (RsaPrivateKey, RsaPublicKey),// 密钥对
-    pub connection_pool: Arc<RwLock<HashMap<String, mpsc::UnboundedSender<Message>>>>,// 对接WebSocket的写端的mpsc发送端池
+    pub connection_pool: Arc<DashMap<String, mpsc::UnboundedSender<Message>>>,// 对接WebSocket的写端的mpsc发送端池
     pub broadcast_pool: Arc<DashMap<String, GroupBroadcastChannel>>
 }
 
@@ -38,7 +38,7 @@ impl AppState {
             db_pool,
             redis_pool: pool,
             session_key: generate_keys(2048),
-            connection_pool: Arc::new(RwLock::new(HashMap::new())), 
+            connection_pool: Arc::new(DashMap::new()), 
             broadcast_pool: Arc::new(DashMap::new())
         })
     }

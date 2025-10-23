@@ -9,7 +9,7 @@ use log::{info, warn};
 use serde_json::json;
 // 分离模块导入
 use crate::models::errors::{AppError, AppResult};
-use crate::models::msg_websocket::{self, ClientMessage};
+use crate::models::msg_websocket::{ClientMessage};
 use crate::state::AppState;
 
 // 回复pong
@@ -26,11 +26,13 @@ pub async fn send_pong(
     // 构建websocket文本消息
     let ws_pong = Message::Text(serde_json::to_string(&pong).unwrap().into());
 
-    // 获取连接池
-    let pool = state.connection_pool.read();
+    // 获取tx（花括号是为了释放锁）
+    let tx = {
+        state.connection_pool.get(&account)
+    };
 
     // 找到对应的连接
-    if let Some(tx) = pool.await.get(&account) {
+    if let Some(tx) = tx{
         tx.send(ws_pong).map_err(|e| AppError::MpcsSenderFailure(e.to_string()))?;
         info!("成功发送Pong到{}", account);
     } else {
@@ -51,11 +53,13 @@ pub async fn send_close(
         reason: "Null".to_string().into()
     }));
 
-    // 获取连接池
-    let pool = state.connection_pool.read();
+    // 获取tx（花括号是为了释放锁）
+    let tx = {
+        state.connection_pool.get(&account)
+    };
 
     // 找到对应连接
-    if let Some(tx) = pool.await.get(&account) {
+    if let Some(tx) = tx{
         tx.send(ws_close).map_err(|e| AppError::MpcsSenderFailure(e.to_string()))?;
         info!("成功发送close到{}", account);
     } else {

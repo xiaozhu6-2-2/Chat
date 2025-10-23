@@ -18,7 +18,7 @@ use serde_json::json;
 use crate::{
     handlers::trans_logic::{handle_group_chat, handle_private_chat, send_close, send_pong}, models::{
         errors::AppResult, msg_websocket::{ClientMessage, ServerMessage}, others::Claims
-    }, state::{self, AppState}
+    }, state::{AppState}
 };
 
 // 用于建立WebSocket连接
@@ -35,7 +35,7 @@ pub async fn websocket_handler(
 
 // 用于处理WebSocket通信(错误不再继续传播)
 async fn handle_websocket(
-    mut socket: WebSocket,
+    socket: WebSocket,
     claims: Claims,
     state: AppState
 )-> () {
@@ -51,17 +51,13 @@ async fn handle_websocket(
     let state_for_timeout = state.clone();
 
     // 将WebSocket分为读写端
-    let (mut sender, mut receiver) = socket.split();
+    let (sender, receiver) = socket.split();
 
     // 创建mpsc信道的读写端
-    let (tx, mut rx) = mpsc::unbounded_channel();
+    let (tx, rx) = mpsc::unbounded_channel();
 
-    // 将tx存入连接池(花括号是为了释放锁)
-    {
-        let mut pool = state.connection_pool.write().await;
-        // 将账号和写端绑定
-        pool.insert(claims.sub.clone(), tx);
-    }
+    // 将tx存入连接池,将账号和写端绑定
+    state.connection_pool.insert(claims.sub.clone(), tx);
     info!("{}连接成功", account);
 
     // 记录最后一次心跳的时间，用于超时判断
@@ -94,8 +90,7 @@ async fn handle_websocket(
     }
 
     // 从连接池清除该连接
-    let mut pool = state.connection_pool.write().await;
-    pool.remove(&claims.sub);
+    state.connection_pool.remove(&claims.sub);
 
     // 日志
     info!("用户{}断开连接", claims.sub);
