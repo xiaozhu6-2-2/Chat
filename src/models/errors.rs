@@ -38,6 +38,8 @@ pub enum AppError {
     RecipientNotFound(String),
     #[error("序列化错误")]
     SerializeFailure(String),
+    #[error("broadcast发送失败")]
+    BroadcastSenderFailure(String),
 }
 
 // 实现AppError转化为HTTP响应
@@ -55,6 +57,7 @@ impl IntoResponse for AppError {
             Self::MpcsSenderFailure(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("mpcs sender发送失败:{}", fault), None),
             Self::RecipientNotFound(fault) => (StatusCode::BAD_REQUEST, format!("消息未指定接收者:{}", fault), None),
             Self::SerializeFailure(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("序列化失败:{}", fault), None),
+            Self::BroadcastSenderFailure(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("广播失败{}", fault), None),
         };
 
         let error_response = ErrorResponse {

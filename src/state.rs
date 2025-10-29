@@ -15,11 +15,16 @@ use crate::models::{errors::{AppError, AppResult}, others::GroupBroadcastChannel
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db_pool: MySqlPool,// 数据库的连接池
-    pub redis_pool: Pool<RedisConnectionManager>,// redis的连接池
-    pub session_key: (RsaPrivateKey, RsaPublicKey),// 密钥对
-    pub connection_pool: Arc<DashMap<String, mpsc::UnboundedSender<Message>>>,// 对接WebSocket的写端的mpsc发送端池
-    pub broadcast_pool: Arc<DashMap<String, GroupBroadcastChannel>>
+    // 数据库的连接池
+    pub db_pool: MySqlPool,
+    // redis的连接池
+    pub redis_pool: Pool<RedisConnectionManager>,
+    // 密钥对
+    pub session_key: (RsaPrivateKey, RsaPublicKey),
+    // 对接WebSocket的写端的mpsc发送端池
+    pub connection_pool: Arc<DashMap<String, mpsc::UnboundedSender<Message>>>,
+    // 群聊广播频道池
+    pub broadcast_pool: Arc<DashMap<String, GroupBroadcastChannel>>,
 }
 
 impl AppState {

@@ -105,8 +105,28 @@ pub async fn handle_private_chat(
 
 // 处理群聊消息
 pub async fn handle_group_chat(
-    
+    payload: MesPayload,
+    state: AppState
 ) -> AppResult<()> {
+    // 构建群聊信息
+    let mes_group = ClientMessage::MesGroup(payload.clone());
+
+    // 群号
+    let group_id = payload.get_receiverId().ok_or_else(|| AppError::RecipientNotFound("群号为空".to_string()))?;
+
+    // 获取broadcast频道
+    let channel = state.broadcast_pool.get(group_id).map(|guard| {
+        guard.value().clone()//克隆频道并释放锁
+    });
+
+    // 取出频道发送端
+    if let Some(channel) = channel{
+        let tx = channel.tx.clone();
+        tx.send(mes_group).map_err(|e| AppError::BroadcastSenderFailure(e.to_string()))?;
+        info!("成功发送群聊消息到群聊频道{}", group_id);
+    } else {
+        warn!("{}频道不存在", group_id);
+    }
     
     Ok(())
 }

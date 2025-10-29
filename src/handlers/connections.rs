@@ -34,6 +34,28 @@ pub async fn websocket_handler(
 }
 
 // 用于处理WebSocket通信(错误不再继续传播)
+/*
+    ===============预处理===================
+    1、将WebSocket连接分为读写端
+    2、创建MPSC信道并分为读写端，将写端存入连接池，与用户账号标识
+    // 3、将用户添加到redis的全局在线状态表
+    // 4、在mysql中查询用户已加入的所有群聊号，在redis中查找并将用户添加至这些群聊的在线状态表
+    // 5、在mysql中查询用户的好友账号，筛选在线好友，并将用户上线通知给这些在线好友的客户端
+    ===============三个任务==================
+    1、需要克隆并传递给三个任务的变量：用户账号account、应用状态state、最后一次心跳的时间last_activity
+    2、写任务函数：
+        ⅰ)监听MPSC读端，并将接收到的信息发送到客户端
+        ⅱ)定时发送心跳请求消息(Ping)
+    3、读任务函数：
+        负责从WebSocket连接中接收到的各类消息，并根据消息类型进行处理动作
+    4、超时任务函数：
+        通过last_activity进行超时判断
+    ===============断连清理==================
+    1、清理连接池中的MPSC信道
+    // 2、清理全局在线状态表中用户在线状态信息
+    // 3、清理群聊在线状态表中用户在线状态信息
+    // 4、向用户的在线好友发送用户下线通知
+*/
 async fn handle_websocket(
     socket: WebSocket,
     claims: Claims,
@@ -184,7 +206,7 @@ async fn recv_tack_spawn(
                         let mut last_activity = last_activity_for_recv.write().await;
                         *last_activity = Instant::now();
                         // 处理群聊消息(注：这里需要错误处理)
-                        let _ = handle_group_chat().await;
+                        let _ = handle_group_chat(payload, state.clone()).await;
                     },
                     _ => {
 
