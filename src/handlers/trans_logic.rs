@@ -75,7 +75,7 @@ pub async fn handle_private_chat(
     state: AppState
 ) -> AppResult<()> {
     // 构建私聊消息
-    let mes_private = ClientMessage::MesPrivate(payload.clone());
+    let mes_private = ClientMessage::Private(payload.clone());
 
     // 构建WebSocket文本消息
     let ws_mes_private = Message::Text(serde_json::to_string(&mes_private)

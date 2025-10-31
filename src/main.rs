@@ -4,6 +4,7 @@ mod models;
 mod routes;
 mod state;
 mod middleware;
+mod repository;
 
 use log::info;
 // 库模块导入

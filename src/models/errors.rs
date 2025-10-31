@@ -20,7 +20,7 @@ pub enum AppError {
     StateGenerationFailure(String),
     #[error("解密失败:{0}")]
     DecryptionFailure(String),
-    #[error("密码哈希失败:{0}")]
+    #[error("密码哈希解析失败:{0}")]
     HashFailure(String),
     #[error("数据库操作失败:{0}")]
     DatabaseFailure(#[from] sqlx::Error),

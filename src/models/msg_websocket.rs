@@ -1,5 +1,3 @@
-use std::sync::mpsc::Receiver;
-
 // src::models::msg_websocket.rs
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -41,7 +39,7 @@ pub enum ClientMessage {
     // 群聊
     MesGroup (MesPayload),
     // 私聊 
-    MesPrivate (MesPayload)
+    Private (MesPayload)
 }
 
 // 服务端发给客户端的消息结构

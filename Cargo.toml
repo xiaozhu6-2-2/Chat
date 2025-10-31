@@ -66,6 +66,10 @@ bb8-redis = "0.9"
 #分段锁
 dashmap = "6.1"
 
+#异步特征
+async-trait = "0.1"
+
 #Axum框架
 axum = { version = "0.8.4", features = ["ws", "macros"] }
+
 

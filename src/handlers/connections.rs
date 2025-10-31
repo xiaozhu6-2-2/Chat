@@ -193,7 +193,7 @@ async fn recv_tack_spawn(
                         let _ = send_pong(account.clone(), state.clone()).await;
                     },
                     // 私聊消息
-                    Ok(ClientMessage::MesPrivate (payload )) => {
+                    Ok(ClientMessage::Private (payload )) => {
                         // 更新时间
                         let mut last_activity = last_activity_for_recv.write().await;
                         *last_activity = Instant::now();
