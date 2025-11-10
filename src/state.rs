@@ -1,6 +1,7 @@
 // src/state.rs
 // 库模块导入
 use axum::extract::ws::Message;
+use log::info;
 use sqlx::MySqlPool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -46,6 +47,17 @@ impl AppState {
             connection_pool: Arc::new(DashMap::new()), 
             broadcast_pool: Arc::new(DashMap::new())
         })
+    }
+    // 测试专用方法：获取连接数量
+    #[cfg(test)]
+    pub fn get_connection_count(&self) -> usize {
+        self.connection_pool.len()
+    }
+    
+    // 测试专用方法：检查特定用户是否在线
+    #[cfg(test)] 
+    pub fn is_user_online(&self, account: &str) -> bool {
+        self.connection_pool.contains_key(account)
     }
 }
 

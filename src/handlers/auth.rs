@@ -66,38 +66,16 @@ pub async fn register(
         .map_err(|e| AppError::HashFailure(e.to_string()))?
         .to_string();
 
-    // 存储到数据库(error类型是DatabaseFailure)
-    // 事务
-    let mut tx = state
-        .db_pool
-        .begin()
-        .await?;
-
     // 查询有没有account在表中
-    let result = sqlx::query!(
-        "SELECT * FROM user_info WHERE account = ?",
-        account
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
+    let result = state.db_pool.find_user_by_account(&account).await;
 
     // 如果用户存在则返回DuplicateUser的错误
-    if let Some(record) = result {
-        return Err(AppError::DuplicateUser(record.account));
+    if !result.is_err() {
+        return Err(AppError::DuplicateUser(result.unwrap().account));
     }
 
-    // SQL
-    sqlx::query!(
-        "INSERT INTO user_info (account, password, username) VALUES (?, ?, ?)",
-        account,// 账号明文存储
-        password_hash,// 密码存储哈希
-        payload.username,// 用户名明文存储
-    )
-    .execute(&mut *tx)
-    .await?;
-
-    // 提交事务
-    tx.commit().await?;
+    // 插入SQL
+    state.db_pool.insert_user(User { account: account, password: password_hash, username: Some(payload.username) }).await?;
 
     Ok(Json(RegisterResponse { success: true }))
 }
@@ -133,15 +111,16 @@ pub async fn login(
             let token = generate_jwt(&account)?;
             // 构建响应结构
             Ok(Json(LoginResponse {
-                username,
-                token,
+                username: username,
+                account: account,
+                token: token
             }))
         },
         Err(e) => Err(e), // 认证失败，返回错误原因(密码错误or用户不存在)
     }
 }
 
-// 登录验证逻辑函数
+// 登录验证逻辑函数(单元测试)
 async fn validate_credentials(
     db_pool: &impl UserRepository,
     account: &str,
@@ -237,6 +216,7 @@ pub async fn get_session_key(
     // 转化为pkcs#8的格式
     let pk = public_key
         .to_public_key_pem(rsa::pkcs8::LineEnding::LF)
+        .map_err(|e| AppError::PubKeyTransitionFailure(e.to_string()))
         .unwrap()
         .to_string();
 
@@ -365,6 +345,10 @@ mod tests {
                     }
                 }
             }
+
+            async fn insert_user(&self, user: User) -> AppResult<()> {
+                    Ok(())
+            }
         }
         
         enum TestBehavior {
@@ -418,6 +402,9 @@ mod tests {
                     password: password_hash,
                     username: Some("test_user".to_string()),
                 })
+            }
+            async fn insert_user(&self, user: User) -> AppResult<()> {
+                    Ok(())
             }
         }
         

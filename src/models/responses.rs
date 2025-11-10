@@ -1,23 +1,24 @@
 // src/models.rs
 // 库模块导入
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 
 // 注册响应结构体
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct RegisterResponse {
     pub success: bool,
 }
 
 // 登录响应模型
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct LoginResponse {
     pub username: String, 
+    pub account: String,
     pub token: String,     // JWT令牌
 }
 
 // 会话响应模型
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SessionKeyRespone {
     pub public_key : String
 }

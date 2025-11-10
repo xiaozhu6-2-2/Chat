@@ -8,15 +8,15 @@ use chrono::{DateTime, Utc};
 use crate::models::others::FriendRequestStatus;
 
 // 用户表模型
-#[derive(Debug, Deserialize, Serialize, FromRow)]
+#[derive(Debug, Deserialize, Serialize, FromRow, PartialEq)]
 pub struct User {
     pub account: String,          // 主键 + 非空
     pub password: String,          // 非空
     pub username: Option<String>,  // 允许为空，保留Option
 }
 
-// 在线用户模型
-#[derive(Serialize, Deserialize)]
+// 用户全局在线状态模型(redis)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserOnline {
     pub account: String,
     pub username: String,

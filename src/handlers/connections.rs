@@ -38,8 +38,8 @@ pub async fn websocket_handler(
     ===============预处理===================
     1、将WebSocket连接分为读写端
     2、创建MPSC信道并分为读写端，将写端存入连接池，与用户账号标识
-    // 3、将用户添加到redis的全局在线状态表
-    // 4、在mysql中查询用户已加入的所有群聊号，在redis中查找并将用户添加至这些群聊的在线状态表
+    // 3、在mysql中查询用户已加入的所有群聊号
+    // 4、将用户添加到redis的全局在线状态表，在redis中将用户添加至用户所在群聊的在线状态表
     // 5、在mysql中查询用户的好友账号，筛选在线好友，并将用户上线通知给这些在线好友的客户端
     ===============三个任务==================
     1、需要克隆并传递给三个任务的变量：用户账号account、应用状态state、最后一次心跳的时间last_activity
@@ -72,14 +72,20 @@ async fn handle_websocket(
     let state_for_recv = state.clone();
     let state_for_timeout = state.clone();
 
-    // 将WebSocket分为读写端
+    // 1、将WebSocket分为读写端
     let (sender, receiver) = socket.split();
 
-    // 创建mpsc信道的读写端
+    // 2、创建mpsc信道的读写端
     let (tx, rx) = mpsc::unbounded_channel();
 
+    // 3、查询用户所在群聊
+
+    // 4、更新用户在线状态
+
+    // 5、通知好友
+
     // 将tx存入连接池,将账号和写端绑定
-    state.connection_pool.insert(claims.sub.clone(), tx);
+    state.connection_pool.insert(account.clone(), tx);
     info!("{}连接成功", account);
 
     // 记录最后一次心跳的时间，用于超时判断
