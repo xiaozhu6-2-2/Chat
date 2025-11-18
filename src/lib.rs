@@ -4,14 +4,12 @@ pub mod routes;
 pub mod state;
 pub mod middleware;
 pub mod repository;
+pub mod utils;
 
-use axum::Router;
 pub use state::AppState;
 
-use std::{clone, sync::Arc};
 use tokio::net::TcpListener;
-use log::info;
-use sqlx::{MySql, MySqlPool};
+use sqlx::MySqlPool;
 
 use crate::models::errors::{AppError, AppResult};
 
@@ -37,7 +35,7 @@ impl AppConfig {
     // 集成测试配置
     pub fn for_test() -> Self {
         Self {
-            database_url: "mysql://root:sysu@localhost/chat".to_string(),// 测试用的数据库
+            database_url: "mysql://root:sysu@localhost/echat".to_string(),// 测试用的数据库
             bind_address: "0.0.0.0:0".to_string(), // 0 表示随机端口
             jwt_secret: "test-jwt-secret-key".to_string(),
         }

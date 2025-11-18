@@ -73,7 +73,6 @@ impl OnlineRepository for OnlineManager {
     // 心跳更新
     async fn update_heartbeat(
         redis_pool : &Pool<RedisConnectionManager>,
-        account : String,
         group_ids : &[String]
     ) -> AppResult<()> {
         // 获取Redis连接

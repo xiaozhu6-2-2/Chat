@@ -33,7 +33,6 @@ pub trait OnlineRepository: Send + Sync {
     // 更新心跳
     async fn update_heartbeat(
         redis_pool : &Pool<RedisConnectionManager>,
-        account : String,
         group_ids : &[String]
     ) -> AppResult<()>;
 }

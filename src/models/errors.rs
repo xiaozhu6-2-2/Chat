@@ -50,6 +50,8 @@ pub enum AppError {
     RedisGetConnFailure(String),
     #[error("Redis操作失败'{0}'")]
     RedisOperationFailure(String),
+    #[error("雪花算法生成失败'{0}'")]
+    SnowflakeFailure(String),
 }
 
 // 实现AppError转化为HTTP响应
@@ -73,7 +75,7 @@ impl IntoResponse for AppError {
             Self::PubKeyTransitionFailure(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("公钥转换失败:{}", fault), None),
             Self::RedisGetConnFailure(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Redis获取连接失败{}", fault), None),
             Self::RedisOperationFailure(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Redis操作失败{}", fault), None),
-            
+            Self::SnowflakeFailure(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("雪花算法生成失败{}", fault), None),
         };
 
         let error_response = ErrorResponse {

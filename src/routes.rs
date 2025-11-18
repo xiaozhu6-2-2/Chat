@@ -36,7 +36,6 @@ pub fn create_routes() -> Router<AppState> {
         // .route("/chatrooms/join", post(handlers::chatroom::join_chatroom))
         // .route("/chatrooms/leave", post(handlers::chatroom::leave_chatroom))
         // .route("/chatrooms/joined", get(handlers::chatroom::get_joined_chatrooms))
-        // .route("/online-users/{:room_id}", get(handlers::online_status::get_online_users))
 
         // .route("/friend-requests", post(handlers::friends::send_friend_request))
         // .route("/friend-requests", get(handlers::friends::list_friend_requests))

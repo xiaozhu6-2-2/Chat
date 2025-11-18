@@ -9,7 +9,7 @@ impl UserRepository for MySqlPool {
     async fn find_user_by_account(&self, account: &str) -> AppResult<User> {
         let user = sqlx::query_as!(
             User,
-            "SELECT * FROM user_info WHERE account = ?",
+            "SELECT * FROM user WHERE account = ?",
             account
         ).fetch_optional(self).await?;
 
@@ -19,11 +19,14 @@ impl UserRepository for MySqlPool {
     }
     // 插入User实体到数据库
     async fn insert_user(&self, user: User) -> AppResult<()> {
+        // 生成uid
+        
         // 事务
         let mut tx = self.begin().await?;
 
         sqlx::query!(
-            "INSERT INTO user_info (account, password, username) VALUES (?, ?, ?)",
+            "INSERT INTO user (uid, account, password, username) VALUES (?, ?, ?, ?)",
+            user.uid,
             user.account,
             user.password,
             user.username
