@@ -5,4 +5,4 @@ pub mod chat_group;
 pub mod friends;
 pub mod other;
 
-pub mod direct_conversation;
+pub mod chat_private;
