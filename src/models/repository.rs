@@ -86,7 +86,7 @@ pub trait GroupChatRepository: Send + Sync {
 
 //-------------------------群聊成员管理----------------------------
     // 加入群聊
-    async fn add_member(&self, member: GroupMember) -> AppResult<()>;
+    async fn save_member(&self, member: GroupMember) -> AppResult<()>;
     // 查找群成员
     async fn find_member(&self, gid: &str, uid: &str) -> AppResult<Option<GroupMember>>;
     // 查找群聊的群成员列表
