@@ -355,7 +355,7 @@ impl GroupChatRepository for MySqlPool {
                 gid,
                 applicant_uid,
                 approver_uid,
-                status  as 'status: ReqStatus',
+                status  as `status: ReqStatus`,
                 apply_text,
                 create_time,
                 handle_time 
@@ -375,7 +375,7 @@ impl GroupChatRepository for MySqlPool {
                 gid,
                 applicant_uid,
                 approver_uid,
-                status  as 'status: ReqStatus',
+                status  as `status: ReqStatus`,
                 apply_text,
                 create_time,
                 handle_time 
