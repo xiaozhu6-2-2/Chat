@@ -1,13 +1,11 @@
-use std::mem;
-
 use chrono::NaiveDateTime;
-use sqlx::{MySqlPool, query_as};
+use sqlx::MySqlPool;
 use async_trait::async_trait;
 
 use crate::models::errors::AppResult;
 use crate::models::repository::GroupChatRepository;
 use crate::models::entities::{GroupChat, GroupJoinRequest, GroupMember, MuteRecord};
-
+use crate::models::entities::Role;
 #[async_trait]
 impl GroupChatRepository for MySqlPool {
     //-------------------------群聊基础管理----------------------------
@@ -16,46 +14,6 @@ impl GroupChatRepository for MySqlPool {
 
         //事务
         let mut tx=self.begin().await?;
-
-        // //先检查是否存在群聊
-        // let exists=sqlx::query_as!(
-        //     GroupChat,
-        //     "SELECT * FROM group_chat WHERE gid = ?",
-        //     group.gid
-        // ).fetch_optional(&mut *tx).await?;
-
-        // //若存在群聊则更新
-        // match exists {
-        //     Some(_) =>{
-        //         sqlx::query!(
-        //         "UPDATE group_chat 
-        //             SET group_name = ?,
-        //             manager_uid = ?,
-        //             group_avatar = ?,
-        //             group_intro = ?,
-        //             create_time = ? 
-        //         WHERE gid = ?",
-        //         group.group_name,
-        //         group.manager_uid,
-        //         group.group_avatar,
-        //         group.group_intro,
-        //         group.create_time,
-        //         group.gid
-        //         ).execute(&mut *tx).await?;
-        //     }
-        //     //若不存在群聊则插入
-        //     None =>{
-        //         sqlx::query!(
-        //         "INSERT INTO group_chat (gid, group_name, manager_uid, group_avatar, group_intro, create_time) VALUES (?,?,?,?,?,?)",
-        //         group.gid,
-        //         group.group_name,
-        //         group.manager_uid,
-        //         group.group_avatar,
-        //         group.group_intro,
-        //         group.create_time,
-        //         ).execute(&mut *tx).await?;
-        //     }
-        // }
         
         //插入或更新
         sqlx::query!(
@@ -145,7 +103,19 @@ impl GroupChatRepository for MySqlPool {
         //检查成员是否存在
         let exists=sqlx::query_as!(
             GroupMember,
-            "SELECT * FROM group_member WHERE uid = ? AND gid = ?",
+            "SELECT 
+                uid, 
+                gid, 
+                role as `role: Role`,
+                nickname, 
+                level, 
+                join_time, 
+                do_not_disturb, 
+                tag, 
+                remark, 
+                is_pinned 
+            FROM group_member 
+            WHERE uid = ? AND gid = ?",
             member.uid,
             member.gid
         ).fetch_optional(&mut *tx).await?;
@@ -204,7 +174,19 @@ impl GroupChatRepository for MySqlPool {
 
         let find_member=sqlx::query_as!(
             GroupMember,
-            "SELECT * FROM group_member WHERE uid = ? AND gid = ?",
+            "SELECT 
+                uid, 
+                gid, 
+                role as `role: Role`,
+                nickname, 
+                level, 
+                join_time, 
+                do_not_disturb, 
+                tag, 
+                remark, 
+                is_pinned 
+            FROM group_member 
+            WHERE uid = ? AND gid = ?",
             uid,
             gid
         ).fetch_optional(self).await?;
@@ -216,7 +198,19 @@ impl GroupChatRepository for MySqlPool {
 
         let find_members=sqlx::query_as!(
             GroupMember,
-            "SELECT * FROM group_member WHERE gid = ?",
+            "SELECT 
+                uid, 
+                gid, 
+                role as `role: Role`,
+                nickname, 
+                level, 
+                join_time, 
+                do_not_disturb, 
+                tag, 
+                remark, 
+                is_pinned 
+            FROM group_member 
+            WHERE gid = ?",
             gid
         ).fetch_all(self).await?;
 
@@ -227,7 +221,19 @@ impl GroupChatRepository for MySqlPool {
 
         let find_group=sqlx::query_as!(
             GroupMember,
-            "SELECT * FROM group_member WHERE uid = ?",
+            "SELECT 
+                uid, 
+                gid, 
+                role as `role: Role`,
+                nickname, 
+                level, 
+                join_time, 
+                do_not_disturb, 
+                tag, 
+                remark, 
+                is_pinned 
+            FROM group_member 
+            WHERE uid = ?",
             uid
         ).fetch_all(self).await?;
 
