@@ -6,6 +6,7 @@ use crate::models::errors::AppResult;
 use crate::models::repository::GroupChatRepository;
 use crate::models::entities::{GroupChat, GroupJoinRequest, GroupMember, MuteRecord};
 use crate::models::entities::Role;
+use crate::models::entities::ReqStatus;
 #[async_trait]
 impl GroupChatRepository for MySqlPool {
     //-------------------------群聊基础管理----------------------------
@@ -100,70 +101,31 @@ impl GroupChatRepository for MySqlPool {
         //事务
         let mut tx=self.begin().await?;
 
-        //检查成员是否存在
-        let exists=sqlx::query_as!(
-            GroupMember,
-            "SELECT 
-                uid, 
-                gid, 
-                role as `role: Role`,
-                nickname, 
-                level, 
-                join_time, 
-                do_not_disturb, 
-                tag, 
-                remark, 
-                is_pinned 
-            FROM group_member 
-            WHERE uid = ? AND gid = ?",
+        //插入或更新
+        sqlx::query!(
+            "INSERT INTO group_member 
+            (uid, gid, role, nickname, level, join_time, do_not_disturb, tag, remark, is_pinned) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+            role = VALUES(role),
+            nickname = VALUES(nickname),
+            level = VALUES(level),
+            join_time = VALUES(join_time),
+            do_not_disturb = VALUES(do_not_disturb),
+            tag = VALUES(tag),
+            remark = VALUES(remark),
+            is_pinned = VALUES(is_pinned)",
             member.uid,
-            member.gid
-        ).fetch_optional(&mut *tx).await?;
-
-
-        //若存在成员记录则更新
-        match exists {
-            Some(_) => {
-                sqlx::query!(
-                "UPDATE group_member 
-                    SET role = ?,
-                    nickname = ?,
-                    level = ?,
-                    join_time = ?,
-                    do_not_disturb = ?,
-                    tag = ?,
-                    remark = ?,
-                    is_pinned = ?
-                WHERE uid = ? AND gid = ?",
-                member.role,
-                member.nickname,
-                member.level,
-                member.join_time,
-                member.do_not_disturb,
-                member.tag,
-                member.remark,
-                member.is_pinned,
-                member.uid,
-                member.gid
-                ).execute(&mut *tx).await?;
-            }
-        //不存在则插入记录
-            None => {
-                sqlx::query!(
-                "INSERT INTO group_member (uid, gid, role, nickname, level, join_time, do_not_disturb, tag, remark, is_pinned) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                member.uid,
-                member.gid,
-                member.role,
-                member.nickname,
-                member.level,
-                member.join_time,
-                member.do_not_disturb,
-                member.tag,
-                member.remark,
-                member.is_pinned,
-                ).execute(&mut *tx).await?;
-            }
-        }
+            member.gid,
+            member.role,
+            member.nickname,
+            member.level,
+            member.join_time,
+            member.do_not_disturb,
+            member.tag,
+            member.remark,
+            member.is_pinned,
+        ).execute(&mut *tx).await?;
 
         tx.commit().await?;
 
@@ -388,7 +350,16 @@ impl GroupChatRepository for MySqlPool {
 
         let find_request=sqlx::query_as!(
             GroupJoinRequest,
-            "SELECT * FROM group_join_request WHERE req_id = ?",
+            "SELECT 
+                req_id,
+                gid,
+                applicant_uid,
+                approver_uid,
+                status  as `status: ReqStatus`,
+                apply_text,
+                create_time,
+                handle_time 
+            FROM group_join_request WHERE req_id = ?",
             req_id
         ).fetch_optional(self).await?;
 
@@ -399,7 +370,16 @@ impl GroupChatRepository for MySqlPool {
 
         let find_request=sqlx::query_as!(
             GroupJoinRequest,
-            "SELECT * FROM group_join_request WHERE gid = ? AND status = 'pending'",
+            "SELECT 
+                req_id,
+                gid,
+                applicant_uid,
+                approver_uid,
+                status  as `status: ReqStatus`,
+                apply_text,
+                create_time,
+                handle_time 
+            FROM group_join_request WHERE gid = ?",
             gid
         ).fetch_all(self).await?;
 
