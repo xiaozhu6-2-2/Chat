@@ -9,7 +9,7 @@ use axum::{
     Extension,
 };
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, broadcast::Receiver, mpsc::{self, UnboundedSender}};
 use tokio::time::{Duration, interval, Instant};
 use futures::{stream::{SplitSink, SplitStream}, SinkExt, StreamExt};
 use log::{info, error};
@@ -17,8 +17,8 @@ use serde_json::json;
 // 模块分离导入
 use crate::{
     handlers::trans_logic::{handle_group_chat, handle_private_chat, send_close, send_pong}, models::{
-        errors::AppResult, msg_websocket::{ClientMessage, ServerMessage}, others::Claims
-    }, state::{AppState}
+        entities::UserOnline, errors::AppResult, msg_websocket::{ClientMessage, ServerMessage}, others::Claims, repository::{GroupChatRepository, OnlineRepository, UserRepository}
+    }, repository::OnlineRepository::OnlineManager, state::AppState
 };
 
 // 用于建立WebSocket连接
@@ -38,9 +38,10 @@ pub async fn websocket_handler(
     ===============预处理===================
     1、将WebSocket连接分为读写端
     2、创建MPSC信道并分为读写端，将写端存入连接池，与用户账号标识
-    // 3、在mysql中查询用户已加入的所有群聊号
-    // 4、将用户添加到redis的全局在线状态表，在redis中将用户添加至用户所在群聊的在线状态表
-    // 5、在mysql中查询用户的好友账号，筛选在线好友，并将用户上线通知给这些在线好友的客户端
+    3、在mysql中查询用户已加入的所有群聊号
+    4、将用户添加到redis的全局在线状态表，在redis中将用户添加至用户所在群聊的在线状态表
+    // 5、连接所在群聊频道
+    // 6、在mysql中查询用户的好友账号，筛选在线好友，并将用户上线通知给这些在线好友的客户端
     ===============三个任务==================
     1、需要克隆并传递给三个任务的变量：用户账号account、应用状态state、最后一次心跳的时间last_activity
     2、写任务函数：
@@ -54,7 +55,8 @@ pub async fn websocket_handler(
     1、清理连接池中的MPSC信道
     // 2、清理全局在线状态表中用户在线状态信息
     // 3、清理群聊在线状态表中用户在线状态信息
-    // 4、向用户的在线好友发送用户下线通知
+    // 4、退出所在群聊频道 or 如果是最后一个用户则清理所在群聊频道
+    // 5、向用户的在线好友发送用户下线通知
 */
 async fn handle_websocket(
     socket: WebSocket,
@@ -79,10 +81,38 @@ async fn handle_websocket(
     let (tx, rx) = mpsc::unbounded_channel();
 
     // 3、查询用户所在群聊
+    // 先查找用户uid
+    let user = match state.db_pool.find_user_by_account(&account).await {
+        Ok(user) => user,
+        Err(e) => {
+            error!("查找用户失败: {}", e);
+            return;
+        }
+    };
+
+    // 再查找用户所在群聊记录
+    let records = match state.db_pool.find_groups_by_user(&user.uid).await {
+        Ok(records) => records,
+        Err(e) => {
+            error!("查找用户群聊失败: {}", e);
+            return;
+        }
+    };
 
     // 4、更新用户在线状态
+    let groups : Vec<String> = records.into_iter().map(|record| record.gid).collect();
 
-    // 5、通知好友
+    if let Err(e) = OnlineManager::user_online(&state.redis_pool, UserOnline {
+        account : user.account,
+        username : user.username
+    }, &groups).await {
+        error!("更新用户在线状态失败: {}", e);
+        return;
+    }
+
+    // 5、连接所在群聊频道
+    
+    // 6、通知好友
 
     // 将tx存入连接池,将账号和写端绑定
     state.connection_pool.insert(account.clone(), tx);
@@ -259,4 +289,14 @@ async fn timeout_task_spawn(
             break;
         }
     }
+}
+
+// 群聊监听任务
+async fn group_channel_listen(
+    tx : UnboundedSender<Message>,
+    gid : String,
+    account : String,
+    state : AppState
+) {
+
 }
