@@ -56,3 +56,6 @@ Thumbs.db
 /dist/
 /build/
 /out/
+
+#AI配置文件
+.claude

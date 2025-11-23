@@ -1,7 +1,6 @@
 use chrono::NaiveDateTime;
 use sqlx::MySqlPool;
 use async_trait::async_trait;
-use sqlx::query;
 
 use crate::models::errors::AppResult;
 use crate::models::repository::GroupMessageRepository;
