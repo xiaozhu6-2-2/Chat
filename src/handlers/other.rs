@@ -5,18 +5,20 @@
 // 库模块导入
 use sqlx::MySqlPool;
 
+use crate::models::errors::{AppError, AppResult};
+
 // 分离模块导入
 
 
 // 查询用户名
-pub async fn get_username(db_pool: &MySqlPool, account: &str) -> Option<String> {
-    sqlx::query_scalar!(
-        "SELECT username FROM user_info WHERE account = ?",
-        account
-    )
-    .fetch_optional(db_pool)
-    .await
-    .unwrap_or(None)
-    .flatten()
+pub async fn get_username(db_pool: &MySqlPool, account: &str) -> AppResult<Option<String>> {
+    let result = sqlx::query_scalar!(
+            "SELECT username FROM user WHERE account = ?",
+            account
+        )
+        .fetch_optional(db_pool)
+        .await?;
+
+    Ok(result)
 }
 

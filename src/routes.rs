@@ -26,18 +26,32 @@ pub fn create_routes() -> Router<AppState> {
         .allow_headers(Any); 
 
     let public_routes = Router::new()
-        .route("/auth/register", post(handlers::auth::register))
-        .route("/auth/login", post(handlers::auth::login))
-        .route("/auth/session-key", get(handlers::auth::get_session_key));
+        .route("/register", post(handlers::auth::register))
+        .route("/login", post(handlers::auth::login))
+        .route("/session-key", get(handlers::auth::get_session_key));
     
     // 需要token认证的路由
     let protected_routes = Router::new();
-        // .route("/chatrooms/create", post(handlers::chatroom::create_chatroom))
-        // .route("/chatrooms/join", post(handlers::chatroom::join_chatroom))
-        // .route("/chatrooms/leave", post(handlers::chatroom::leave_chatroom))
-        // .route("/chatrooms/joined", get(handlers::chatroom::get_joined_chatrooms))
-        // .route("/online-users/{:room_id}", get(handlers::online_status::get_online_users))
+        // // 群聊管理类API
+        // .route("/auth/group_chat/info", get(handlers::chat_group::))// 获取群聊信息
+        // .route("/auth/group_chat/update", put(handlers::chat_group::)) // 更新群聊信息
+        // .route("/auth/group_chat/dismiss", delete(handlers::chat_group::))// 解散群聊
+        // .route("/auth/group_chat/transfer", post(handlers::chat_group::))// 转让群主
+        // // 群聊成员管理类API
+        // .route("/auth/group_chat/kick", post(handlers::chat_group::kick_member))// 踢出群成员
+        // .route("/auth/group_chat/members", get(handlers::chat_group::get_members))// 获取群成员列表
+        // .route("/auth/group_chat/member/update", put(handlers::chat_group::update_member_info))// 修改群成员昵称/备注
+        // .route("/auth/group_chat/invite", post(handlers::chat_group::invite_member))// // 邀请用户加入群聊
+        // // 申请处理类API
+        // .route("/auth/group_chat/requests", get(handlers::chat_group::get_join_requests))// 获取加群申请列表
+        // .route("/auth/group_chat/request/handle", post(handlers::chat_group::handle_join_request))// 处理加群申请（同意/拒绝）
 
+        // .route("/auth/group_chat/join", post(handlers::chat_group::))// 加入群聊
+        // .route("/auth/group_chat/leave", post(handlers::chat_group::))
+        // .route("/auth/group_chat/mute", post(handlers::chat_group::))
+        // .route("/auth/group_chat/set_announce", post(handlers::chat_group::))
+        // .route("/auth/group_chat/set_role", post(handlers::chat_group::))
+        // .route("/auth/group_chat/pull_history", post(handlers::chat_group::))
         // .route("/friend-requests", post(handlers::friends::send_friend_request))
         // .route("/friend-requests", get(handlers::friends::list_friend_requests))
         // .route("/friend-requests/respond", post(handlers::friends::respond_friend_request))
@@ -49,7 +63,7 @@ pub fn create_routes() -> Router<AppState> {
         // .route_layer(middleware::from_fn(auth_middleware));
 
     let ws_route: Router<AppState> = Router::new()
-        .route("/connection/ws",get(handlers::connections::websocket_handler))
+        .route("/auth/connection/ws",get(handlers::connections::websocket_handler))
         .layer(middleware::from_fn(ws_auth_middleware));
 
     Router::new()

@@ -1,7 +1,7 @@
 # src/Cargo.toml
 
 [package]
-name = "chat"
+name = "echat"
 version = "0.1.0"
 edition = "2024"
 
@@ -63,6 +63,23 @@ redis = "0.23.0"
 #连接池管理
 bb8-redis = "0.9"
 
+#分段锁
+dashmap = "6.1"
+
+#异步特征
+async-trait = "0.1"
+
+tower = {version = "0.4", features = ["util"]}
+
+hyper = "0.14"
+
+reqwest = { version = "0.11", features = ["json"] }
+
+tokio-tungstenite = "0.20"
+
+futures-util = "0.3"
+
 #Axum框架
 axum = { version = "0.8.4", features = ["ws", "macros"] }
+
 

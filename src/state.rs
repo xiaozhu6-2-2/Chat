@@ -1,6 +1,7 @@
 // src/state.rs
 // 库模块导入
 use axum::extract::ws::Message;
+use log::info;
 use sqlx::MySqlPool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -9,15 +10,22 @@ use rsa::{RsaPrivateKey, RsaPublicKey};
 use rand_core::OsRng;
 use bb8_redis::bb8::Pool;
 use bb8_redis::RedisConnectionManager;
+use dashmap::DashMap;
 // 模块分离导入
-use crate::models::errors::{AppError, AppResult};
+use crate::models::{errors::{AppError, AppResult}, others::GroupBroadcastChannel};
 
 #[derive(Clone)]
 pub struct AppState {
+    // 数据库的连接池
     pub db_pool: MySqlPool,
+    // redis的连接池
     pub redis_pool: Pool<RedisConnectionManager>,
+    // 密钥对
     pub session_key: (RsaPrivateKey, RsaPublicKey),
-    pub connection_pool: Arc<RwLock<HashMap<String, mpsc::UnboundedSender<Message>>>>,
+    // 对接WebSocket的写端的mpsc发送端池
+    pub connection_pool: Arc<DashMap<String, mpsc::UnboundedSender<Message>>>,
+    // 群聊广播频道池
+    pub broadcast_pool: Arc<DashMap<String, GroupBroadcastChannel>>,
 }
 
 impl AppState {
@@ -36,8 +44,20 @@ impl AppState {
             db_pool,
             redis_pool: pool,
             session_key: generate_keys(2048),
-            connection_pool: Arc::new(RwLock::new(HashMap::new())), 
+            connection_pool: Arc::new(DashMap::new()), 
+            broadcast_pool: Arc::new(DashMap::new())
         })
+    }
+    // 测试专用方法：获取连接数量
+    #[cfg(test)]
+    pub fn get_connection_count(&self) -> usize {
+        self.connection_pool.len()
+    }
+    
+    // 测试专用方法：检查特定用户是否在线
+    #[cfg(test)] 
+    pub fn is_user_online(&self, account: &str) -> bool {
+        self.connection_pool.contains_key(account)
     }
 }
 

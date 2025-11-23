@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use crate::models::others::FriendRequestStatus;
 
 // 注册请求结构体
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct RegisterRequest {
     pub account: String,
     pub password: String,
@@ -16,7 +16,7 @@ pub struct RegisterRequest {
 }
 
 // 登录请求模型
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct LoginRequest {
     pub account: String,
     pub password: String,

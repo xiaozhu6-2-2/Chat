@@ -4,3 +4,4 @@ pub mod responses;
 pub mod others;
 pub mod errors;
 pub mod msg_websocket;
+pub mod repository;
