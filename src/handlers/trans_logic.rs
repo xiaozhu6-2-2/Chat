@@ -9,7 +9,8 @@ use log::{info, warn};
 use serde_json::json;
 // 分离模块导入
 use crate::models::errors::{AppError, AppResult};
-use crate::models::msg_websocket::{ClientMessage, MesPayload};
+use crate::models::msg_websocket::{ClientMessage, MesPayload, ServerMessage};
+use crate::models::repository::UserRepository;
 use crate::state::AppState;
 
 // 回复pong
@@ -24,7 +25,11 @@ pub async fn send_pong(
     };
 
     // 构建websocket文本消息
-    let ws_pong = Message::Text(serde_json::to_string(&pong).unwrap().into());
+    let ws_pong = Message::Text(
+        serde_json::to_string(&pong)
+        .map_err(|e| AppError::SerializeFailure(e.to_string()))?
+        .into()
+    );
 
     // 获取tx
     let tx = state.connection_pool.get(&account).map({|guard|
@@ -81,7 +86,8 @@ pub async fn handle_private_chat(
     let ws_mes_private = Message::Text(serde_json::to_string(&mes_private)
         .map_err(|e| 
             AppError::SerializeFailure(e.to_string())
-        )?.into()
+        )?
+        .into()
     );
 
     // 接收人账号
@@ -128,5 +134,33 @@ pub async fn handle_group_chat(
         warn!("{}频道不存在", group_id);
     }
     
+    Ok(())
+}
+
+// 发送上线消息
+pub async fn send_online_state(
+    to_uid: String,
+    online_state: ServerMessage,
+    state: AppState,
+) -> AppResult<()> {
+    // 转换为Message
+    let online_state_msg = serde_json::to_string(&online_state).map_err(|e| AppError::SerializeFailure(e.to_string()))?;
+    
+    // 获取接收者的account
+    let account = state.db_pool.find_user_by_uid(&to_uid).await.map(|user| user.account)?;
+
+    // 获取tx
+    let tx = state.connection_pool.get(&account).map(|guard| {
+        guard.value().clone() // 获取tx，并释放锁
+    });
+
+    //发送消息
+    if let Some(tx) = tx {
+        tx.send(Message::Text(online_state_msg.into())).map_err(|e| AppError::MpcsSenderFailure(e.to_string()))?;
+        info!("成功发送在线状态更新消息到{}", to_uid);
+    }
+    else {
+        warn!("{}账号没有连接", to_uid);
+    }
     Ok(())
 }

@@ -19,7 +19,7 @@ impl MesPayload {
 }
 
 // 客户端发给服务端的消息结构
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", content = "payload")]
 pub enum ClientMessage {
     // 心跳请求
@@ -43,7 +43,7 @@ pub enum ClientMessage {
 }
 
 // 服务端发给客户端的消息结构
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", content = "payload")]
 pub enum ServerMessage {
 // 心跳请求
@@ -60,4 +60,9 @@ pub enum ServerMessage {
         #[serde(skip_serializing_if = "Option::is_none")]
         data: Option<Value>
     },
+    // 在线状态更新
+    UpdateOnlineState {
+        uid: String,
+        online_state: bool,
+    }
 }

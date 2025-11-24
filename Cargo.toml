@@ -81,5 +81,7 @@ futures-util = "0.3"
 
 #Axum框架
 axum = { version = "0.8.4", features = ["ws", "macros"] }
+scopeguard = "1.2.0"
+tokio-util = "0.7.17"
 
 
