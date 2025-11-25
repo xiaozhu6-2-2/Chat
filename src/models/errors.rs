@@ -3,7 +3,6 @@ use axum::{http::StatusCode, Json, response::{IntoResponse, Response}};
 use serde::Serialize;
 use thiserror::Error;
 use sqlx;
-use tokio_tungstenite::tungstenite::error;
 
 #[derive(Serialize)]
 struct ErrorResponse {

@@ -8,19 +8,16 @@ use axum::{
     response::Response,
     Extension,
 };
-use dashmap::DashMap;
 use std::sync::Arc;
-use tokio::sync::{RwLock, broadcast::{self}, mpsc::{self, UnboundedSender}};
-use tokio_util::sync::CancellationToken;
+use tokio::sync::{RwLock, mpsc};
 use tokio::time::{Duration, interval, Instant};
 use futures::{SinkExt, StreamExt, stream::{SplitSink, SplitStream}};
-use log::{error, info, warn};
-use scopeguard::guard;
+use log::{error, info};
 use serde_json::json;
 // 模块分离导入
 use crate::{
-    handlers::trans_logic::{handle_group_chat, handle_private_chat, send_close, send_online_state, send_pong}, models::{
-        entities::UserOnline, errors::AppResult, msg_websocket::{ClientMessage, ServerMessage}, others::{Claims, GroupBroadcastChannel}, repository::{FriendshipRepository, GroupChatRepository, OnlineRepository, UserRepository}
+    utils::trans_logic::{handle_group_chat, handle_private_chat, send_close, send_online_state, send_pong}, models::{
+        entities::UserOnline, errors::AppResult, msg_websocket::{ClientMessage, ServerMessage}, others::Claims, repository::{FriendshipRepository, GroupChatRepository, OnlineRepository, UserRepository}
     }, repository::OnlineRepository::OnlineManager, state::AppState
 };
 
@@ -370,97 +367,4 @@ async fn timeout_task_spawn(
             break;
         }
     }
-}
-
-// 群聊监听任务
-pub async fn group_channel_listen(
-    gid : String,
-    account : String,
-    tx : UnboundedSender<Message>,
-    broadcast_pool : Arc<DashMap<String, GroupBroadcastChannel>>,
-    cancel_token: CancellationToken,
-) {
-    // 获取/创建群聊频道
-    let channel = broadcast_pool.entry(gid.clone())
-        .or_insert_with(|| {
-            info!("创建新的群聊频道: {}", gid);
-            let (broadcast_tx, _) = tokio::sync::broadcast::channel(1000);
-            GroupBroadcastChannel { 
-                tx: broadcast_tx, 
-                created_at: tokio::time::Instant::now(), 
-                subscriber_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)) 
-            }    
-        }).clone();
-
-    // 订阅群聊频道
-    let mut rx = channel.tx.subscribe();
-    
-    // 增加订阅者计数
-    let old_count = channel.subscriber_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    info!("用户 {} 开始监听群聊 {} 频道，当前订阅者数量: {}", account, gid, old_count + 1);
-    
-    // 减少计数
-    let account_for_guard = account.clone();
-    let gid_for_guard = gid.clone();
-    let _guard = guard((), move |_| {
-        if let Some(channel) = broadcast_pool.get(&gid_for_guard) {
-            let count = channel.subscriber_count.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
-            info!("用户 {} 退出群聊 {} 频道，剩余订阅者: {}", account_for_guard, gid_for_guard, count - 1);
-
-            // 清理频道（最后一个订阅者）
-            if count <= 1 {
-                info!("清理空闲群聊频道: {}", gid_for_guard);
-                broadcast_pool.remove(&gid_for_guard);
-            }
-        }
-    });
-
-    // 监听群聊频道
-    loop {
-        // 检查取消令牌
-        if cancel_token.is_cancelled() {
-            break;
-        }
-        tokio::select! {
-            result = rx.recv() => {
-                match result {
-                    Ok(msg) => {
-                        // 检查取消令牌
-                        if cancel_token.is_cancelled() {
-                            break;
-                        }
-                        // 将收到的消息序列化
-                        let msg_json = match serde_json::to_string(&msg) {
-                            Ok(msg) => msg,
-                            Err(e) => {
-                                error!("序列化失败: {}", e);
-                                break;
-                            }
-                        };
-                        // 检查取消令牌
-                        if cancel_token.is_cancelled() {
-                            break;
-                        }
-                        // 向mpsc中发送消息
-                        if tx.send(Message::Text(msg_json.into())).is_err() {
-                            error!("向用户 {} 转发群聊 {} 消息失败", account, gid);
-                            break;
-                        }
-                    },
-                    Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                        warn!("用户 {} 群聊 {} 消息滞后，跳过 {} 条消息", account, gid, skipped);
-                    },
-                    Err(broadcast::error::RecvError::Closed) => {
-                        info!("群聊 {} 频道已关闭", gid);
-                        break;
-                    }
-                }
-            },
-            _ = cancel_token.cancelled() => {
-                info!("群聊 {} 监听被主动取消", gid);
-                break;
-            }
-        }
-    }
-    
 }

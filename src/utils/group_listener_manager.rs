@@ -5,7 +5,7 @@ use tokio::{sync::{RwLock, mpsc, oneshot}, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{handlers::connections::group_channel_listen, models::errors::AppError, models::group_listener::{GroupListenerTask, TaskCommand}, models::others::GroupBroadcastChannel, AppResult};
+use crate::{utils::trans_logic::group_channel_listen, models::errors::AppError, models::group_listener::{GroupListenerTask, TaskCommand}, models::others::GroupBroadcastChannel, AppResult};
 
 // 用户群聊监听任务管理器
 #[derive(Clone)]
