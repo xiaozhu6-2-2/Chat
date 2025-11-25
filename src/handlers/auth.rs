@@ -24,7 +24,7 @@ use base64::Engine;
 use crate::models::repository::UserRepository;
 // 分离模块导入
 use crate::models::requests::{RegisterRequest, LoginRequest};
-use crate::models::responses::{RegisterResponse, LoginResponse, SessionKeyRespone, };
+use crate::models::responses::{RegisterResponse, LoginResponse, SessionKeyResponse, };
 use crate::models::entities::{User};
 use crate::models::others::{Claims};
 use crate::models::errors::{AppError, AppResult};
@@ -222,7 +222,7 @@ fn generate_jwt(account: &str) -> AppResult<String> {
 // 公钥获取函数
 pub async fn get_session_key(
     State(state) : State<AppState>
-) -> Result<Json<SessionKeyRespone>, StatusCode> {
+) -> Result<Json<SessionKeyResponse>, StatusCode> {
     // 获取公钥
     let public_key = &state.session_key.1;
 
@@ -233,7 +233,7 @@ pub async fn get_session_key(
         .unwrap()
         .to_string();
 
-    Ok(Json(SessionKeyRespone { public_key: pk }))
+    Ok(Json(SessionKeyResponse { public_key: pk }))
 }
 
 // // 单元测试

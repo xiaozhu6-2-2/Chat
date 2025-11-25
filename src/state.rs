@@ -12,7 +12,7 @@ use bb8_redis::bb8::Pool;
 use bb8_redis::RedisConnectionManager;
 use dashmap::DashMap;
 // 模块分离导入
-use crate::models::{errors::{AppError, AppResult}, others::GroupBroadcastChannel};
+use crate::{models::{errors::{AppError, AppResult}, others::GroupBroadcastChannel}, utils::group_listener_manager::UserGroupTaskManager};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -26,6 +26,8 @@ pub struct AppState {
     pub connection_pool: Arc<DashMap<String, mpsc::UnboundedSender<Message>>>,
     // 群聊广播频道池
     pub broadcast_pool: Arc<DashMap<String, GroupBroadcastChannel>>,
+    // 群聊监听任务管理器
+    pub group_task_manager: Arc<UserGroupTaskManager>,
 }
 
 impl AppState {
@@ -45,7 +47,8 @@ impl AppState {
             redis_pool: pool,
             session_key: generate_keys(2048),
             connection_pool: Arc::new(DashMap::new()), 
-            broadcast_pool: Arc::new(DashMap::new())
+            broadcast_pool: Arc::new(DashMap::new()),
+            group_task_manager: Arc::new(UserGroupTaskManager::new()),
         })
     }
     // 测试专用方法：获取连接数量

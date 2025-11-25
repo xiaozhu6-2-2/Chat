@@ -3,7 +3,7 @@ use echat::{
     create_test_app, 
     models::{
         requests::{RegisterRequest, LoginRequest},
-        responses::{RegisterResponse, LoginResponse, SessionKeyRespone}
+        responses::{RegisterResponse, LoginResponse, SessionKeyResponse}
     }
 };
 use axum::{
@@ -43,7 +43,7 @@ async fn test_auth_workflow() {
     assert_eq!(session_key_response.status(), StatusCode::OK);
     
     let body = to_bytes(session_key_response.into_body(), 10 * 1024 * 1024).await.unwrap();
-    let session_key: SessionKeyRespone = serde_json::from_slice(&body).unwrap();
+    let session_key: SessionKeyResponse = serde_json::from_slice(&body).unwrap();
     
     // 解析公钥 
     let public_key = RsaPublicKey::from_public_key_pem(&session_key.public_key).unwrap();
@@ -153,7 +153,7 @@ async fn test_login_with_invalid_credentials() {
         .unwrap();
     
     let body = to_bytes(session_key_response.into_body(), 10 * 1024 * 1024).await.unwrap();
-    let session_key: SessionKeyRespone = serde_json::from_slice(&body).unwrap();
+    let session_key: SessionKeyResponse = serde_json::from_slice(&body).unwrap();
     let public_key = RsaPublicKey::from_public_key_pem(&session_key.public_key).unwrap();
     
     // 测试错误密码登录
@@ -209,7 +209,7 @@ async fn test_websocket_auth() {
         .unwrap();
     
     let body = to_bytes(session_key_response.into_body(), 10 * 1024 * 1024).await.unwrap();
-    let session_key: SessionKeyRespone = serde_json::from_slice(&body).unwrap();
+    let session_key: SessionKeyResponse = serde_json::from_slice(&body).unwrap();
     let public_key = RsaPublicKey::from_public_key_pem(&session_key.public_key).unwrap();
     
     let test_account = "ws_test_user";

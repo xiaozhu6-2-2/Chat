@@ -160,7 +160,7 @@ pub async fn send_online_state(
         info!("成功发送在线状态更新消息到{}", to_uid);
     }
     else {
-        warn!("{}账号没有连接", to_uid);
+        warn!("{}用户没有连接", to_uid);
     }
     Ok(())
 }

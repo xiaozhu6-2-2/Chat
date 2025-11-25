@@ -44,7 +44,7 @@ pub async fn websocket_handler(
     3、在mysql中查询用户已加入的所有群聊号
     4、将用户添加到redis的全局在线状态表，在redis中将用户添加至用户所在群聊的在线状态表
     5、连接所在群聊频道
-    // 6、在mysql中查询用户的好友账号，筛选在线好友，并将用户上线通知给这些在线好友的客户端
+    6、在mysql中查询用户的好友账号，筛选在线好友，并将用户上线通知给这些在线好友的客户端
     ===============三个任务==================
     1、需要克隆并传递给三个任务的变量：用户账号account、应用状态state、最后一次心跳的时间last_activity
     2、写任务函数：
@@ -117,28 +117,18 @@ async fn handle_websocket(
     }
 
     // 5、连接所在群聊频道
-    // 创建取消执行令牌
-    let cancel_token = CancellationToken::new();
-
-    // 创建监听任务列表
-    let mut listen_handlers = Vec::new();
-
     // 创建任务监听每个group_id
     for group_id in &group_ids {
-        // 克隆需要转移所有权的变量
-        let account_for_listen = account.clone();
-        let gid = group_id.clone();
-        let tx_for_listen = tx.clone();// mpsc发送信道
-        let broadcast_pool_for_listen = state.broadcast_pool.clone();
-        let child_token = cancel_token.child_token();// 派生子令牌
-
-        // 创建监听任务
-        let listen = tokio::spawn(async move {
-            group_channel_listen(gid, account_for_listen, tx_for_listen, broadcast_pool_for_listen, child_token).await
-        });
-
-        // 加入到监听任务列表
-        listen_handlers.push(listen);
+        if let Err(e) = state.group_task_manager.add_listener(
+            user.uid.clone(), 
+            account.clone(), 
+            group_id.clone(), 
+            tx.clone(), 
+            state.broadcast_pool.clone()
+        ).await
+        {
+            error!("监听群聊失败{}", e);
+        }
     }
 
     // 6、通知好友
@@ -216,16 +206,8 @@ async fn handle_websocket(
     }
 
     // 3、清理群聊频道
-    cancel_token.cancel();
-    for handle in listen_handlers {
-        match tokio::time::timeout(Duration::from_millis(100), handle).await {
-            Ok(_) => {
-                info!("群聊监听任务优雅退出");
-            },
-            Err(_) => {
-                warn!("群聊监听任务退出超时，强制终止");
-            }
-        }
+    if let Err(e) = state.group_task_manager.remove_all_user_tasks(&user.uid).await {
+        error!("监听群聊清理失败: {}", e);
     }
 
     // 4、向好友发送下线通知
@@ -391,7 +373,7 @@ async fn timeout_task_spawn(
 }
 
 // 群聊监听任务
-async fn group_channel_listen(
+pub async fn group_channel_listen(
     gid : String,
     account : String,
     tx : UnboundedSender<Message>,
@@ -435,10 +417,19 @@ async fn group_channel_listen(
 
     // 监听群聊频道
     loop {
+        // 检查取消令牌
+        if cancel_token.is_cancelled() {
+            break;
+        }
         tokio::select! {
             result = rx.recv() => {
                 match result {
                     Ok(msg) => {
+                        // 检查取消令牌
+                        if cancel_token.is_cancelled() {
+                            break;
+                        }
+                        // 将收到的消息序列化
                         let msg_json = match serde_json::to_string(&msg) {
                             Ok(msg) => msg,
                             Err(e) => {
@@ -446,7 +437,11 @@ async fn group_channel_listen(
                                 break;
                             }
                         };
-                        
+                        // 检查取消令牌
+                        if cancel_token.is_cancelled() {
+                            break;
+                        }
+                        // 向mpsc中发送消息
                         if tx.send(Message::Text(msg_json.into())).is_err() {
                             error!("向用户 {} 转发群聊 {} 消息失败", account, gid);
                             break;
