@@ -1,18 +1,16 @@
 // src/state.rs
 // 库模块导入
 use axum::extract::ws::Message;
-use log::info;
 use sqlx::MySqlPool;
-use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::mpsc;
 use rsa::{RsaPrivateKey, RsaPublicKey};
 use rand_core::OsRng;
 use bb8_redis::bb8::Pool;
 use bb8_redis::RedisConnectionManager;
 use dashmap::DashMap;
 // 模块分离导入
-use crate::{models::{errors::{AppError, AppResult}, others::GroupBroadcastChannel}, utils::group_listener_manager::UserGroupTaskManager};
+use crate::{models::{errors::{AppError, AppResult}, others::GroupBroadcastChannel}, utils::{connection_resources_manager::ConnectionResourcesManager, group_listener_manager::UserGroupTaskManager}};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -28,6 +26,8 @@ pub struct AppState {
     pub broadcast_pool: Arc<DashMap<String, GroupBroadcastChannel>>,
     // 群聊监听任务管理器
     pub group_task_manager: Arc<UserGroupTaskManager>,
+    // 连接资源管理器
+    pub connection_resources_manager: Arc<DashMap<String, ConnectionResourcesManager>>,
 }
 
 impl AppState {
@@ -49,18 +49,8 @@ impl AppState {
             connection_pool: Arc::new(DashMap::new()), 
             broadcast_pool: Arc::new(DashMap::new()),
             group_task_manager: Arc::new(UserGroupTaskManager::new()),
+            connection_resources_manager: Arc::new(DashMap::new())
         })
-    }
-    // 测试专用方法：获取连接数量
-    #[cfg(test)]
-    pub fn get_connection_count(&self) -> usize {
-        self.connection_pool.len()
-    }
-    
-    // 测试专用方法：检查特定用户是否在线
-    #[cfg(test)] 
-    pub fn is_user_online(&self, account: &str) -> bool {
-        self.connection_pool.contains_key(account)
     }
 }
 

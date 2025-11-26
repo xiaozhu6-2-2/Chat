@@ -16,9 +16,9 @@ use log::{error, info};
 use serde_json::json;
 // 模块分离导入
 use crate::{
-    utils::trans_logic::{handle_group_chat, handle_private_chat, send_close, send_online_state, send_pong}, models::{
+    models::{
         entities::UserOnline, errors::AppResult, msg_websocket::{ClientMessage, ServerMessage}, others::Claims, repository::{FriendshipRepository, GroupChatRepository, OnlineRepository, UserRepository}
-    }, repository::OnlineRepository::OnlineManager, state::AppState
+    }, repository::OnlineRepository::OnlineManager, state::AppState, utils::{connection_resources_manager::ConnectionResourcesManager, trans_logic::{handle_group_chat, handle_private_chat, send_close, send_online_state, send_pong}}
 };
 
 // 用于建立WebSocket连接
@@ -71,14 +71,7 @@ async fn handle_websocket(
     let state_for_recv = state.clone();
     let state_for_timeout = state.clone();
 
-    // 1、将WebSocket分为读写端
-    let (sender, receiver) = socket.split();
-
-    // 2、创建mpsc信道的读写端
-    let (tx, rx) = mpsc::unbounded_channel();
-
-    // 3、查询用户所在群聊
-    // 查找uid
+    // 查找用户
     let user = match state.db_pool.find_user_by_account(&account).await {
         Ok(user) => user,
         Err(e) => {
@@ -87,34 +80,55 @@ async fn handle_websocket(
         }
     };
 
-    // 根据uid查找群聊
+    // 连接资源管理器
+    let resources_manager = ConnectionResourcesManager::new(&user.uid, &account);
+    state.connection_resources_manager.insert(account.clone(), resources_manager);
+    
+    // 将WebSocket分为读写端
+    let (sender, receiver) = socket.split();
+
+    // 创建mpsc信道的读写端
+    let (tx, rx) = mpsc::unbounded_channel();
+
+    // 查询用户所在群聊
     let records = match state.db_pool.find_groups_by_user(&user.uid).await {
         Ok(records) => records,
         Err(e) => {
             error!("查找用户群聊失败: {}", e);
+            state.connection_resources_manager.remove(&user.account);
             return;
         }
     };
 
-    // 4、更新用户在线状态
     // 将record转换为gid
     let group_ids : Vec<String> = records.into_iter().map(|record| record.gid).collect();
-
-    // 更新在线状态
+    
+    // 更新用户在线状态
     if let Err(e) = OnlineManager::user_online(
         &state.redis_pool, 
         UserOnline {
-            account : user.account,
+            account : user.account.clone(),
             username : user.username
         },
         &group_ids).await 
     {
         error!("用户上线失败: {}", e);
+        state.connection_resources_manager.remove(&user.account);
         return;
     }
 
-    // 5、连接所在群聊频道
-    // 创建任务监听每个group_id
+    // 添加群聊在线
+    if let Some(mut manager) = state.connection_resources_manager.get_mut(&user.account) {
+        manager.set_group_ids(group_ids.clone());
+        manager.set_online(true);
+    }
+
+    // 设置监听位
+    if let Some(mut manager) = state.connection_resources_manager.get_mut(&user.account) {
+        manager.set_listener(true);
+    }
+
+    // 开始监听
     for group_id in &group_ids {
         if let Err(e) = state.group_task_manager.add_listener(
             user.uid.clone(), 
@@ -125,22 +139,29 @@ async fn handle_websocket(
         ).await
         {
             error!("监听群聊失败{}", e);
+            if let Some(manager) = state.connection_resources_manager.get(&user.account) {
+                manager.cleanup_resources(state.clone()).await;
+            }
+            state.connection_resources_manager.remove(&user.account);
+            return;
         }
     }
 
-    // 6、通知好友
     // 查找好友记录
     let records = match state.db_pool.find_friendship_by_uid(&user.uid).await {
         Ok(records) => records,
         Err(e) => {
             error!("查找用户好友失败: {}",e);
+            if let Some(manager) = state.connection_resources_manager.get(&user.account) {
+                manager.cleanup_resources(state.clone()).await;
+            }
+            state.connection_resources_manager.remove(&user.account);
             return;
         }
     };
     
-    
-    let uid_for_friend = user.uid.clone();
     // 提取好友id
+    let uid_for_friend = user.uid.clone();
     let friend_uids: Vec<String> = records.into_iter().map(|record|
         if uid_for_friend == record.uid {
             record.to_uid
@@ -150,13 +171,17 @@ async fn handle_websocket(
         }
     ).collect();
 
-    let online_state_msg = ServerMessage::UpdateOnlineState { uid: user.uid.clone(), online_state: true };
     // 发送上线通知
+    let online_state_msg = ServerMessage::UpdateOnlineState { uid: user.uid.clone(), online_state: true };
     for friend_uid in &friend_uids {
         match send_online_state(friend_uid.clone(), online_state_msg.clone(), state.clone()).await {
             Ok(()) => {},
             Err(e) => {
                 error!("发送上线通知失败: {}", e);
+                if let Some(manager) = state.connection_resources_manager.get(&user.account) {
+                    manager.cleanup_resources(state.clone()).await;
+                }
+                state.connection_resources_manager.remove(&user.account);
                 return;
             }
         }
@@ -164,6 +189,9 @@ async fn handle_websocket(
 
     // 将tx存入连接池,将账号和写端绑定
     state.connection_pool.insert(account.clone(), tx);
+    if let Some(mut manager) = state.connection_resources_manager.get_mut(&user.account) {
+        manager.set_tx(true);
+    }
     info!("{}连接成功", account);
 
     // 记录最后一次心跳的时间，用于超时判断
@@ -194,20 +222,7 @@ async fn handle_websocket(
         _ = timeout_task => {}
     }
 
-    // 1、从连接池清除该连接
-    state.connection_pool.remove(&account);
-
-    // 2、下线
-    if let Err(e) = OnlineManager::user_offline(&state.redis_pool, account.clone(), &group_ids).await {
-        error!("用户下线失败{}", e);
-    }
-
-    // 3、清理群聊频道
-    if let Err(e) = state.group_task_manager.remove_all_user_tasks(&user.uid).await {
-        error!("监听群聊清理失败: {}", e);
-    }
-
-    // 4、向好友发送下线通知
+    // 向好友发送下线通知
     let offline_state_msg = ServerMessage::UpdateOnlineState { uid: user.uid, online_state: false };
     for friend_uid in &friend_uids {
         match send_online_state(friend_uid.clone(), offline_state_msg.clone(), state.clone()).await {
@@ -216,6 +231,11 @@ async fn handle_websocket(
                 error!("发送下线通知失败: {}", e);
             }
         }
+    }
+
+    // 清理资源
+    if let Some(manager) = state.connection_resources_manager.get(&user.account) {
+        manager.cleanup_resources(state.clone()).await;
     }
 
     // 日志
