@@ -2,7 +2,7 @@ use sqlx::MySqlPool;
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
 
-use crate::models::{entities::User, errors::{AppError, AppResult}, repository::UserRepository};
+use crate::models::{entities::{User, Gender}, errors::{AppError, AppResult}, repository::UserRepository};
 
 #[async_trait]
 impl UserRepository for MySqlPool {
@@ -12,8 +12,9 @@ impl UserRepository for MySqlPool {
         let user = sqlx::query_as!(
             User,
             "SELECT
-                uid, account, password, username, gender, region,
-                email, create_time, avatar
+                uid, account, password, username,
+                gender as `gender: Option<Gender>`, region,
+                email, create_time, avatar, bio
             FROM user WHERE uid = ?",
             uid
         ).fetch_optional(self).await?;
@@ -28,8 +29,9 @@ impl UserRepository for MySqlPool {
         let user = sqlx::query_as!(
             User,
             "SELECT
-                uid, account, password, username, gender, region,
-                email, create_time, avatar
+                uid, account, password, username,
+                gender as `gender: Option<Gender>`, region,
+                email, create_time, avatar, bio
             FROM user WHERE account = ?",
             account
         ).fetch_optional(self).await?;
@@ -44,8 +46,9 @@ impl UserRepository for MySqlPool {
         let users = sqlx::query_as!(
             User,
             "SELECT
-                uid, account, password, username, gender, region,
-                email, create_time, avatar
+                uid, account, password, username,
+                gender as `gender: Option<Gender>`, region,
+                email, create_time, avatar, bio
             FROM user WHERE region = ?",
             region
         ).fetch_all(self).await?;
@@ -58,8 +61,9 @@ impl UserRepository for MySqlPool {
         let users = sqlx::query_as!(
             User,
             "SELECT
-                uid, account, password, username, gender, region,
-                email, create_time, avatar
+                uid, account, password, username,
+                gender as `gender: Option<Gender>`, region,
+                email, create_time, avatar, bio
             FROM user WHERE username LIKE ?",
             format!("%{}%", username)
         ).fetch_all(self).await?;
@@ -72,8 +76,9 @@ impl UserRepository for MySqlPool {
         let users = sqlx::query_as!(
             User,
             "SELECT
-                uid, account, password, username, gender, region,
-                email, create_time, avatar
+                uid, account, password, username,
+                gender as `gender: Option<Gender>`, region,
+                email, create_time, avatar, bio
             FROM user WHERE create_time BETWEEN ? AND ?
             ORDER BY create_time DESC",
             start,
@@ -89,8 +94,8 @@ impl UserRepository for MySqlPool {
         let mut tx = self.begin().await?;
 
         sqlx::query!(
-            "INSERT INTO user (uid, account, password, username, gender, region, email, create_time, avatar)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO user (uid, account, password, username, gender, region, email, create_time, avatar, bio)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             user.uid,
             user.account,
             user.password,
@@ -99,7 +104,8 @@ impl UserRepository for MySqlPool {
             user.region,
             user.email,
             user.create_time,
-            user.avatar
+            user.avatar,
+            user.bio
         ).execute(&mut *tx).await?;
 
         // 插入结束
@@ -114,8 +120,8 @@ impl UserRepository for MySqlPool {
         let mut tx = self.begin().await?;
 
         sqlx::query!(
-            "INSERT INTO user (uid, account, password, username, gender, region, email, create_time, avatar)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "INSERT INTO user (uid, account, password, username, gender, region, email, create_time, avatar, bio)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 account = VALUES(account),
                 password = VALUES(password),
@@ -123,7 +129,8 @@ impl UserRepository for MySqlPool {
                 gender = VALUES(gender),
                 region = VALUES(region),
                 email = VALUES(email),
-                avatar = VALUES(avatar)",
+                avatar = VALUES(avatar),
+                bio = VALUES(bio)",
             user.uid,
             user.account,
             user.password,
@@ -132,7 +139,8 @@ impl UserRepository for MySqlPool {
             user.region,
             user.email,
             user.create_time,
-            user.avatar
+            user.avatar,
+            user.bio
         ).execute(&mut *tx).await?;
 
         tx.commit().await?;

@@ -78,15 +78,16 @@ pub async fn register(
     let uid = snowflake_constructor.next_id()?;
     // 插入SQL
     state.db_pool.insert_user(User {
-        uid: uid.to_string(), 
-        account: account, 
-        password: password_hash, 
+        uid: uid.to_string(),
+        account: account,
+        password: password_hash,
         username: payload.username,
-        gender: None, 
+        gender: None,
         region: None,
         email: None,
         create_time: None,
-        avatar: None, 
+        avatar: None,
+        bio: None,
 
     }).await?;
 

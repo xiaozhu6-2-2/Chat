@@ -153,6 +153,26 @@ pub async fn group_channel_listen(
     broadcast_pool : Arc<DashMap<String, GroupBroadcastChannel>>,
     cancel_token: CancellationToken,
 ) {
+    // debug
+    info!("监听群聊{}", gid);
+    if tx.is_closed() {
+        error!("tx已关闭，监听群聊{}失败", gid);
+    }
+
+    if cancel_token.is_cancelled() {
+        error!("取消令牌意外触发，监听群聊{}失败", gid);
+    }
+
+    // debug
+    info!("准备创建群聊频道");
+
+    if broadcast_pool.contains_key(&gid) {
+        info!("群聊频道{}已存在，不需要创建", gid);
+    }
+    else {
+        info!("群聊{}频道不存在于broadcast_pool中，准备创建", gid);
+    }
+
     // 获取/创建群聊频道
     let channel = broadcast_pool.entry(gid.clone())
         .or_insert_with(|| {
@@ -165,6 +185,8 @@ pub async fn group_channel_listen(
             }    
         }).clone();
 
+    info!("获取群聊频道成功");
+
     // 订阅群聊频道
     let mut rx = channel.tx.subscribe();
     
@@ -176,14 +198,28 @@ pub async fn group_channel_listen(
     let account_for_guard = account.clone();
     let gid_for_guard = gid.clone();
     let _guard = guard((), move |_| {
-        if let Some(channel) = broadcast_pool.get(&gid_for_guard) {
+        // 先获取读锁，读取订阅者数量
+        let should_remove = if let Some(channel) = broadcast_pool.get(&gid_for_guard) {
             let count = channel.subscriber_count.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
             info!("用户 {} 退出群聊 {} 频道，剩余订阅者: {}", account_for_guard, gid_for_guard, count - 1);
 
-            // 清理频道（最后一个订阅者）
-            if count <= 1 {
-                info!("清理空闲群聊频道: {}", gid_for_guard);
-                broadcast_pool.remove(&gid_for_guard);
+            // 返回是否需要删除频道（当减1后为0时）
+            count <= 1
+        } else {
+            info!("群聊频道 {} 已不存在，无需清理", gid_for_guard);
+            false
+        };
+
+        // 如果需要删除频道，在锁外进行删除操作
+        if should_remove {
+            info!("尝试清理空闲群聊频道: {}", gid_for_guard);
+            match broadcast_pool.remove(&gid_for_guard) {
+                Some((_key, _channel)) => {
+                    info!("成功清理空闲群聊频道: {}", gid_for_guard);
+                }
+                None => {
+                    info!("群聊频道 {} 已被其他线程清理", gid_for_guard);
+                }
             }
         }
     });

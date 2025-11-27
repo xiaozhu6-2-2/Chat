@@ -10,7 +10,7 @@ use bb8_redis::bb8::Pool;
 use bb8_redis::RedisConnectionManager;
 use dashmap::DashMap;
 // 模块分离导入
-use crate::{models::{errors::{AppError, AppResult}, others::GroupBroadcastChannel}, utils::{connection_resources_manager::ConnectionResourcesManager, group_listener_manager::UserGroupTaskManager}};
+use crate::{models::{errors::{AppError, AppResult}, others::GroupBroadcastChannel}, utils::{group_listener_manager::UserGroupTaskManager}};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -20,14 +20,12 @@ pub struct AppState {
     pub redis_pool: Pool<RedisConnectionManager>,
     // 密钥对
     pub session_key: (RsaPrivateKey, RsaPublicKey),
-    // 对接WebSocket的写端的mpsc发送端池
+    // 对接WebSocket的写端的mpsc发送端池 account -> Manager
     pub connection_pool: Arc<DashMap<String, mpsc::UnboundedSender<Message>>>,
-    // 群聊广播频道池
+    // 群聊广播频道池 gid->Manager
     pub broadcast_pool: Arc<DashMap<String, GroupBroadcastChannel>>,
     // 群聊监听任务管理器
-    pub group_task_manager: Arc<UserGroupTaskManager>,
-    // 连接资源管理器
-    pub connection_resources_manager: Arc<DashMap<String, ConnectionResourcesManager>>,
+    pub group_task_manager: Arc<UserGroupTaskManager>
 }
 
 impl AppState {
@@ -49,7 +47,6 @@ impl AppState {
             connection_pool: Arc::new(DashMap::new()), 
             broadcast_pool: Arc::new(DashMap::new()),
             group_task_manager: Arc::new(UserGroupTaskManager::new()),
-            connection_resources_manager: Arc::new(DashMap::new())
         })
     }
 }

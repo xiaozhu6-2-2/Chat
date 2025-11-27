@@ -1,6 +1,8 @@
+use core::task;
 use std::{collections::HashMap, sync::Arc};
 
 use dashmap::DashMap;
+use log::info;
 use tokio::{sync::{RwLock, mpsc, oneshot}, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -101,24 +103,33 @@ impl UserGroupTaskManager {
     // 内部实现
     // 任务管理器协程
     async fn run_task_manager(&self, mut command_rx: mpsc::UnboundedReceiver<TaskCommand>) {
-        while let Some(command) = command_rx.recv().await {
-            match command {
-                TaskCommand::AddListener { uid, account,  gid, tx, broadcast_pool, response } => {
-                    let result = self.add_listener_internal(uid, account, gid, tx, broadcast_pool).await;
-                    let _ = response.send(result);
+        loop {
+            match command_rx.recv().await {
+                Some(command) => {
+                    match command {
+                        TaskCommand::AddListener { uid, account,  gid, tx, broadcast_pool, response } => {
+                            let result = self.add_listener_internal(uid, account, gid, tx, broadcast_pool).await;
+                            let _ = response.send(result);
+                        },
+                        TaskCommand::RemoveListener { uid, gid, response } => {
+                            let result = self.remove_listener_internal(uid, gid).await;
+                            let _ = response.send(result);
+                        },
+                        TaskCommand::RemoveAllUserTasks { uid, response } => {
+                            let result = self.remove_all_user_tasks_internal(uid).await;
+                            let _ = response.send(result);
+                        },
+                        TaskCommand::GetTaskStatus { uid, gid, response } => {
+                            let result = self.get_task_status_internal(uid, gid).await;
+                            let _ = response.send(result);
+                        },
+                    }
                 },
-                TaskCommand::RemoveListener { uid, gid, response } => {
-                    let result = self.remove_listener_internal(uid, gid).await;
-                    let _ = response.send(result);
-                },
-                TaskCommand::RemoveAllUserTasks { uid, response } => {
-                    let result = self.remove_all_user_tasks_internal(uid).await;
-                    let _ = response.send(result);
-                },
-                TaskCommand::GetTaskStatus { uid, gid, response } => {
-                    let result = self.get_task_status_internal(uid, gid).await;
-                    let _ = response.send(result);
-                },
+                None => {
+                    // 通道关闭，记录日志并退出循环
+                    log::error!("任务管理器命令通道已关闭，任务管理器协程退出");
+                    break;
+                }
             }
         }
     }
@@ -134,7 +145,8 @@ impl UserGroupTaskManager {
     ) -> AppResult<String> {
         let task_id = Uuid::new_v4().to_string();
         let cancel_token = CancellationToken::new();
-
+        // debug
+        info!("添加任务{}监听群聊{}", task_id, group_id);
         // 创建并启动监听任务（调用原来的群聊监听逻辑）
         let task_handle = self.create_listener_task(
             account.clone(),
@@ -190,6 +202,9 @@ impl UserGroupTaskManager {
                 &group_listeners_for_cleanup,
             ).await;
         });
+        
+        // debug
+        info!("成功添加{}任务监听群聊{}", task_id, group_id);
 
         Ok(task_id)
     }
@@ -198,18 +213,19 @@ impl UserGroupTaskManager {
     async fn remove_listener_internal(&self, user_id: String, group_id: String) -> AppResult<()> {
         // 查找对应的任务并触发取消
         let active_tasks = self.active_tasks.read().await;
-        let mut tasks_cancelled = 0;
+        // let mut tasks_cancelled = 0;
 
+        // 如果有的话就取消，没有的话就不取消
         for task in active_tasks.values() {
             if task.uid == user_id && task.gid == group_id {
                 task.cancel_token.cancel();
-                tasks_cancelled += 1;
+                // tasks_cancelled += 1;
             }
         }
 
-        if tasks_cancelled == 0 {
-            return Err(AppError::TaskManagerError("No matching task found".to_string()));
-        }
+        // if tasks_cancelled == 0 {
+        //     return Err(AppError::TaskManagerError(format!("用户{}没有群聊监听任务", user_id)));
+        // }
 
         Ok(())
     }

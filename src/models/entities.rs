@@ -6,6 +6,14 @@ use chrono::NaiveDateTime;
 
 // 分离模块导入
 
+// 性别枚举
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, sqlx::Type)]
+#[sqlx(type_name = "TEXT", rename_all = "lowercase")]
+pub enum Gender {
+    Male,
+    Female,
+    Other,
+}
 // 用户表模型(user表)
 #[derive(Debug, Clone, Deserialize, Serialize, FromRow, PartialEq)]
 pub struct User {
@@ -13,11 +21,12 @@ pub struct User {
     pub account: String,// 唯一
     pub password: String,// 非空（哈希加密）
     pub username: String, // 可相同（昵称）
-    pub gender: Option<String>, 
+    pub gender: Option<Gender>, 
     pub region: Option<String>,
     pub email: Option<String>,
     pub create_time: Option<NaiveDateTime>,
     pub avatar: Option<String>,
+    pub bio: Option<String>,// 简介
 }
 
 // 用户全局在线状态模型(redis)
