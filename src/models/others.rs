@@ -15,7 +15,7 @@ pub struct Claims {
 }
 
 // 广播通道结构
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GroupBroadcastChannel {
     pub tx: broadcast::Sender<ClientMessage>,
     pub created_at: tokio::time::Instant,

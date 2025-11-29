@@ -1,8 +1,6 @@
 // 从库模块导入
 use axum::{http::StatusCode, Json, response::{IntoResponse, Response}};
-use chrono::format;
 use serde::Serialize;
-use serde_json::error;
 use thiserror::Error;
 use sqlx;
 
@@ -52,6 +50,8 @@ pub enum AppError {
     RedisOperationFailure(String),
     #[error("雪花算法生成失败'{0}'")]
     SnowflakeFailure(String),
+    #[error("群聊任务管理发生错误'{0}'")]
+    TaskManagerError(String),
 }
 
 // 实现AppError转化为HTTP响应
@@ -76,6 +76,8 @@ impl IntoResponse for AppError {
             Self::RedisGetConnFailure(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Redis获取连接失败{}", fault), None),
             Self::RedisOperationFailure(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Redis操作失败{}", fault), None),
             Self::SnowflakeFailure(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("雪花算法生成失败{}", fault), None),
+            Self::TaskManagerError(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("群聊任务管理发生错误{}", fault), None),
+
         };
 
         let error_response = ErrorResponse {

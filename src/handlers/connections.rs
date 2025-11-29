@@ -9,16 +9,16 @@ use axum::{
     Extension,
 };
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tokio::time::{Duration, interval, Instant};
-use futures::{stream::{SplitSink, SplitStream}, SinkExt, StreamExt};
-use log::{info, error};
+use futures::{SinkExt, StreamExt, stream::{SplitSink, SplitStream}};
+use log::{error, info};
 use serde_json::json;
 // 模块分离导入
 use crate::{
-    handlers::trans_logic::{handle_group_chat, handle_private_chat, send_close, send_pong}, models::{
-        errors::AppResult, msg_websocket::{ClientMessage, ServerMessage}, others::Claims
-    }, state::{AppState}
+    models::{
+        entities::UserOnline, errors::AppResult, msg_websocket::{ClientMessage, ServerMessage}, others::Claims, repository::{FriendshipRepository, GroupChatRepository, OnlineRepository, UserRepository}
+    }, repository::OnlineRepository::OnlineManager, state::AppState, utils::{trans_logic::{handle_group_chat, handle_private_chat, send_close, send_online_state, send_pong}}
 };
 
 // 用于建立WebSocket连接
@@ -38,9 +38,10 @@ pub async fn websocket_handler(
     ===============预处理===================
     1、将WebSocket连接分为读写端
     2、创建MPSC信道并分为读写端，将写端存入连接池，与用户账号标识
-    // 3、在mysql中查询用户已加入的所有群聊号
-    // 4、将用户添加到redis的全局在线状态表，在redis中将用户添加至用户所在群聊的在线状态表
-    // 5、在mysql中查询用户的好友账号，筛选在线好友，并将用户上线通知给这些在线好友的客户端
+    3、在mysql中查询用户已加入的所有群聊号
+    4、将用户添加到redis的全局在线状态表，在redis中将用户添加至用户所在群聊的在线状态表
+    5、连接所在群聊频道
+    6、在mysql中查询用户的好友账号，筛选在线好友，并将用户上线通知给这些在线好友的客户端
     ===============三个任务==================
     1、需要克隆并传递给三个任务的变量：用户账号account、应用状态state、最后一次心跳的时间last_activity
     2、写任务函数：
@@ -52,46 +53,123 @@ pub async fn websocket_handler(
         通过last_activity进行超时判断
     ===============断连清理==================
     1、清理连接池中的MPSC信道
-    // 2、清理全局在线状态表中用户在线状态信息
-    // 3、清理群聊在线状态表中用户在线状态信息
-    // 4、向用户的在线好友发送用户下线通知
+    2、清理在线状态
+    3、退出所在群聊频道 or 如果是最后一个用户则清理所在群聊频道
+    4、向用户的在线好友发送用户下线通知
 */
 async fn handle_websocket(
     socket: WebSocket,
     claims: Claims,
     state: AppState
 )-> () {
-    // 连接者账号
+    // 连接者账号（接收任务和超时任务需要转移所有权）
     let account = claims.sub.clone();
-    let account_for_send = account.clone();
     let account_for_recv = account.clone();
     let account_for_timeout = account.clone();
 
-    // 状态
-    let state_for_send = state.clone();
+    // 状态（接受任务和超时任务需要转移所有权）
     let state_for_recv = state.clone();
     let state_for_timeout = state.clone();
 
-    // 1、将WebSocket分为读写端
+    // 查找用户
+    let user = match state.db_pool.find_user_by_account(&account).await {
+        Ok(user) => user,
+        Err(e) => {
+            error!("查找用户失败: {}", e);
+            return;
+        }
+    };
+    
+    // 将WebSocket分为读写端（分别为读任务和写任务持有）
     let (sender, receiver) = socket.split();
 
-    // 2、创建mpsc信道的读写端
+    // 创建mpsc信道的读写端（分别为读任务和全局状态持有）
     let (tx, rx) = mpsc::unbounded_channel();
 
-    // 3、查询用户所在群聊
+    // 查询用户所在群聊（用于更新群聊在线状态和监听群聊）
+    let records = match state.db_pool.find_groups_by_user(&user.uid).await {
+        Ok(records) => records,
+        Err(e) => {
+            error!("查找用户群聊失败: {}", e);
+            clean_resources(&user.account, &user.uid, state.clone()).await;// 清理资源，防止资源泄露
+            return;
+        }
+    };
 
-    // 4、更新用户在线状态
+    // 将record转换为gid
+    let group_ids : Vec<String> = records.into_iter().map(|record| record.gid).collect();
+    
+    // 更新用户在线状态
+    if let Err(e) = OnlineManager::user_online(
+        &state.redis_pool, 
+        UserOnline {
+            account : user.account.clone(),
+            username : user.username
+        },
+        &group_ids).await 
+    {
+        error!("用户上线失败: {}", e);
+        clean_resources(&user.account, &user.uid, state.clone()).await;// 清理资源，防止资源泄露
+        return;
+    }
 
-    // 5、通知好友
+    // 开始监听
+    for group_id in &group_ids {
+        if let Err(e) = state.group_task_manager.add_listener(
+            user.uid.clone(), 
+            account.clone(), 
+            group_id.clone(), 
+            tx.clone(), 
+            state.broadcast_pool.clone()
+        ).await
+        {
+            error!("监听群聊失败{}", e);
+            clean_resources(&user.account, &user.uid, state.clone()).await;// 清理已监听的群聊
+            return;
+        }
+    }
+
+    // 查找好友记录
+    let records = match state.db_pool.find_friendship_by_uid(&user.uid).await {
+        Ok(records) => records,
+        Err(e) => {
+            error!("查找用户好友失败: {}",e);
+            clean_resources(&user.account, &user.uid, state.clone()).await;// 清理已分配的资源
+            return;
+        }
+    };
+    
+    // 提取好友id（用于发送上线通知）
+    let uid_for_friend = user.uid.clone();
+    let friend_uids: Vec<String> = records.into_iter().map(|record|
+        if uid_for_friend == record.uid {
+            record.to_uid
+        }
+        else {
+            record.uid
+        }
+    ).collect();
+
+    // 发送上线通知
+    let online_state_msg = ServerMessage::UpdateOnlineState { uid: user.uid.clone(), online_state: true };
+    for friend_uid in &friend_uids {
+        match send_online_state(friend_uid.clone(), online_state_msg.clone(), state.clone()).await {
+            Ok(()) => {},
+            Err(e) => {
+                error!("发送上线通知失败: {}", e);
+                clean_resources(&user.account, &user.uid, state.clone()).await;
+                return;
+            }
+        }
+    }
 
     // 将tx存入连接池,将账号和写端绑定
     state.connection_pool.insert(account.clone(), tx);
     info!("{}连接成功", account);
 
     // 记录最后一次心跳的时间，用于超时判断
-    let last_activity = Arc::new(tokio::sync::RwLock::new(Instant::now())); 
+    let last_activity = Arc::new(tokio::sync::RwLock::new(Instant::now()));
     // 克隆智能指针，让不同的任务共享一块内存
-    let last_activity_for_send = Arc::clone(&last_activity);
     let last_activity_for_recv = Arc::clone(&last_activity);
     let last_activity_for_timeout = Arc::clone(&last_activity);
 
@@ -101,8 +179,8 @@ async fn handle_websocket(
     });
 
     // WebSocket读任务(监听 WebSocket 接收消息)
-    let recv_tack = tokio::spawn(async move{
-        recv_tack_spawn(receiver, last_activity_for_recv, state_for_recv, account_for_recv).await
+    let recv_task = tokio::spawn(async move{
+        recv_task_spawn(receiver, last_activity_for_recv, state_for_recv, account_for_recv).await
     });
 
     // 超时机制
@@ -113,12 +191,23 @@ async fn handle_websocket(
     // 结束连接:当读任务或者写任务任意一个结束时，结束连接
     tokio::select! {
         _ = send_task => {},
-        _ = recv_tack => {},
+        _ = recv_task => {},
         _ = timeout_task => {}
     }
 
-    // 从连接池清除该连接
-    state.connection_pool.remove(&claims.sub);
+    // 向好友发送下线通知
+    let offline_state_msg = ServerMessage::UpdateOnlineState { uid: user.uid.clone(), online_state: false };
+    for friend_uid in &friend_uids {
+        match send_online_state(friend_uid.clone(), offline_state_msg.clone(), state.clone()).await {
+            Ok(()) => {},
+            Err(e) => {
+                error!("发送下线通知失败: {}", e);// 无伤大雅，等客户端轮询
+            }
+        }
+    }
+
+    // 清理资源
+    clean_resources(&user.account, &user.uid, state.clone()).await;
 
     // 日志
     info!("用户{}断开连接", claims.sub);
@@ -171,7 +260,7 @@ async fn send_task_spawn(
 }
 
 // WebSocket接收任务
-async fn recv_tack_spawn(
+async fn recv_task_spawn(
     mut receiver: SplitStream<WebSocket>,
     last_activity_for_recv: Arc<RwLock<Instant>>,
     state: AppState,
@@ -185,34 +274,40 @@ async fn recv_tack_spawn(
             Message::Text(text) => {
                 match serde_json::from_str::<ClientMessage>(&text) {
                     // 心跳响应消息
-                    Ok(ClientMessage::Pong { timestamp, data }) => {
+                    Ok(ClientMessage::Pong { timestamp: _, data: _ }) => {
                         // 更新时间
                         let mut last_activity = last_activity_for_recv.write().await;
                         *last_activity = Instant::now();
                     },
                     // 心跳请求消息
-                    Ok(ClientMessage::Ping { timestamp, data }) => {
+                    Ok(ClientMessage::Ping { timestamp: _, data: _ }) => {
                         // 更新时间
                         let mut last_activity = last_activity_for_recv.write().await;
                         *last_activity = Instant::now();
-                        // 回复pong(注：这里需要错误处理)
-                        let _ = send_pong(account.clone(), state.clone()).await;
+                        // 回复pong
+                        if let Err(e) = send_pong(account.clone(), state.clone()).await {
+                            error!("回复pong错误 {}", e);
+                        }
                     },
                     // 私聊消息
                     Ok(ClientMessage::Private (payload )) => {
                         // 更新时间
                         let mut last_activity = last_activity_for_recv.write().await;
                         *last_activity = Instant::now();
-                        // 处理私聊消息(注：这里需要错误处理)
-                        let _ = handle_private_chat(payload, state.clone()).await;
+                        // 处理私聊消息
+                        if let Err(e) = handle_private_chat(payload, state.clone()).await {
+                            error!("处理私聊消息错误 {}", e);
+                        }
                     },
                     // 群聊消息
                     Ok(ClientMessage::MesGroup (payload)) => {
                         // 更新时间
                         let mut last_activity = last_activity_for_recv.write().await;
                         *last_activity = Instant::now();
-                        // 处理群聊消息(注：这里需要错误处理)
-                        let _ = handle_group_chat(payload, state.clone()).await;
+                        // 处理群聊消息
+                        if let Err(e) = handle_group_chat(payload, state.clone()).await {
+                            error!("处理群聊消息错误 {}", e);
+                        }
                     },
                     _ => {
 
@@ -221,8 +316,10 @@ async fn recv_tack_spawn(
             },
             // 关闭帧
             Message::Close(msg) => {
-                // 发送close帧(注：这里需要错误处理)
-                let _ = send_close(account.clone(), state.clone()).await;
+                // 发送close帧
+                if let Err(e) = send_close(account.clone(), state.clone()).await {
+                    error!("发送关闭帧失败 {}", e);
+                }
                 // 关闭连接
                 info!("客户端发来关闭帧:{:?}，关闭连接", msg);
                 break;
@@ -254,9 +351,40 @@ async fn timeout_task_spawn(
         if last_activity.elapsed() > Duration::from_secs(90) {
             // 自动断开连接
             error!("连接{}心跳超时", account);
-            // 发送close帧(注：这里需要错误处理)
-            let _ = send_close(account.clone(), state.clone()).await;
+            // 发送close帧
+            if let Err(e) = send_close(account.clone(), state.clone()).await {
+                error!("发送关闭帧失败 {}", e);
+            }
             break;
         }
     }
+}
+
+// 清理资源
+async fn clean_resources(account: &String, uid: &String, state: AppState) {
+    // 如果存在mpsc发送信道，则清理。DashMap的remove()方法本身是安全的
+    state.connection_pool.remove(account);
+    info!("清除 {} 的连接", account);
+
+    // 查找群聊
+    let records = match state.db_pool.find_groups_by_user(uid).await {
+        Ok(records) => records,
+        Err(e) => {
+            error!("查找用户{}群聊失败: {}", account, e);
+            Vec::new()
+        }
+    };
+    let gids: Vec<String> = records.into_iter().map(|record| record.gid).collect();
+
+    // 清理群聊在线状态。user_offline是安全的
+    if let Err(e) = OnlineManager::user_offline(&state.redis_pool, account.clone(), &gids).await {
+        error!("清理用户在线状态失败: {}", e);
+    }
+
+    // 如果有的话则清理，没有则返回Ok(())。remove_all_user_task是安全的
+    if let Err(e) = state.group_task_manager.remove_all_user_tasks(uid).await {
+        error!("清理监听任务失败{}", e);
+    }
+
+    info!("{}连接的资源清理完毕", account);
 }

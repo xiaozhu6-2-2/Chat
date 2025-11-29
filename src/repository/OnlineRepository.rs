@@ -7,6 +7,8 @@ use crate::models::{entities::UserOnline, errors::{AppError, AppResult}, reposit
 
 pub struct OnlineManager;
 
+impl OnlineManager {}
+
 #[async_trait]
 impl OnlineRepository for OnlineManager {
     // 在线状态上线
