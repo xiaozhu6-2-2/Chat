@@ -11,7 +11,6 @@ use tower_http::cors::{CorsLayer, Any};
 use super::handlers;
 use crate::{
     middleware::{
-        auth_middleware,
         ws_auth_middleware
     },
     state::AppState

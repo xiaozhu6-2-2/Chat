@@ -1,7 +1,6 @@
 // src/models.rs
 // 库模块导入
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 
 // 注册响应结构体
 #[derive(Serialize, Deserialize)]
@@ -14,6 +13,7 @@ pub struct RegisterResponse {
 pub struct LoginResponse {
     pub username: String, 
     pub account: String,
+    pub uid: String,
     pub token: String,     // JWT令牌
 }
 
