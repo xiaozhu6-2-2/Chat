@@ -1,9 +1,8 @@
 // src/models/repository.rs
 use async_trait::async_trait;
-use axum::http::status;
 use bb8_redis::RedisConnectionManager;
 use bb8_redis::bb8::Pool;
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::NaiveDateTime;
 
 use crate::models::{entities::{FriendRequest, Friends, GroupChat, GroupJoinRequest, GroupMember, GroupMessage, MuteRecord, PrivateChat, PrivateMessage, User, UserOnline}, errors::AppResult};
 

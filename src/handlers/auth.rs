@@ -120,13 +120,15 @@ pub async fn login(
 
     // 用解密后的账号和密码进行登录凭证验证
     match validate_credentials(&state.db_pool, &account, &password).await {
-        Ok(username) => {
+        Ok(user) => {
             // 生成JWT令牌
             let token = generate_jwt(&account)?;
+            
             // 构建响应结构
             Ok(Json(LoginResponse {
-                username: username,
-                account: account,
+                username: user.username,
+                account: user.account,
+                uid: user.uid,
                 token: token
             }))
         },
@@ -139,7 +141,7 @@ async fn validate_credentials(
     db_pool: &impl UserRepository,
     account: &str,
     password: &str,
-) -> AppResult<String> {
+) -> AppResult<User> {
     // 从数据库中查询用户信息
     let user = db_pool.find_user_by_account(&account).await?;
     
@@ -151,7 +153,7 @@ async fn validate_credentials(
     let argon2 = Argon2::default();
     // 验证密码正确性
     match argon2.verify_password(password.as_bytes(), &parsed_hash) {
-        Ok(_) => Ok(user.username), // 验证成功
+        Ok(_) => Ok(user), // 验证成功
         Err(_) => Err(AppError::InvalidPassword),         // 密码不匹配
     }
 }
