@@ -10,10 +10,10 @@ use tower_http::cors::{CorsLayer, Any};
 // 分离模块导入
 use super::handlers;
 use crate::{
-    middleware::{
+    handlers::user::get_user_info, middleware::{
+        auth_middleware,
         ws_auth_middleware
-    },
-    state::AppState
+    }, state::AppState
 };
 
 // 构建路由并返回 Router 实例
@@ -25,41 +25,55 @@ pub fn create_routes() -> Router<AppState> {
         .allow_headers(Any); 
 
     let public_routes = Router::new()
-        .route("/register", post(handlers::auth::register))
-        .route("/login", post(handlers::auth::login))
-        .route("/session-key", get(handlers::auth::get_session_key));
+        .route("/noauth/auth/register", post(handlers::auth::register))
+        .route("/noauth/auth/login", post(handlers::auth::login))
+        .route("/noauth/auth/session-key", get(handlers::auth::get_session_key));
     
     // 需要token认证的路由
     let protected_routes = Router::new();
-        // // 群聊管理API
-        // .route("/auth/group_chat/create", post(handlers::chat_group::create_group))         // 创建群聊
-        // .route("/auth/group_chat/exit", post(handlers::chat_group::exit_group))             // 退出群聊
-        // .route("/auth/group_chat/dismiss", post(handlers::chat_group::dismiss_group))       // 解散群聊
-        // .route("/auth/group_chat/translate", post(handlers::chat_group::translate_group))   // 转让群聊
-        // .route("/auth/group_chat/set_role", post(handlers::chat_group::set_role))           // 设置权限
-        // .route("/auth/group_chat/invite", post(handlers::chat_group::invite))               // 邀请成员
-        // .route("/auth/group_chat/kick", post(handlers::chat_group::kick))                   // 踢出群聊
-        // .route("/auth/group_chat/online_state", post(handlers::chat_group::online_state))   // 群成员在线状态
-        // .route("/auth/group_chat/notification", post(handlers::chat_group::notification))   // 群公告
-        // .route("/auth/group_chat/group_rename", post(handlers::chat_group::group_rename))   // 修改群名称
-        // .route("/auth/group_chat/remark", post(handlers::chat_group::remark))               // 修改群备注
-        // .route("/auth/group_chat/reavator", post(handlers::chat_group::reavator))           // 修改群头像
-        // .route("/auth/group_chat/info", post(handlers::chat_group::info))                   // 获取群信息
-        // .route("/auth/group_chat/history", post(handlers::chat_group::history))             // 获取历史消息
-        // .route("/auth/group_chat/member_rename", post(handlers::chat_group::member_rename)) // 修改群昵称
-        // .route("/auth/group_chat/tag", post(handlers::chat_group::tag))                     // 修改群标签
-        // // 私聊管理API
+        // .route("/auth/user/user-info", post(handlers::user::get_user_info))// 获取用户信息
+        // .route("/auth/user/update-user-info", post(handler))// 更新用户信息
+        // .route("/auth/user/profile", post())// 获取非好友用户资料
 
-        // // 好友管理API
-        // .route("/auth/friends/add", post(handlers::friends::add))                           // 添加好友
-        // .route("/auth/friends/delete", post(handlers::friends::delete))                     // 删除好友
-        // .route("/auth/friends/black_list", post(handlers::friends::))                       // 拉入黑名单
-        // .route("/auth/friends/remark", post(handlers::friends::remark))                     // 修改好友备注
-        // .route("/auth/friends/tag", post(handlers::friends::tag))                           // 修改好友分组
+        // .route("/auth/chat/list", get(handler))// 获取会话列表
+        // .route("/auth/chat/soloprivate", post(handler))// 获取指定私聊会话
+        // .route("/auth/chat/sologroup", post())// 获取指定群聊会话
+
+        // .route("/auth/message/private_history", post(handler))// 获取私聊会话历史消息
+        // .route("/auth/message/group_history", post(handler))// 获取群聊会话历史消息
+        // .route("/auth/message/read", post(handler))// 设置消息为已读
+
+        // .route("/auth/friends/search", post())// 搜索用户
+        // .route("/auth/friends/profile", post())// 获取好友资料
+        // .route("/auth/friends/friendlist", post())// 获取好友列表
+        // .route("/auth/friends/request", post())// 发送好友请求
+        // .route("/auth/friends/respond", post())// 回复好友请求
+        // .route("/auth/friends/request_list", post())// 获取好友请求列表
+        // .route("/auth/friends/remove", post())// 删除好友
+        // .route("/auth/friends/update-remark", post())// 更新好友备注
+        // .route("/auth/friends/blacklist", post())// 更新好友黑名单状态
+
+        // .route("/auth/groups/search", post())// 搜索群聊
+        // .route("/auth/groups/profile", post())// 获取群聊资料
+        // .route("/auth/groups/grouplist", post())// 获取群聊列表
+
+        // .route("/auth/state/friends-online", post())// 获取好友列表在线状态
+        // .route("/auth/state/group-online", post())// 获取群聊在线状态
+
+        // .route("/auth/file/upload", post())// 上传文件
+        // .route("/auth/file/preview", post())// 预览文件
+        // .route("/auth/file/download", post())// 下载文件
+        // .route("/auth/file/delete", post())// 删除文件
+
         // .route_layer(middleware::from_fn(auth_middleware));
+        
+        // .route("/auth/group/profile", post())// 获取群聊资料
+        // .route("/auth/group/profile", post())// 获取群聊资料
+        // .route("/auth/group/profile", post())// 获取群聊资料
+        
 
     let ws_route: Router<AppState> = Router::new()
-        .route("/auth/connection/ws",get(handlers::connections::websocket_handler))
+        .route("/auth/connection/ws",post(handlers::connections::websocket_handler))
         .layer(middleware::from_fn(ws_auth_middleware));
 
     Router::new()

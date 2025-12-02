@@ -23,9 +23,9 @@ pub struct LoginRequest {
     pub password: String,
 }
 
-// 创建群聊请求模型
+// 获取用户信息请求模型
 #[derive(Deserialize, Serialize)]
-pub struct CreateGroupRequest {
+pub struct UserInfoRequest {
     
 }
 

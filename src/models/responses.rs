@@ -23,8 +23,8 @@ pub struct SessionKeyResponse {
     pub public_key: String
 }
 
-// 创建群聊响应模型
+// 获取用户信息响应模型
 #[derive(Serialize, Deserialize)]
-pub struct CreateGroupResponse {
-    pub group_id: String
+pub struct UserInfoResponse {
+    
 }
