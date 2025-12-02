@@ -23,10 +23,166 @@ pub struct LoginRequest {
     pub password: String,
 }
 
-// 创建群聊请求模型
+// 获取用户信息请求模型
 #[derive(Deserialize, Serialize)]
-pub struct CreateGroupRequest {
-    
+pub struct UserInfoRequest {
+
+}
+
+// 用户信息更新请求模型
+#[derive(Deserialize, Serialize)]
+pub struct UserInfoUpdateRequest {
+
+}
+
+// 获取用户资料请求模型
+#[derive(Deserialize, Serialize)]
+pub struct FetchProfileRequest {
+
+}
+
+// 搜索用户请求模型
+#[derive(Deserialize, Serialize)]
+pub struct SearchUserRequest {
+
+}
+
+// 好友资料请求模型
+#[derive(Deserialize, Serialize)]
+pub struct FriendProfileRequest {
+
+}
+
+// 好友列表请求模型
+#[derive(Deserialize, Serialize)]
+pub struct FriendListRequest {
+
+}
+
+// 好友请求请求模型
+#[derive(Deserialize, Serialize)]
+pub struct FriendRequestRequest {
+
+}
+
+// 回复好友请求请求模型
+#[derive(Deserialize, Serialize)]
+pub struct RespondFriendRequestRequest {
+
+}
+
+// 好友请求列表请求模型
+#[derive(Deserialize, Serialize)]
+pub struct FriendRequestListRequest {
+
+}
+
+// 删除好友请求模型
+#[derive(Deserialize, Serialize)]
+pub struct RemoveFriendRequest {
+
+}
+
+// 更新好友备注请求模型
+#[derive(Deserialize, Serialize)]
+pub struct UpdateFriendRemarkRequest {
+
+}
+
+// 更新好友黑名单请求模型
+#[derive(Deserialize, Serialize)]
+pub struct UpdateFriendBlacklistRequest {
+
+}
+
+// 搜索群组请求模型
+#[derive(Deserialize, Serialize)]
+pub struct SearchGroupRequest {
+
+}
+
+// 群组资料请求模型
+#[derive(Deserialize, Serialize)]
+pub struct GroupProfileRequest {
+
+}
+
+// 群组列表请求模型
+#[derive(Deserialize, Serialize)]
+pub struct GroupListRequest {
+
+}
+
+// 聊天列表请求模型
+#[derive(Deserialize, Serialize)]
+pub struct ChatListRequest {
+
+}
+
+// 私聊请求模型
+#[derive(Deserialize, Serialize)]
+pub struct PrivateChatRequest {
+
+}
+
+// 群聊请求模型
+#[derive(Deserialize, Serialize)]
+pub struct GroupChatRequest {
+
+}
+
+// 私聊历史请求模型
+#[derive(Deserialize, Serialize)]
+pub struct PrivateHistoryRequest {
+
+}
+
+// 群聊历史请求模型
+#[derive(Deserialize, Serialize)]
+pub struct GroupHistoryRequest {
+
+}
+
+// 标记已读请求模型
+#[derive(Deserialize, Serialize)]
+pub struct ReadRequest {
+
+}
+
+// 上传文件请求模型
+#[derive(Deserialize, Serialize)]
+pub struct UploadFileRequest {
+
+}
+
+// 预览文件请求模型
+#[derive(Deserialize, Serialize)]
+pub struct PreviewFileRequest {
+
+}
+
+// 下载文件请求模型
+#[derive(Deserialize, Serialize)]
+pub struct DownloadFileRequest {
+
+}
+
+// 删除文件请求模型
+#[derive(Deserialize, Serialize)]
+pub struct DeleteFileRequest {
+
+}
+
+// 好友在线状态请求模型
+#[derive(Deserialize, Serialize)]
+pub struct FriendsOnlineRequest {
+
+}
+
+// 群组在线状态请求模型
+#[derive(Deserialize, Serialize)]
+pub struct GroupOnlineRequest {
+
 }
 
 
