@@ -1,7 +1,11 @@
 pub mod auth;
+pub mod chat;
 pub mod connections;
-pub mod chat_group;
+pub mod file;
 pub mod friends;
+pub mod groups;
+pub mod message;
+pub mod online;
 pub mod other;
 pub mod user;
-pub mod chat_private;
+
