@@ -4,17 +4,27 @@ use serde_json::Value;
 // 公共的消息数据负载
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MesPayload {
-    messageId: Option<String>,
+    message_id: Option<String>,
+    chat_id: Option<String>,
     timestamp: Option<i64>,
-    senderId: Option<String>,
-    receiverId: Option<String>,
-    chatType: Option<String>,
+
+    sender_id: Option<String>,
+    sender_name: Option<String>,
+    sender_avatar: Option<String>,
+
+    receiver_id: Option<String>,
+
+    content_type: Option<String>,
     details: Option<String>,
+
+    is_announcement: bool,
+    mentioned_uids: Vec<String>,
+    quote_msg_id: String,
 }
 // 实现类方法
 impl MesPayload {
-    pub fn get_receiverId(&self)-> Option<&String>{
-        self.receiverId.as_ref()
+    pub fn get_receiver_id(&self)-> Option<&String>{
+        self.receiver_id.as_ref()
     }
 }
 

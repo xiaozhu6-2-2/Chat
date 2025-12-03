@@ -41,7 +41,7 @@ impl PrivateChatRepository for MySqlPool {
         let chat = sqlx::query_as!(
             PrivateChat,
             "SELECT
-                pid, uid1, uid2, create_time, is_pinned_by_uid1, is_pinned_by_uid2
+                pid, uid1, uid2, create_time, is_pinned_by_uid1, is_pinned_by_uid2, do_not_disturb_uid1, do_not_disturb_uid2
             FROM private_chat WHERE pid = ?",
             pid
         ).fetch_optional(self).await?;
@@ -61,7 +61,7 @@ impl PrivateChatRepository for MySqlPool {
         let chat = sqlx::query_as!(
             PrivateChat,
             "SELECT
-                pid, uid1, uid2, create_time, is_pinned_by_uid1, is_pinned_by_uid2
+                pid, uid1, uid2, create_time, is_pinned_by_uid1, is_pinned_by_uid2, do_not_disturb_uid1, do_not_disturb_uid2
             FROM private_chat
             WHERE uid1 = ? AND uid2 = ?",
             smaller_uid,
@@ -76,7 +76,7 @@ impl PrivateChatRepository for MySqlPool {
         let chats = sqlx::query_as!(
             PrivateChat,
             "SELECT
-                pid, uid1, uid2, create_time, is_pinned_by_uid1, is_pinned_by_uid2
+                pid, uid1, uid2, create_time, is_pinned_by_uid1, is_pinned_by_uid2, do_not_disturb_uid1, do_not_disturb_uid2
             FROM private_chat
             WHERE uid1 = ? OR uid2 = ?
             ORDER BY create_time DESC",

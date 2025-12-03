@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 // src/models.rs
 // 库模块导入
 use serde::{Deserialize, Serialize};
@@ -26,25 +27,53 @@ pub struct SessionKeyResponse {
 // 获取用户信息响应模型
 #[derive(Serialize, Deserialize)]
 pub struct UserInfoResponse {
-
+    pub uid: String,
+    pub account: String,
+    pub username: String,
+    pub gender: Option<String>,        
+    pub region: Option<String>,        
+    pub email: Option<String>,         
+    pub create_time: Option<NaiveDateTime>,  
+    pub avatar: Option<String>,        
+    pub bio: Option<String>,         
 }
 
 // 用户信息更新响应模型
 #[derive(Serialize, Deserialize)]
 pub struct UserInfoUpdateResponse {
-
+    pub success: bool,
 }
 
 // 获取用户资料响应模型
 #[derive(Serialize, Deserialize)]
 pub struct FetchProfileResponse {
+    pub uid: String,
+    pub account: String,
+    pub username: String,
+    pub gender: Option<String>,        
+    pub region: Option<String>,        
+    pub email: Option<String>,
+    pub avatar: Option<String>,        
+    pub bio: Option<String>, 
+}
 
+// 搜索用户条目模型
+#[derive(Serialize, Deserialize)]
+pub struct SearchUserItem {
+    pub uid: String,
+    pub username: String,
+    pub gender: Option<String>,
+    pub avatar: Option<String>,
+    pub bio: Option<String>,
 }
 
 // 搜索用户响应模型
 #[derive(Serialize, Deserialize)]
 pub struct SearchUserResponse {
-
+    pub total_pages: i64, // 总页数
+    pub current_page: i64, // 当前页码
+    pub total_items: i64,  // 总条目数
+    pub users: Vec<SearchUserItem>,
 }
 
 // 好友资料响应模型

@@ -103,8 +103,8 @@ impl GroupChatRepository for MySqlPool {
 
         //插入或更新
         sqlx::query!(
-            "INSERT INTO group_member 
-            (uid, gid, role, nickname, level, join_time, do_not_disturb, tag, remark, is_pinned) 
+            "INSERT INTO group_member
+            (uid, gid, role, nickname, level, join_time, do_not_disturb, group_by, remark, is_pinned)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
             role = VALUES(role),
@@ -112,7 +112,7 @@ impl GroupChatRepository for MySqlPool {
             level = VALUES(level),
             join_time = VALUES(join_time),
             do_not_disturb = VALUES(do_not_disturb),
-            tag = VALUES(tag),
+            group_by = VALUES(group_by),
             remark = VALUES(remark),
             is_pinned = VALUES(is_pinned)",
             member.uid,
@@ -122,7 +122,7 @@ impl GroupChatRepository for MySqlPool {
             member.level,
             member.join_time,
             member.do_not_disturb,
-            member.tag,
+            member.group_by,
             member.remark,
             member.is_pinned,
         ).execute(&mut *tx).await?;
@@ -136,18 +136,18 @@ impl GroupChatRepository for MySqlPool {
 
         let find_member=sqlx::query_as!(
             GroupMember,
-            "SELECT 
-                uid, 
-                gid, 
+            "SELECT
+                uid,
+                gid,
                 role as `role: Role`,
-                nickname, 
-                level, 
-                join_time, 
-                do_not_disturb, 
-                tag, 
-                remark, 
-                is_pinned 
-            FROM group_member 
+                nickname,
+                level,
+                join_time,
+                do_not_disturb,
+                group_by,
+                remark,
+                is_pinned
+            FROM group_member
             WHERE uid = ? AND gid = ?",
             uid,
             gid
@@ -160,18 +160,18 @@ impl GroupChatRepository for MySqlPool {
 
         let find_members=sqlx::query_as!(
             GroupMember,
-            "SELECT 
-                uid, 
-                gid, 
+            "SELECT
+                uid,
+                gid,
                 role as `role: Role`,
-                nickname, 
-                level, 
-                join_time, 
-                do_not_disturb, 
-                tag, 
-                remark, 
-                is_pinned 
-            FROM group_member 
+                nickname,
+                level,
+                join_time,
+                do_not_disturb,
+                group_by,
+                remark,
+                is_pinned
+            FROM group_member
             WHERE gid = ?",
             gid
         ).fetch_all(self).await?;
@@ -183,18 +183,18 @@ impl GroupChatRepository for MySqlPool {
 
         let find_group=sqlx::query_as!(
             GroupMember,
-            "SELECT 
-                uid, 
-                gid, 
+            "SELECT
+                uid,
+                gid,
                 role as `role: Role`,
-                nickname, 
-                level, 
-                join_time, 
-                do_not_disturb, 
-                tag, 
-                remark, 
-                is_pinned 
-            FROM group_member 
+                nickname,
+                level,
+                join_time,
+                do_not_disturb,
+                group_by,
+                remark,
+                is_pinned
+            FROM group_member
             WHERE uid = ?",
             uid
         ).fetch_all(self).await?;

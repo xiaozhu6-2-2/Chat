@@ -19,15 +19,15 @@ impl FriendshipRepository for MySqlPool {
         // 插入或更新好友关系
         sqlx::query!(
             "INSERT INTO friends
-            (fid, uid, to_uid, create_time, is_blacklist, remark, to_remark, tag, to_tag)
+            (fid, uid, to_uid, create_time, is_blacklist, remark, to_remark, group_by, to_group_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
             create_time = VALUES(create_time),
             is_blacklist = VALUES(is_blacklist),
             remark = VALUES(remark),
             to_remark = VALUES(to_remark),
-            tag = VALUES(tag),
-            to_tag = VALUES(to_tag)",
+            group_by = VALUES(group_by),
+            to_group_by = VALUES(to_group_by)",
             friendship.fid,
             friendship.uid,
             friendship.to_uid,
@@ -35,8 +35,8 @@ impl FriendshipRepository for MySqlPool {
             friendship.is_blacklist,
             friendship.remark,
             friendship.to_remark,
-            friendship.tag,
-            friendship.to_tag,
+            friendship.group_by,
+            friendship.to_group_by,
         ).execute(&mut *tx).await?;
 
         // 提交事务
@@ -51,7 +51,7 @@ impl FriendshipRepository for MySqlPool {
             Friends,
             "SELECT
                 fid, uid, to_uid, create_time, is_blacklist,
-                remark, to_remark, tag, to_tag
+                remark, to_remark, group_by, to_group_by
             FROM friends WHERE fid = ?",
             fid
         ).fetch_optional(self).await?;
@@ -72,7 +72,7 @@ impl FriendshipRepository for MySqlPool {
             Friends,
             "SELECT
                 fid, uid, to_uid, create_time, is_blacklist,
-                remark, to_remark, tag, to_tag
+                remark, to_remark, group_by, to_group_by
             FROM friends
             WHERE uid = ? AND to_uid = ?",
             smaller_uid,
@@ -88,7 +88,7 @@ impl FriendshipRepository for MySqlPool {
             Friends,
             "SELECT
                 fid, uid, to_uid, create_time, is_blacklist,
-                remark, to_remark, tag, to_tag
+                remark, to_remark, group_by, to_group_by
             FROM friends
             WHERE uid = ? OR to_uid = ?",
             uid,
@@ -140,7 +140,7 @@ impl FriendshipRepository for MySqlPool {
             Friends,
             "SELECT
                 fid, uid, to_uid, create_time, is_blacklist,
-                remark, to_remark, tag, to_tag
+                remark, to_remark, group_by, to_group_by
             FROM friends
             WHERE (uid = ? OR to_uid = ?) AND is_blacklist = 1",
             uid,

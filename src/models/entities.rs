@@ -14,13 +14,42 @@ pub enum Gender {
     Female,
     Other,
 }
+
+// 为 Option<Gender> 添加转换扩展
+pub trait GenderOptionExt {
+    fn to_optional_string(&self) -> Option<String>;
+    fn from_optional_string(gender: Option<String>) -> Option<Gender>;
+}
+
+impl GenderOptionExt for Option<Gender> {
+    fn to_optional_string(&self) -> Option<String> {
+        self.as_ref().map(|g| {
+            match g {
+                Gender::Male => "male".to_string(),
+                Gender::Female => "female".to_string(),
+                Gender::Other => "other".to_string(),
+            }
+        })
+    }
+
+    fn from_optional_string(gender: Option<String>) -> Option<Gender> {
+        match gender.as_deref() {
+            Some("male") => Some(Gender::Male),
+            Some("female") => Some(Gender::Female),
+            Some("other") => Some(Gender::Other),
+            Some(_) => None,
+            None => None,
+        }
+    }
+}
+
 // 用户表模型(user表)
 #[derive(Debug, Clone, Deserialize, Serialize, FromRow, PartialEq)]
 pub struct User {
     pub uid: String,// 主键（雪花算法）
+    pub username: String, // 可相同（昵称）
     pub account: String,// 唯一
     pub password: String,// 非空（哈希加密）
-    pub username: String, // 可相同（昵称）
     pub gender: Option<Gender>, 
     pub region: Option<String>,
     pub email: Option<String>,
@@ -90,7 +119,7 @@ pub struct GroupMember {
     pub level: Option<u8>,// 在群聊的等级
     pub join_time: Option<NaiveDateTime>,
     pub do_not_disturb: Option<i8>,// 免打扰
-    pub tag: Option<String>,// 分组标签
+    pub group_by: Option<String>,// 分组标签
     pub remark: Option<String>,// 备注
     pub is_pinned: Option<i8>,// 置顶状态
 }
@@ -120,7 +149,7 @@ pub struct GroupMessage {
     pub is_revoked: Option<i8>,// 是否撤回
     #[sqlx(rename = "type")]
     pub msg_type: GroupMsgType,// 枚举类型 text image file voice video link emoji annoucement
-    pub mentioned_uids: Option<serde_json::Value>,// Json格式
+    pub mentioned_uids: Option<serde_json::Value>,// Json格式@字段
     pub quote_msg_id: Option<String>,// 消息引用
     pub is_announcement: Option<i8>,// 是否是群公告
 }
@@ -152,6 +181,8 @@ pub struct PrivateChat {
     pub create_time: Option<NaiveDateTime>,
     pub is_pinned_by_uid1: Option<i8>,// uid1置顶状态
     pub is_pinned_by_uid2: Option<i8>,// uid2置顶状态
+    pub do_not_disturb_uid1: Option<i8>,
+    pub do_not_disturb_uid2: Option<i8>,
 }
 
 // 私聊消息类型枚举
@@ -192,8 +223,8 @@ pub struct Friends {
     pub is_blacklist: Option<i8>,// 黑名单，拒收消息
     pub remark: Option<String>,// 小uid to 大uid的备注
     pub to_remark: Option<String>, // 大uid to 小uid的备注
-    pub tag: Option<String>,// 小uid to 大uid的分组
-    pub to_tag: Option<String>,// 大uid to 小uid的分组
+    pub group_by: Option<String>,// 小uid to 大uid的分组
+    pub to_group_by: Option<String>,// 大uid to 小uid的分组
 }
 
 // 好友申请表模型(friend_request表)
@@ -208,4 +239,63 @@ pub struct FriendRequest {
     pub handle_time: Option<NaiveDateTime>,
 }
 
+// 文件访问权限
+#[derive(Debug, Clone, Deserialize, Serialize, sqlx::Type)]
+#[sqlx(type_name = "TEXT", rename_all = "lowercase")]
+pub enum FilePrivalege {
+    Public,
+    Friend,
+    Group,
+    Private,
+}
 
+// 文件状态
+#[derive(Debug, Clone, Deserialize, Serialize, sqlx::Type)]
+#[sqlx(type_name = "TEXT", rename_all = "lowercase")]
+pub enum FileStatus {
+    Active,
+    Deleted,
+    Expired,
+}
+
+// 文件信息表
+#[derive(Debug, Clone, Deserialize, Serialize, FromRow)]
+pub struct FileInfo {
+    pub file_id: String,
+    pub upload_uid: String,
+    pub original_name: String,// 原始文件名
+    pub file_name: String,// 存储文件名
+    pub file_path: String,// 存储路径
+    pub file_size: i128,// 文件大小
+    pub mime_type: String,// mime类型
+    pub file_hash: String,// 文件哈希（用于去重）
+    pub access_level: FilePrivalege,
+    pub thumbnail_path: Option<String>,// 缩略图路径
+    pub upload_time: Option<NaiveDateTime>,
+    pub last_access_time: Option<NaiveDateTime>,
+    pub download_count: i64,
+    pub status: FileStatus,
+}
+
+// 文件关联类型
+#[derive(Debug, Clone, Deserialize, Serialize, sqlx::Type)]
+#[sqlx(type_name = "TEXT")]
+pub enum AssociationType {
+    #[sqlx(rename = "private_message")]
+    PrivateMessage,
+    #[sqlx(rename = "group_message")]
+    GroupMessage,
+    #[sqlx(rename = "user_avatar")]
+    UserAvatar,
+    #[sqlx(rename = "group_avatar")]
+    GroupAvatar,
+}
+// 文件关联表
+#[derive(Debug, Clone, Deserialize, Serialize, FromRow)]
+pub struct FileAssociation {
+    pub association_id: String,
+    pub file_id: String,
+    pub association_type: AssociationType,
+    pub associated_id: String,
+    pub created_at: Option<NaiveDateTime>,
+}

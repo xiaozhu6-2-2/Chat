@@ -32,19 +32,26 @@ pub struct UserInfoRequest {
 // 用户信息更新请求模型
 #[derive(Deserialize, Serialize)]
 pub struct UserInfoUpdateRequest {
-
+    pub username: String,
+    pub gender: Option<String>,        
+    pub region: Option<String>,        
+    pub email: Option<String>,         
+    pub avatar: Option<String>,        
+    pub bio: Option<String>,  
 }
 
 // 获取用户资料请求模型
 #[derive(Deserialize, Serialize)]
 pub struct FetchProfileRequest {
-
+    pub uid: String,
 }
 
 // 搜索用户请求模型
 #[derive(Deserialize, Serialize)]
 pub struct SearchUserRequest {
-
+    pub query: String,// 可以是用户名/uid/account
+    pub limit: i64,// 每页的条目数
+    pub offset: i64,// 第几页
 }
 
 // 好友资料请求模型
