@@ -102,58 +102,58 @@ pub async fn search_user(
     }))
 }
 
-pub async fn get_friend_profile(
-    State(state): State<AppState>,
-    Json(payload): Json<FriendProfileRequest>,
-) -> AppResult<Json<FriendProfileResponse>> {
+// pub async fn get_friend_profile(
+//     State(state): State<AppState>,
+//     Json(payload): Json<FriendProfileRequest>,
+// ) -> AppResult<Json<FriendProfileResponse>> {
 
-}
+// }
 
-pub async fn get_friend_list(
-    State(state): State<AppState>,
-    Json(payload): Json<FriendListRequest>,
-) -> AppResult<Json<FriendListResponse>> {
+// pub async fn get_friend_list(
+//     State(state): State<AppState>,
+//     Json(payload): Json<FriendListRequest>,
+// ) -> AppResult<Json<FriendListResponse>> {
 
-}
+// }
 
-pub async fn send_friend_request(
-    State(state): State<AppState>,
-    Json(payload): Json<FriendRequestRequest>,
-) -> AppResult<Json<FriendRequestResponse>> {
+// pub async fn send_friend_request(
+//     State(state): State<AppState>,
+//     Json(payload): Json<FriendRequestRequest>,
+// ) -> AppResult<Json<FriendRequestResponse>> {
 
-}
+// }
 
-pub async fn respond_friend_request(
-    State(state): State<AppState>,
-    Json(payload): Json<RespondFriendRequestRequest>,
-) -> AppResult<Json<RespondFriendRequestResponse>> {
+// pub async fn respond_friend_request(
+//     State(state): State<AppState>,
+//     Json(payload): Json<RespondFriendRequestRequest>,
+// ) -> AppResult<Json<RespondFriendRequestResponse>> {
 
-}
+// }
 
-pub async fn get_friend_request_list(
-    State(state): State<AppState>,
-    Json(payload): Json<FriendRequestListRequest>,
-) -> AppResult<Json<FriendRequestListResponse>> {
+// pub async fn get_friend_request_list(
+//     State(state): State<AppState>,
+//     Json(payload): Json<FriendRequestListRequest>,
+// ) -> AppResult<Json<FriendRequestListResponse>> {
 
-}
+// }
 
-pub async fn remove_friend(
-    State(state): State<AppState>,
-    Json(payload): Json<RemoveFriendRequest>,
-) -> AppResult<Json<RemoveFriendResponse>> {
+// pub async fn remove_friend(
+//     State(state): State<AppState>,
+//     Json(payload): Json<RemoveFriendRequest>,
+// ) -> AppResult<Json<RemoveFriendResponse>> {
 
-}
+// }
 
-pub async fn update_friend_remark(
-    State(state): State<AppState>,
-    Json(payload): Json<UpdateFriendRemarkRequest>,
-) -> AppResult<Json<UpdateFriendRemarkResponse>> {
+// pub async fn update_friend_remark(
+//     State(state): State<AppState>,
+//     Json(payload): Json<UpdateFriendRemarkRequest>,
+// ) -> AppResult<Json<UpdateFriendRemarkResponse>> {
 
-}
+// }
 
-pub async fn update_friend_blacklist(
-    State(state): State<AppState>,
-    Json(payload): Json<UpdateFriendBlacklistRequest>,
-) -> AppResult<Json<UpdateFriendBlacklistResponse>> {
+// pub async fn update_friend_blacklist(
+//     State(state): State<AppState>,
+//     Json(payload): Json<UpdateFriendBlacklistRequest>,
+// ) -> AppResult<Json<UpdateFriendBlacklistResponse>> {
 
-}
+// }

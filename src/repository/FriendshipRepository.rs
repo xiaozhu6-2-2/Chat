@@ -19,11 +19,12 @@ impl FriendshipRepository for MySqlPool {
         // 插入或更新好友关系
         sqlx::query!(
             "INSERT INTO friends
-            (fid, uid, to_uid, create_time, is_blacklist, remark, to_remark, group_by, to_group_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (fid, uid, to_uid, create_time, is_blacklist, to_is_blacklist, remark, to_remark, group_by, to_group_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
             create_time = VALUES(create_time),
             is_blacklist = VALUES(is_blacklist),
+            to_is_blacklist = VALUES(to_is_blacklist),
             remark = VALUES(remark),
             to_remark = VALUES(to_remark),
             group_by = VALUES(group_by),
@@ -33,6 +34,7 @@ impl FriendshipRepository for MySqlPool {
             friendship.to_uid,
             friendship.create_time,
             friendship.is_blacklist,
+            friendship.to_is_blacklist,
             friendship.remark,
             friendship.to_remark,
             friendship.group_by,
@@ -50,7 +52,7 @@ impl FriendshipRepository for MySqlPool {
         let friendship = sqlx::query_as!(
             Friends,
             "SELECT
-                fid, uid, to_uid, create_time, is_blacklist,
+                fid, uid, to_uid, create_time, is_blacklist, to_is_blacklist,
                 remark, to_remark, group_by, to_group_by
             FROM friends WHERE fid = ?",
             fid
@@ -71,7 +73,7 @@ impl FriendshipRepository for MySqlPool {
         let friendship = sqlx::query_as!(
             Friends,
             "SELECT
-                fid, uid, to_uid, create_time, is_blacklist,
+                fid, uid, to_uid, create_time, is_blacklist, to_is_blacklist,
                 remark, to_remark, group_by, to_group_by
             FROM friends
             WHERE uid = ? AND to_uid = ?",
@@ -87,7 +89,7 @@ impl FriendshipRepository for MySqlPool {
         let friendships = sqlx::query_as!(
             Friends,
             "SELECT
-                fid, uid, to_uid, create_time, is_blacklist,
+                fid, uid, to_uid, create_time, is_blacklist, to_is_blacklist,
                 remark, to_remark, group_by, to_group_by
             FROM friends
             WHERE uid = ? OR to_uid = ?",
@@ -115,17 +117,19 @@ impl FriendshipRepository for MySqlPool {
 
     //-------------------------黑名单管理----------------------------
     // 保存记录到黑名单(可以加入黑名单也可以移出黑名单)
-    async fn save_blacklist(&self, fid: &str, is_blacklist: bool) -> AppResult<()> {
+    async fn save_blacklist(&self, fid: &str, is_blacklist: bool, to_is_blacklist: bool) -> AppResult<()> {
         // 事务
         let mut tx = self.begin().await?;
 
         let blacklist_value = if is_blacklist { 1 } else { 0 };
+        let to_blacklist_value = if to_is_blacklist { 1 } else { 0 };
 
         sqlx::query!(
             "UPDATE friends
-            SET is_blacklist = ?
+            SET is_blacklist = ?, to_is_blacklist = ?
             WHERE fid = ?",
             blacklist_value,
+            to_blacklist_value,
             fid
         ).execute(&mut *tx).await?;
 
@@ -139,10 +143,10 @@ impl FriendshipRepository for MySqlPool {
         let blacklisted_friends = sqlx::query_as!(
             Friends,
             "SELECT
-                fid, uid, to_uid, create_time, is_blacklist,
+                fid, uid, to_uid, create_time, is_blacklist, to_is_blacklist,
                 remark, to_remark, group_by, to_group_by
             FROM friends
-            WHERE (uid = ? OR to_uid = ?) AND is_blacklist = 1",
+            WHERE (uid = ? AND is_blacklist = 1) OR (to_uid = ? AND to_is_blacklist = 1)",
             uid,
             uid
         ).fetch_all(self).await?;

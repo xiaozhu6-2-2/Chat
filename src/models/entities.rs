@@ -221,6 +221,7 @@ pub struct Friends {
     pub to_uid: String,// 较大的那个
     pub create_time: Option<NaiveDateTime>,
     pub is_blacklist: Option<i8>,// 黑名单，拒收消息
+    pub to_is_blacklist: Option<i8>,// 大uid to 小uid的黑名单
     pub remark: Option<String>,// 小uid to 大uid的备注
     pub to_remark: Option<String>, // 大uid to 小uid的备注
     pub group_by: Option<String>,// 小uid to 大uid的分组

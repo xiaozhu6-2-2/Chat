@@ -99,7 +99,7 @@ pub async fn handle_private_chat(
     );
 
     // 接收人账号
-    let account = payload.get_receiverId().ok_or_else(|| AppError::RecipientNotFound("接收者为空".to_string()))?;
+    let account = payload.get_receiver_id().ok_or_else(|| AppError::RecipientNotFound("接收者为空".to_string()))?;
 
     // 获取tx
     let tx = state.connection_pool.get(account).map(|guard| {
@@ -126,7 +126,7 @@ pub async fn handle_group_chat(
     let mes_group = ClientMessage::MesGroup(payload.clone());
 
     // 群号
-    let group_id = payload.get_receiverId().ok_or_else(|| AppError::RecipientNotFound("群号为空".to_string()))?;
+    let group_id = payload.get_receiver_id().ok_or_else(|| AppError::RecipientNotFound("群号为空".to_string()))?;
 
     // 获取broadcast频道
     let channel = state.broadcast_pool.get(group_id).map(|guard| {

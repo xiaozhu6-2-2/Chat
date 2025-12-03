@@ -50,7 +50,7 @@ pub trait FriendshipRepository: Send + Sync {
 
 //-------------------------黑名单管理----------------------------
     // 保存记录到黑名单(可以加入黑名单也可以移出黑名单)
-    async fn save_blacklist(&self, fid: &str, is_blacklist: bool) -> AppResult<()>;
+    async fn save_blacklist(&self, fid: &str, is_blacklist: bool, to_is_blacklist: bool) -> AppResult<()>;
     // 查找用户黑名单
     async fn find_blacklisted_friends(&self, uid: &str) -> AppResult<Vec<Friends>>;
 //-------------------------好友申请管理----------------------------
