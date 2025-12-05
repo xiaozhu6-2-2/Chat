@@ -117,25 +117,60 @@ impl FriendshipRepository for MySqlPool {
 
     //-------------------------黑名单管理----------------------------
     // 保存记录到黑名单(可以加入黑名单也可以移出黑名单)
-    async fn save_blacklist(&self, fid: &str, is_blacklist: bool, to_is_blacklist: bool) -> AppResult<()> {
-        // 事务
-        let mut tx = self.begin().await?;
+    async fn save_blacklist(&self, fid: &str, uid: &str, is_blacklist: bool) -> AppResult<()> {
+        // 首先根据fid查找好友关系
+        let friendship = self.find_friendship_by_fid(fid).await?;
 
-        let blacklist_value = if is_blacklist { 1 } else { 0 };
-        let to_blacklist_value = if to_is_blacklist { 1 } else { 0 };
+        match friendship {
+            Some(friend) => {
+                // 判断uid是哪个字段
+                if uid == friend.uid {
+                    // uid与uid字段相同，更新is_blacklist
+                    let blacklist_value = if is_blacklist { 1 } else { 0 };
 
-        sqlx::query!(
-            "UPDATE friends
-            SET is_blacklist = ?, to_is_blacklist = ?
-            WHERE fid = ?",
-            blacklist_value,
-            to_blacklist_value,
-            fid
-        ).execute(&mut *tx).await?;
+                    // 事务
+                    let mut tx = self.begin().await?;
 
-        tx.commit().await?;
+                    sqlx::query!(
+                        "UPDATE friends
+                        SET is_blacklist = ?
+                        WHERE fid = ?",
+                        blacklist_value,
+                        fid
+                    ).execute(&mut *tx).await?;
 
-        Ok(())
+                    tx.commit().await?;
+                } else if uid == friend.to_uid {
+                    // uid与to_uid字段相同，更新to_is_blacklist
+                    let blacklist_value = if is_blacklist { 1 } else { 0 };
+
+                    // 事务
+                    let mut tx = self.begin().await?;
+
+                    sqlx::query!(
+                        "UPDATE friends
+                        SET to_is_blacklist = ?
+                        WHERE fid = ?",
+                        blacklist_value,
+                        fid
+                    ).execute(&mut *tx).await?;
+
+                    tx.commit().await?;
+                } else {
+                    // uid不匹配，返回错误
+                    return Err(crate::models::errors::AppError::NotFound(
+                        format!("User {} is not part of friendship {}", uid, fid)
+                    ));
+                }
+
+                Ok(())
+            }
+            None => {
+                Err(crate::models::errors::AppError::NotFound(
+                    format!("Friendship {} not found", fid)
+                ))
+            }
+        }
     }
 
     // 查找用户黑名单

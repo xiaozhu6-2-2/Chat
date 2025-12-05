@@ -79,19 +79,52 @@ pub struct SearchUserResponse {
 // 好友资料响应模型
 #[derive(Serialize, Deserialize)]
 pub struct FriendProfileResponse {
+    pub fid: String,// 好友关系id
+    pub uid: String,// 好友id
+    pub account: String,// 好友账号
+    pub username: String,// 好友用户名
+    pub remark: String,// 对好友的备注
+    pub group_by: String,// 对好友的分组
+    pub is_blacklisted: bool,// 对好友的黑名单状态
+    pub created_at: Option<NaiveDateTime>,// 好友账号的创建时间
+    pub bio: Option<String>,// 好友的简介
+    pub avatar: Option<String>,// 好友的头像
+    pub gender: Option<String>,// 好友的性别
+    pub region: Option<String>,// 好友的地区
+    pub email: Option<String>,// 好友的联系方式
+}
 
+// 好友列表项模型
+#[derive(Serialize, Deserialize)]
+pub struct FriendItem {
+    pub fid: String,
+    pub uid: String,
+    pub username: String,
+    pub remark: String,
+    pub group_by: String,
+    pub is_blacklisted: bool,
+    pub created_at: Option<NaiveDateTime>,
+    pub bio: Option<String>,
+    pub avatar: Option<String>,
 }
 
 // 好友列表响应模型
 #[derive(Serialize, Deserialize)]
 pub struct FriendListResponse {
-
+    pub total: i64,
+    pub friends: Vec<FriendItem>,
+    pub blacklist: Vec<FriendItem>,
 }
 
 // 好友请求响应模型
 #[derive(Serialize, Deserialize)]
 pub struct FriendRequestResponse {
-
+    pub req_id: String,
+    pub sender_uid: String,
+    pub receiver_uid: String,
+    pub apply_text: Option<String>,
+    pub create_time: String,
+    pub status: Option<String>,
 }
 
 // 回复好友请求响应模型

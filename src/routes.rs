@@ -44,9 +44,9 @@ pub fn create_routes() -> Router<AppState> {
         // .route("/auth/message/read", post(handlers::message::mark_msg_read))// 设置消息为已读
 
         .route("/auth/friends/search", post(handlers::friends::search_user))// 搜索用户
-        // .route("/auth/friends/profile", post(handlers::friends::get_friend_profile))// 获取好友资料
-        // .route("/auth/friends/friendlist", post(handlers::friends::get_friend_list))// 获取好友列表
-        // .route("/auth/friends/request", post(handlers::friends::send_friend_request))// 发送好友请求
+        .route("/auth/friends/profile", post(handlers::friends::get_friend_profile))// 获取好友资料
+        .route("/auth/friends/friendlist", get(handlers::friends::get_friend_list))// 获取好友列表
+        .route("/auth/friends/request", post(handlers::friends::send_friend_request))// 发送好友请求
         // .route("/auth/friends/respond", post(handlers::friends::respond_friend_request))// 回复好友请求
         // .route("/auth/friends/request_list", post(handlers::friends::get_friend_request_list))// 获取好友请求列表
         // .route("/auth/friends/remove", post(handlers::friends::remove_friend))// 删除好友

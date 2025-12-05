@@ -54,6 +54,9 @@ pub enum AppError {
     TaskManagerError(String),
     #[error("分页参数超出范围: 请求页码 {page}, 总页数 {total_pages}")]
     PageOutOfRange { page: i64, total_pages: i64 },
+    #[error("资源未找到: {0}")]
+    NotFound(String),
+
 }
 
 // 实现AppError转化为HTTP响应
@@ -80,6 +83,7 @@ impl IntoResponse for AppError {
             Self::SnowflakeFailure(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("雪花算法生成失败{}", fault), None),
             Self::TaskManagerError(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("群聊任务管理发生错误{}", fault), None),
             Self::PageOutOfRange { page, total_pages } => (StatusCode::BAD_REQUEST, format!("分页参数超出范围: 请求页码 {}, 总页数 {}", page, total_pages), None),
+            Self::NotFound(msg) => (StatusCode::NOT_FOUND, format!("资源未找到: {}", msg), None),
 
         };
 

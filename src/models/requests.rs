@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 // src/models.rs
 // 库模块导入
 use serde::{Deserialize, Serialize};
@@ -57,19 +58,16 @@ pub struct SearchUserRequest {
 // 好友资料请求模型
 #[derive(Deserialize, Serialize)]
 pub struct FriendProfileRequest {
-
-}
-
-// 好友列表请求模型
-#[derive(Deserialize, Serialize)]
-pub struct FriendListRequest {
-
+    pub uid: String,// 好友的uid
+    pub fid: String,// 好友关系的id
 }
 
 // 好友请求请求模型
 #[derive(Deserialize, Serialize)]
 pub struct FriendRequestRequest {
-
+    pub receiver_id: String,// 接收者id
+    pub message: String,// 申请消息
+    pub create_time: NaiveDateTime,// 好友请求创建时间
 }
 
 // 回复好友请求请求模型

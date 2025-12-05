@@ -86,6 +86,36 @@ pub enum ReqStatus {
     Expired
 }
 
+// 为 Option<ReqStatus> 添加转换扩展
+pub trait ReqStatusOptionExt {
+    fn to_optional_string(&self) -> Option<String>;
+    fn from_optional_string(status: Option<String>) -> Option<ReqStatus>;
+}
+
+impl ReqStatusOptionExt for Option<ReqStatus> {
+    fn to_optional_string(&self) -> Option<String> {
+        self.as_ref().map(|s| {
+            match s {
+                ReqStatus::Pending => "pending".to_string(),
+                ReqStatus::Accepted => "accepted".to_string(),
+                ReqStatus::Rejected => "rejected".to_string(),
+                ReqStatus::Expired => "expired".to_string(),
+            }
+        })
+    }
+
+    fn from_optional_string(status: Option<String>) -> Option<ReqStatus> {
+        match status.as_deref() {
+            Some("pending") => Some(ReqStatus::Pending),
+            Some("accepted") => Some(ReqStatus::Accepted),
+            Some("rejected") => Some(ReqStatus::Rejected),
+            Some("expired") => Some(ReqStatus::Expired),
+            Some(_) => None,
+            None => None,
+        }
+    }
+}
+
 // 群聊加入申请表模型(group_join_request表)
 #[derive(Debug, Clone, Deserialize, Serialize, FromRow)]
 pub struct GroupJoinRequest {

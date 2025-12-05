@@ -3,8 +3,10 @@ use axum::{extract::State, Json};
 
 use crate::models::entities::GenderOptionExt;
 use crate::models::others::Claims;
-use crate::models::repository::UserRepository;
-use crate::models::{errors::AppResult, responses::SearchUserResponse, responses::FriendProfileResponse, responses::FriendListResponse, responses::FriendRequestResponse, responses::RespondFriendRequestResponse, responses::FriendRequestListResponse, responses::RemoveFriendResponse, responses::UpdateFriendRemarkResponse, responses::UpdateFriendBlacklistResponse, requests::SearchUserRequest, requests::FriendProfileRequest, requests::FriendListRequest, requests::FriendRequestRequest, requests::RespondFriendRequestRequest, requests::FriendRequestListRequest, requests::RemoveFriendRequest, requests::UpdateFriendRemarkRequest, requests::UpdateFriendBlacklistRequest};
+use crate::models::repository::{UserRepository, FriendshipRepository};
+use crate::models::requests::FriendRequestRequest;
+use crate::models::responses::{FriendListResponse, FriendRequestResponse};
+use crate::models::{errors::AppResult, responses::SearchUserResponse, responses::FriendProfileResponse, requests::SearchUserRequest, requests::FriendProfileRequest};
 use crate::state::AppState;
 
 pub async fn search_user(
@@ -102,26 +104,211 @@ pub async fn search_user(
     }))
 }
 
-// pub async fn get_friend_profile(
-//     State(state): State<AppState>,
-//     Json(payload): Json<FriendProfileRequest>,
-// ) -> AppResult<Json<FriendProfileResponse>> {
+pub async fn get_friend_profile(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<FriendProfileRequest>,
+) -> AppResult<Json<FriendProfileResponse>> {
+    // 1. 从 claims 中提取当前用户的 sub (account)
+    let current_account = &claims.sub;
 
-// }
+    // 2. 通过 account 查找当前用户
+    let current_user = state.db_pool.find_user_by_account(current_account).await?;
 
-// pub async fn get_friend_list(
-//     State(state): State<AppState>,
-//     Json(payload): Json<FriendListRequest>,
-// ) -> AppResult<Json<FriendListResponse>> {
+    // 3. 通过两个 uid 查找好友关系
+    let friendship = state.db_pool
+        .find_friendship_by_users(&current_user.uid, &payload.uid)
+        .await?;
 
-// }
+    // 检查是否为好友
+    let friendship = friendship.ok_or(crate::models::errors::AppError::NotFound(
+        "Friendship not found".to_string()
+    ))?;
 
-// pub async fn send_friend_request(
-//     State(state): State<AppState>,
-//     Json(payload): Json<FriendRequestRequest>,
-// ) -> AppResult<Json<FriendRequestResponse>> {
+    // 4. 通过 payload.uid 查找好友用户资料
+    let friend_user = state.db_pool.find_user_by_uid(&payload.uid).await?;
 
-// }
+    // 5. 判断当前用户是 uid 还是 to_uid，以确定使用哪个备注和分组
+    let (remark, group_by, is_blacklisted) = if current_user.uid == friendship.uid {
+        (
+            friendship.remark.unwrap_or_default(),
+            friendship.group_by.unwrap_or_default(),
+            friendship.is_blacklist.unwrap_or(0) == 1
+        )
+    } else {
+        (
+            friendship.to_remark.unwrap_or_default(),
+            friendship.to_group_by.unwrap_or_default(),
+            friendship.to_is_blacklist.unwrap_or(0) == 1
+        )
+    };
+
+    // 6. 构建 FriendProfileResponse
+    let response = FriendProfileResponse {
+        fid: friendship.fid,
+        uid: friend_user.uid,
+        account: friend_user.account,
+        username: friend_user.username,
+        remark,
+        group_by,
+        is_blacklisted,
+        created_at: friendship.create_time,
+        bio: friend_user.bio,
+        avatar: friend_user.avatar,
+        gender: friend_user.gender.to_optional_string(),
+        region: friend_user.region,
+        email: friend_user.email,
+    };
+
+    Ok(Json(response))
+}
+
+pub async fn get_friend_list(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>
+) -> AppResult<Json<FriendListResponse>> {
+    // 1. 从 claims 中提取当前用户的 sub (account)
+    let current_account = &claims.sub;
+
+    // 2. 通过 account 查找当前用户
+    let current_user = state.db_pool.find_user_by_account(current_account).await?;
+
+    // 3. 根据当前用户的 uid 获取所有好友关系
+    let friendships = state.db_pool.find_friendship_by_uid(&current_user.uid).await?;
+
+    // 4. 收集所有好友的 uid，区分普通好友和黑名单好友
+    let mut normal_friend_uids = Vec::new();
+    let mut blacklist_friend_uids = Vec::new();
+    let mut friendship_map = std::collections::HashMap::new();
+
+    for friendship in friendships {
+        // 判断当前用户是 uid 还是 to_uid
+        let (friend_uid, remark, group_by, is_blacklisted) = if current_user.uid == friendship.uid {
+            (
+                friendship.to_uid.clone(),
+                friendship.remark.clone().unwrap_or_default(),
+                friendship.group_by.clone().unwrap_or_default(),
+                friendship.is_blacklist.unwrap_or(0) == 1
+            )
+        } else {
+            (
+                friendship.uid.clone(),
+                friendship.to_remark.clone().unwrap_or_default(),
+                friendship.to_group_by.clone().unwrap_or_default(),
+                friendship.to_is_blacklist.unwrap_or(0) == 1
+            )
+        };
+
+        // 根据 is_blacklisted 分别添加到不同的列表
+        if is_blacklisted {
+            blacklist_friend_uids.push(friend_uid.clone());
+        } else {
+            normal_friend_uids.push(friend_uid.clone());
+        }
+
+        // 将好友关系信息存入 map
+        friendship_map.insert(friend_uid, (friendship.fid, remark, group_by, friendship.create_time, is_blacklisted));
+    }
+
+    // 5. 查找普通好友的详细信息
+    let mut friends = Vec::new();
+    for friend_uid in normal_friend_uids {
+        // 根据 uid 查找好友用户信息
+        if let Ok(friend_user) = state.db_pool.find_user_by_uid(&friend_uid).await {
+            // 从 map 中获取好友关系信息
+            if let Some((fid, remark, group_by, created_at, _)) = friendship_map.get(&friend_uid) {
+                let friend_item = crate::models::responses::FriendItem {
+                    fid: fid.clone(),
+                    uid: friend_user.uid.clone(),
+                    username: friend_user.username.clone(),
+                    remark: remark.clone(),
+                    group_by: group_by.clone(),
+                    is_blacklisted: false, // 普通好友
+                    created_at: *created_at,
+                    bio: friend_user.bio.clone(),
+                    avatar: friend_user.avatar.clone(),
+                };
+                friends.push(friend_item);
+            }
+        }
+    }
+
+    // 6. 查找黑名单好友的详细信息
+    let mut blacklist = Vec::new();
+    for friend_uid in blacklist_friend_uids {
+        // 根据 uid 查找好友用户信息
+        if let Ok(friend_user) = state.db_pool.find_user_by_uid(&friend_uid).await {
+            // 从 map 中获取好友关系信息
+            if let Some((fid, remark, group_by, created_at, _)) = friendship_map.get(&friend_uid) {
+                let friend_item = crate::models::responses::FriendItem {
+                    fid: fid.clone(),
+                    uid: friend_user.uid.clone(),
+                    username: friend_user.username.clone(),
+                    remark: remark.clone(),
+                    group_by: group_by.clone(),
+                    is_blacklisted: true, // 黑名单好友
+                    created_at: *created_at,
+                    bio: friend_user.bio.clone(),
+                    avatar: friend_user.avatar.clone(),
+                };
+                blacklist.push(friend_item);
+            }
+        }
+    }
+
+    // 7. 构建并返回响应
+    let response = FriendListResponse {
+        total: (friends.len() + blacklist.len()) as i64,
+        friends,
+        blacklist,
+    };
+
+    Ok(Json(response))
+}
+
+pub async fn send_friend_request(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<FriendRequestRequest>,
+) -> AppResult<Json<FriendRequestResponse>> {
+    use crate::models::entities::{ReqStatus, ReqStatusOptionExt};
+
+    // 1. 从 claims 中提取当前用户的 sub (account)
+    let current_account = &claims.sub;
+
+    // 2. 通过 account 查找当前用户，获取 sender_uid
+    let current_user = state.db_pool.find_user_by_account(current_account).await?;
+
+    // 3. 生成 req_id 使用雪花算法
+    let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
+    let req_id = snowflake.next_id()?.to_string();
+
+    // 4. 创建 FriendRequest 记录
+    let friend_request = crate::models::entities::FriendRequest {
+        req_id,
+        sender_uid: current_user.uid,
+        receiver_uid: payload.receiver_id.clone(), // receiver_id 直接就是 uid
+        status: ReqStatus::Pending,
+        apply_text: Some(payload.message),
+        create_time: Some(payload.create_time),
+        handle_time: None, // 处理时间设为 NULL
+    };
+
+    // 5. 插入数据库
+    state.db_pool.save_friend_request(friend_request.clone()).await?;
+
+    // 6. 返回响应
+    let response = FriendRequestResponse {
+        req_id: friend_request.req_id,
+        sender_uid: friend_request.sender_uid,
+        receiver_uid: friend_request.receiver_uid,
+        apply_text: friend_request.apply_text,
+        create_time: friend_request.create_time.unwrap_or_default().to_string(),
+        status: Some(ReqStatus::Pending).to_optional_string(),
+    };
+
+    Ok(Json(response))
+}
 
 // pub async fn respond_friend_request(
 //     State(state): State<AppState>,
