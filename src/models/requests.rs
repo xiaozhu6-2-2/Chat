@@ -73,7 +73,9 @@ pub struct FriendRequestRequest {
 // 回复好友请求请求模型
 #[derive(Deserialize, Serialize)]
 pub struct RespondFriendRequestRequest {
-
+    pub req_id: String,      // 好友请求ID
+    pub action: String,      // 操作类型: "accept" 或 "reject"
+    pub handle_time: String, // 处理时间戳
 }
 
 // 好友请求列表请求模型
@@ -85,13 +87,16 @@ pub struct FriendRequestListRequest {
 // 删除好友请求模型
 #[derive(Deserialize, Serialize)]
 pub struct RemoveFriendRequest {
-
+    pub fid: String,
 }
 
 // 更新好友备注请求模型
 #[derive(Deserialize, Serialize)]
-pub struct UpdateFriendRemarkRequest {
-
+pub struct UpdateFriendRemarkBlacklistGroupByRequest {
+    pub fid: String,
+    pub remark: Option<String>,
+    pub is_blacklisted: bool,
+    pub group_by: Option<String>,
 }
 
 // 更新好友黑名单请求模型

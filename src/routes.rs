@@ -47,11 +47,10 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/friends/profile", post(handlers::friends::get_friend_profile))// 获取好友资料
         .route("/auth/friends/friendlist", get(handlers::friends::get_friend_list))// 获取好友列表
         .route("/auth/friends/request", post(handlers::friends::send_friend_request))// 发送好友请求
-        // .route("/auth/friends/respond", post(handlers::friends::respond_friend_request))// 回复好友请求
-        // .route("/auth/friends/request_list", post(handlers::friends::get_friend_request_list))// 获取好友请求列表
-        // .route("/auth/friends/remove", post(handlers::friends::remove_friend))// 删除好友
-        // .route("/auth/friends/update-remark", post(handlers::friends::update_friend_remark))// 更新好友备注
-        // .route("/auth/friends/blacklist", post(handlers::friends::update_friend_blacklist))// 更新好友黑名单状态
+        .route("/auth/friends/respond", post(handlers::friends::respond_friend_request))// 回复好友请求
+        .route("/auth/friends/request_list", get(handlers::friends::get_friend_request_list))// 获取好友请求列表
+        .route("/auth/friends/remove", post(handlers::friends::remove_friend))// 删除好友
+        .route("/auth/friends/update", post(handlers::friends::update_friend_remark_blacklist_group))// 更新好友备注/黑名单/分组
 
         // .route("/auth/groups/search", post(handlers::groups::search_group))// 搜索群聊
         .route("/auth/groups/profile", post(handlers::groups::get_group_profile))// 获取群聊资料

@@ -1,11 +1,12 @@
 use axum::Extension;
 use axum::{extract::State, Json};
+use chrono::{NaiveDateTime, Utc};
 
-use crate::models::entities::GenderOptionExt;
+use crate::models::entities::{GenderOptionExt, ReqStatus, ReqStatusOptionExt, Friends};
 use crate::models::others::Claims;
 use crate::models::repository::{UserRepository, FriendshipRepository};
-use crate::models::requests::FriendRequestRequest;
-use crate::models::responses::{FriendListResponse, FriendRequestResponse};
+use crate::models::requests::{FriendRequestRequest, RemoveFriendRequest, RespondFriendRequestRequest, UpdateFriendRemarkBlacklistGroupByRequest};
+use crate::models::responses::{FriendListResponse, FriendRequestItem, FriendRequestListResponse, FriendRequestResponse, RespondFriendRequestResponse};
 use crate::models::{errors::AppResult, responses::SearchUserResponse, responses::FriendProfileResponse, requests::SearchUserRequest, requests::FriendProfileRequest};
 use crate::state::AppState;
 
@@ -271,7 +272,6 @@ pub async fn send_friend_request(
     Extension(claims): Extension<Claims>,
     Json(payload): Json<FriendRequestRequest>,
 ) -> AppResult<Json<FriendRequestResponse>> {
-    use crate::models::entities::{ReqStatus, ReqStatusOptionExt};
 
     // 1. 从 claims 中提取当前用户的 sub (account)
     let current_account = &claims.sub;
@@ -279,11 +279,45 @@ pub async fn send_friend_request(
     // 2. 通过 account 查找当前用户，获取 sender_uid
     let current_user = state.db_pool.find_user_by_account(current_account).await?;
 
-    // 3. 生成 req_id 使用雪花算法
+    // 3. 检查是否尝试添加自己为好友
+    if current_user.uid == payload.receiver_id {
+        return Err(crate::models::errors::AppError::BadRequest(
+            "Cannot send friend request to yourself".to_string()
+        ));
+    }
+
+    // 4. 检查两人是否已经是好友关系
+    let existing_friendship = state.db_pool.find_friendship_by_users(
+        &current_user.uid,
+        &payload.receiver_id
+    ).await?;
+
+    if existing_friendship.is_some() {
+        return Err(crate::models::errors::AppError::BadRequest(
+            "Users are already friends".to_string()
+        ));
+    }
+
+    // 5. 检查是否已有待处理的好友申请
+    let pending_requests_from_sender = state.db_pool.find_friend_request_by_sender(
+        &current_user.uid
+    ).await?;
+
+    let existing_pending = pending_requests_from_sender.iter().any(|req| {
+        req.receiver_uid == payload.receiver_id && matches!(req.status, ReqStatus::Pending)
+    });
+
+    if existing_pending {
+        return Err(crate::models::errors::AppError::BadRequest(
+            "Friend request already sent and pending".to_string()
+        ));
+    }
+
+    // 6. 生成 req_id 使用雪花算法
     let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
     let req_id = snowflake.next_id()?.to_string();
 
-    // 4. 创建 FriendRequest 记录
+    // 7. 创建 FriendRequest 记录
     let friend_request = crate::models::entities::FriendRequest {
         req_id,
         sender_uid: current_user.uid,
@@ -294,10 +328,10 @@ pub async fn send_friend_request(
         handle_time: None, // 处理时间设为 NULL
     };
 
-    // 5. 插入数据库
+    // 8. 插入数据库
     state.db_pool.save_friend_request(friend_request.clone()).await?;
 
-    // 6. 返回响应
+    // 9. 返回响应
     let response = FriendRequestResponse {
         req_id: friend_request.req_id,
         sender_uid: friend_request.sender_uid,
@@ -310,37 +344,262 @@ pub async fn send_friend_request(
     Ok(Json(response))
 }
 
-// pub async fn respond_friend_request(
-//     State(state): State<AppState>,
-//     Json(payload): Json<RespondFriendRequestRequest>,
-// ) -> AppResult<Json<RespondFriendRequestResponse>> {
+pub async fn respond_friend_request(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<RespondFriendRequestRequest>,
+) -> AppResult<Json<RespondFriendRequestResponse>> {
 
-// }
+    // 1. 从 claims 中提取当前用户的 account
+    let current_account = &claims.sub;
 
-// pub async fn get_friend_request_list(
-//     State(state): State<AppState>,
-//     Json(payload): Json<FriendRequestListRequest>,
-// ) -> AppResult<Json<FriendRequestListResponse>> {
+    // 2. 通过 account 查找当前用户
+    let current_user = state.db_pool.find_user_by_account(current_account).await?;
 
-// }
+    // 3. 根据 req_id 查找好友请求记录
+    let friend_request = state.db_pool.find_friend_request_by_id(&payload.req_id).await?
+        .ok_or_else(|| crate::models::errors::AppError::NotFound(
+            format!("Friend request {} not found", payload.req_id)
+        ))?;
 
-// pub async fn remove_friend(
-//     State(state): State<AppState>,
-//     Json(payload): Json<RemoveFriendRequest>,
-// ) -> AppResult<Json<RemoveFriendResponse>> {
+    // 4. 检查当前用户是否是请求的接收者
+    if friend_request.receiver_uid != current_user.uid {
+        return Err(crate::models::errors::AppError::BadRequest(
+            "You are not authorized to respond to this friend request".to_string()
+        ));
+    }
 
-// }
+    // 5. 检查请求状态
+    match friend_request.status {
+        ReqStatus::Accepted => {
+            return Err(crate::models::errors::AppError::BadRequest(
+                "Friend request has already been accepted".to_string()
+            ));
+        }
+        ReqStatus::Rejected => {
+            return Err(crate::models::errors::AppError::BadRequest(
+                "Friend request has already been rejected".to_string()
+            ));
+        }
+        ReqStatus::Expired => {
+            return Err(crate::models::errors::AppError::BadRequest(
+                "Friend request has expired".to_string()
+            ));
+        }
+        ReqStatus::Pending => {
+            // 继续处理
+        }
+    }
 
-// pub async fn update_friend_remark(
-//     State(state): State<AppState>,
-//     Json(payload): Json<UpdateFriendRemarkRequest>,
-// ) -> AppResult<Json<UpdateFriendRemarkResponse>> {
+    // 6. 解析 handle_time
+    let handle_time = NaiveDateTime::parse_from_str(&payload.handle_time, "%Y-%m-%d %H:%M:%S")
+        .map_err(|_| crate::models::errors::AppError::BadRequest(
+            "Invalid handle_time format. Use YYYY-MM-DD HH:MM:SS".to_string()
+        ))?;
 
-// }
+    // 7. 根据 action 处理请求
+    match payload.action.as_str() {
+        "accept" => {
+            // 检查两人是否已经是好友
+            let existing_friendship = state.db_pool.find_friendship_by_users(
+                &friend_request.sender_uid,
+                &friend_request.receiver_uid
+            ).await?;
 
-// pub async fn update_friend_blacklist(
-//     State(state): State<AppState>,
-//     Json(payload): Json<UpdateFriendBlacklistRequest>,
-// ) -> AppResult<Json<UpdateFriendBlacklistResponse>> {
+            if existing_friendship.is_some() {
+                return Err(crate::models::errors::AppError::BadRequest(
+                    "Users are already friends".to_string()
+                ));
+            }
 
-// }
+            // 生成好友关系 ID
+            let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
+            let fid = snowflake.next_id()?.to_string();
+
+            // 确保较小的 uid 在前，较大的 uid 在后
+            let (uid, to_uid) = if friend_request.sender_uid < friend_request.receiver_uid {
+                (friend_request.sender_uid.clone(), friend_request.receiver_uid.clone())
+            } else {
+                (friend_request.receiver_uid.clone(), friend_request.sender_uid.clone())
+            };
+
+            // 创建好友关系
+            let friendship = Friends {
+                fid: fid.clone(),
+                uid,
+                to_uid,
+                create_time: Some(Utc::now().naive_utc()),
+                is_blacklist: Some(0),
+                to_is_blacklist: Some(0),
+                remark: None,
+                to_remark: None,
+                group_by: None,
+                to_group_by: None,
+            };
+
+            // 保存好友关系
+            state.db_pool.save_friendship(friendship).await?;
+
+            // 更新好友请求状态为已接受
+            state.db_pool.update_request_status(
+                &payload.req_id,
+                "accepted",
+                handle_time
+            ).await?;
+
+            // 返回成功响应，包含另一位用户的 ID 和好友关系 ID
+            Ok(Json(RespondFriendRequestResponse {
+                uid: friend_request.sender_uid,
+                fid,
+            }))
+        }
+        "reject" => {
+            // 更新好友请求状态为已拒绝
+            state.db_pool.update_request_status(
+                &payload.req_id,
+                "rejected",
+                handle_time
+            ).await?;
+
+            // 返回拒绝响应，两个字段都返回 "Rejected"
+            Ok(Json(RespondFriendRequestResponse {
+                uid: "Rejected".to_string(),
+                fid: "Rejected".to_string(),
+            }))
+        }
+        _ => {
+            Err(crate::models::errors::AppError::BadRequest(
+                "Invalid action. Must be 'accept' or 'reject'".to_string()
+            ))
+        }
+    }
+}
+
+pub async fn get_friend_request_list(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+) -> AppResult<Json<FriendRequestListResponse>> {
+    // 1. 从 claims 中提取当前用户的 account
+    let current_account = &claims.sub;
+
+    // 2. 通过 account 查找当前用户
+    let current_user = state.db_pool.find_user_by_account(current_account).await?;
+
+    // 3. 查找用户发送的好友请求
+    let sent_requests = state.db_pool.find_friend_request_by_sender(&current_user.uid).await?;
+
+    // 4. 查找用户接收的好友请求
+    let received_requests = state.db_pool.find_friend_request_by_receiver(&current_user.uid).await?;
+
+    // 5. 转换发送的请求为响应格式
+    let requests: Vec<FriendRequestItem> = sent_requests.into_iter()
+        .map(|req| FriendRequestItem {
+            req_id: req.req_id,
+            sender_uid: req.sender_uid,
+            apply_text: req.apply_text,
+            create_time: req.create_time.map(|dt| dt.to_string()),
+            status: req.status.to_string(),
+        })
+        .collect();
+
+    // 6. 转换接收的请求为响应格式
+    let receives: Vec<FriendRequestItem> = received_requests.into_iter()
+        .map(|req| FriendRequestItem {
+            req_id: req.req_id,
+            sender_uid: req.sender_uid,
+            apply_text: req.apply_text,
+            create_time: req.create_time.map(|dt| dt.to_string()),
+            status: req.status.to_string(),
+        })
+        .collect();
+
+    // 7. 计算总数
+    let total = (requests.len() + receives.len()) as i64;
+
+    // 8. 返回响应
+    Ok(Json(FriendRequestListResponse {
+        total,
+        requests,
+        receives,
+    }))
+}
+
+pub async fn remove_friend(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<RemoveFriendRequest>,
+) -> AppResult<Json<()>> {
+    // 1. 从 claims 中提取当前用户的 account
+    let current_account = &claims.sub;
+
+    // 2. 通过 account 查找当前用户
+    let current_user = state.db_pool.find_user_by_account(current_account).await?;
+
+    // 3. 根据 fid 查找好友关系
+    let friendship = state.db_pool.find_friendship_by_fid(&payload.fid).await?
+        .ok_or_else(|| crate::models::errors::AppError::NotFound(
+            format!("Friendship {} not found", payload.fid)
+        ))?;
+
+    // 4. 检查当前用户是否是好友关系中的一方
+    if friendship.uid != current_user.uid && friendship.to_uid != current_user.uid {
+        return Err(crate::models::errors::AppError::BadRequest(
+            "You are not authorized to delete this friendship".to_string()
+        ));
+    }
+
+    // 5. 删除好友关系
+    state.db_pool.delete_friendship(&payload.fid).await?;
+
+    // 6. 返回空响应
+    Ok(Json(()))
+}
+
+pub async fn update_friend_remark_blacklist_group(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<UpdateFriendRemarkBlacklistGroupByRequest>,
+) -> AppResult<Json<()>> {
+    // 1. 从 claims 中提取当前用户的 account
+    let current_account = &claims.sub;
+
+    // 2. 通过 account 查找当前用户
+    let current_user = state.db_pool.find_user_by_account(current_account).await?;
+
+    // 3. 根据 fid 查找好友关系
+    let friendship = state.db_pool.find_friendship_by_fid(&payload.fid).await?
+        .ok_or_else(|| crate::models::errors::AppError::NotFound(
+            format!("Friendship {} not found", payload.fid)
+        ))?;
+
+    // 4. 检查当前用户是否是好友关系中的一方
+    if friendship.uid != current_user.uid && friendship.to_uid != current_user.uid {
+        return Err(crate::models::errors::AppError::BadRequest(
+            "You are not authorized to update this friendship".to_string()
+        ));
+    }
+
+    // 5. 判断当前用户是 uid 还是 to_uid，以便更新正确的字段
+    let is_current_user_uid = friendship.uid == current_user.uid;
+
+    // 6. 构建更新后的好友关系
+    let mut updated_friendship = friendship.clone();
+
+    if is_current_user_uid {
+        // 当前用户是 uid，更新对应的字段
+        updated_friendship.remark = payload.remark;
+        updated_friendship.is_blacklist = Some(if payload.is_blacklisted { 1 } else { 0 });
+        updated_friendship.group_by = payload.group_by;
+    } else {
+        // 当前用户是 to_uid，更新对应的字段
+        updated_friendship.to_remark = payload.remark;
+        updated_friendship.to_is_blacklist = Some(if payload.is_blacklisted { 1 } else { 0 });
+        updated_friendship.to_group_by = payload.group_by;
+    }
+
+    // 7. 保存更新后的好友关系
+    state.db_pool.save_friendship(updated_friendship).await?;
+
+    // 8. 返回空响应
+    Ok(Json(()))
+}

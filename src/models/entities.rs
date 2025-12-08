@@ -86,6 +86,17 @@ pub enum ReqStatus {
     Expired
 }
 
+impl std::fmt::Display for ReqStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            ReqStatus::Pending => write!(f, "pending"),
+            ReqStatus::Accepted => write!(f, "accepted"),
+            ReqStatus::Rejected => write!(f, "rejected"),
+            ReqStatus::Expired => write!(f, "expired"),
+        }
+    }
+}
+
 // 为 Option<ReqStatus> 添加转换扩展
 pub trait ReqStatusOptionExt {
     fn to_optional_string(&self) -> Option<String>;
