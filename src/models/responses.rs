@@ -130,13 +130,26 @@ pub struct FriendRequestResponse {
 // 回复好友请求响应模型
 #[derive(Serialize, Deserialize)]
 pub struct RespondFriendRequestResponse {
+    pub uid: String,// 用户id
+    pub fid: String,// 好友关系id
+}
 
+// 好友请求项
+#[derive(Serialize, Deserialize)]
+pub struct FriendRequestItem {
+    pub req_id: String,
+    pub sender_uid: String,
+    pub apply_text: Option<String>,
+    pub create_time: Option<String>,
+    pub status: String,
 }
 
 // 好友请求列表响应模型
 #[derive(Serialize, Deserialize)]
 pub struct FriendRequestListResponse {
-
+    pub total: i64,
+    pub requests: Vec<FriendRequestItem>,// 自己的请求
+    pub receives: Vec<FriendRequestItem>,// 别人的请求
 }
 
 // 删除好友响应模型
