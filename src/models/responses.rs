@@ -166,7 +166,12 @@ pub struct SearchGroupResponse {
 // 群组资料响应模型
 #[derive(Serialize, Deserialize)]
 pub struct GroupProfileResponse {
-
+    pub gid: String,
+    pub group_name: String,
+    pub manager_uid: String,
+    pub avatar: Option<String>,
+    pub group_intro: Option<String>,
+    pub created_at: Option<NaiveDateTime>,
 }
 
 // 群组列表响应模型

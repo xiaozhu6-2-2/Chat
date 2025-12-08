@@ -109,7 +109,7 @@ pub struct SearchGroupRequest {
 // 群组资料请求模型
 #[derive(Deserialize, Serialize)]
 pub struct GroupProfileRequest {
-
+    pub gid: String,
 }
 
 // 群组列表请求模型

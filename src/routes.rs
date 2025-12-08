@@ -54,7 +54,7 @@ pub fn create_routes() -> Router<AppState> {
         // .route("/auth/friends/blacklist", post(handlers::friends::update_friend_blacklist))// 更新好友黑名单状态
 
         // .route("/auth/groups/search", post(handlers::groups::search_group))// 搜索群聊
-        // .route("/auth/groups/profile", post(handlers::groups::get_group_profile))// 获取群聊资料
+        .route("/auth/groups/profile", post(handlers::groups::get_group_profile))// 获取群聊资料
         // .route("/auth/groups/grouplist", post(handlers::groups::get_group_list))// 获取群聊列表
 
         // .route("/auth/online/friends-online", post(handlers::online::get_friends_online))// 获取好友列表在线状态
