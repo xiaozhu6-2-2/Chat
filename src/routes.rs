@@ -35,9 +35,9 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/user/update-user-info", post(handlers::user::update_user_info))// 更新用户信息
         .route("/auth/user/profile", post(handlers::user::fetch_user_profile))// 获取非好友用户资料
 
-        // .route("/auth/chat/list", get(handlers::chat::get_chat_list))// 获取会话列表
-        // .route("/auth/chat/soloprivate", post(handlers::chat::get_private_chat))// 获取指定私聊会话
-        // .route("/auth/chat/sologroup", post(handlers::chat::get_group_chat))// 获取指定群聊会话
+        .route("/auth/chat/list", get(handlers::chat::get_chat_list))// 获取会话列表
+        .route("/auth/chat/soloprivate", post(handlers::chat::get_private_chat))// 获取指定私聊会话
+        .route("/auth/chat/sologroup", post(handlers::chat::get_group_chat))// 获取指定群聊会话
 
         // .route("/auth/message/private_history", post(handlers::message::get_private_history))// 获取私聊会话历史消息
         // .route("/auth/message/group_history", post(handlers::message::get_group_history))// 获取群聊会话历史消息

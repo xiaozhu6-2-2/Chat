@@ -139,8 +139,12 @@ pub trait GroupMessageRepository: Send + Sync {
     async fn find_read_users_by_message(&self, msg_id: &str) -> AppResult<Vec<String>>;
     // 查找用户未读消息
     async fn find_unread_messages_by_user(&self, gid: &str, uid: &str) -> AppResult<Vec<GroupMessage>>;
+    // 获取用户未读消息数量
+    async fn get_unread_message_count_by_group(&self, gid: &str, uid: &str) -> AppResult<i32>;
     // 查找消息已读用户数量
     async fn get_message_read_count(&self, msg_id: &str) -> AppResult<u64>;
+    // 查找群聊的最新消息
+    async fn find_latest_message_by_group(&self, gid: &str) -> AppResult<Option<GroupMessage>>;
 }
 
 // 私聊会话聚合根
@@ -170,6 +174,10 @@ pub trait PrivateChatRepository: Send + Sync {
     async fn mark_message_as_revoked(&self, msg_id: &str) -> AppResult<()>;
     // 查找未读消息
     async fn find_unread_message_by_chat(&self, pid: &str, uid: &str) -> AppResult<Vec<PrivateMessage>>;
+    // 获取未读消息数量
+    async fn get_unread_message_count_by_chat(&self, pid: &str, uid: &str) -> AppResult<i32>;
+    // 查找会话的最新消息
+    async fn find_latest_message_by_chat(&self, pid: &str) -> AppResult<Option<PrivateMessage>>;
 }
 
 // 在线状态聚合根

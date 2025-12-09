@@ -58,7 +58,8 @@ pub enum AppError {
     NotFound(String),
     #[error("请求参数错误: {0}")]
     BadRequest(String),
-
+    #[error("权限验证失败: {0}")]
+    Forbidden(String),
 }
 
 // 实现AppError转化为HTTP响应
@@ -87,6 +88,7 @@ impl IntoResponse for AppError {
             Self::PageOutOfRange { page, total_pages } => (StatusCode::BAD_REQUEST, format!("分页参数超出范围: 请求页码 {}, 总页数 {}", page, total_pages), None),
             Self::NotFound(msg) => (StatusCode::NOT_FOUND, format!("资源未找到: {}", msg), None),
             Self::BadRequest(msg) => (StatusCode::BAD_REQUEST, format!("请求参数错误: {}", msg), None),
+            Self::Forbidden(msg) => (StatusCode::FORBIDDEN, format!("权限验证失败: {}", msg), None),
 
         };
 

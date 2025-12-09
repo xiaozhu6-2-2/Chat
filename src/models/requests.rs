@@ -14,7 +14,7 @@ pub struct RegisterRequest {
     pub gender: String,
     pub region: String,
     pub bio: String,
-    pub avator: String,
+    pub avatar: String,
 }
 
 // 登录请求模型
@@ -132,13 +132,13 @@ pub struct ChatListRequest {
 // 私聊请求模型
 #[derive(Deserialize, Serialize)]
 pub struct PrivateChatRequest {
-
+    pub fid: String,// 好友关系id
 }
 
 // 群聊请求模型
 #[derive(Deserialize, Serialize)]
 pub struct GroupChatRequest {
-
+    pub gid: String,// 群聊id
 }
 
 // 私聊历史请求模型
