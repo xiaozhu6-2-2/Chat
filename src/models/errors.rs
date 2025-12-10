@@ -62,7 +62,8 @@ pub enum AppError {
     InsufficientPermission(String),
     #[error("请求参数错误: {0}")]
     BadRequest(String),
-
+    #[error("权限验证失败: {0}")]
+    Forbidden(String),
 }
 
 // 实现AppError转化为HTTP响应
@@ -93,6 +94,7 @@ impl IntoResponse for AppError {
             Self::NotGroupMember { uid, gid } => (StatusCode::FORBIDDEN, format!("用户'{}'不是群组'{}'的成员", uid, gid), None),
             Self::InsufficientPermission(msg) => (StatusCode::FORBIDDEN, format!("权限不足: {}", msg), None),
             Self::BadRequest(msg) => (StatusCode::BAD_REQUEST, format!("请求参数错误: {}", msg), None),
+            Self::Forbidden(msg) => (StatusCode::FORBIDDEN, format!("权限验证失败: {}", msg), None),
 
         };
 

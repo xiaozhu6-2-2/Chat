@@ -236,4 +236,46 @@ impl GroupMessageRepository for MySqlPool {
         Ok(already.count as u64)
 
     }
+
+    // 获取用户未读消息数量
+    async fn get_unread_message_count_by_group(&self, gid: &str, uid: &str) -> AppResult<i32> {
+        let count = sqlx::query!(
+            "SELECT COUNT(*) as count
+            FROM group_message gm
+            LEFT JOIN group_message_read gmr
+                ON gm.msg_id = gmr.msg_id
+                AND gm.gid = gmr.gid
+                AND gmr.uid = ?
+            WHERE gm.gid = ? AND gmr.msg_id IS NULL",
+            uid,
+            gid
+        ).fetch_one(self).await?;
+
+        Ok(count.count as i32)
+    }
+
+    // 查找群聊的最新消息
+    async fn find_latest_message_by_group(&self, gid: &str) -> AppResult<Option<GroupMessage>> {
+        let message = sqlx::query_as!(
+            GroupMessage,
+            "SELECT
+                msg_id,
+                gid,
+                content,
+                sender_uid,
+                send_time,
+                is_revoked,
+                type as `msg_type: GroupMsgType`,
+                mentioned_uids,
+                quote_msg_id,
+                is_announcement
+            FROM group_message
+            WHERE gid = ?
+            ORDER BY send_time DESC
+            LIMIT 1",
+            gid
+        ).fetch_optional(self).await?;
+
+        Ok(message)
+    }
 }

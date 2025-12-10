@@ -355,22 +355,58 @@ pub struct SettingAdminResponse {
     // 目前为空响应体
 }
 
+// 聊天类型枚举
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum ChatType {
+    Private,
+    Group,
+}
+
+// 聊天项模型
+#[derive(Serialize, Deserialize)]
+pub struct ChatItem {
+    pub id: String,
+    pub is_pinned: bool,
+    #[serde(rename = "type")]
+    pub chat_type: ChatType, // "private" or "group"
+    pub latest_message: String,
+    pub updated_at: String, // 时间戳字符串
+    pub unread_messages: i32,
+    pub avatar: String,
+    pub remark: String, // 备注/名字
+}
+
 // 聊天列表响应模型
 #[derive(Serialize, Deserialize)]
 pub struct ChatListResponse {
-
+    pub chats: Vec<ChatItem>,
 }
 
 // 私聊响应模型
 #[derive(Serialize, Deserialize)]
 pub struct PrivateChatResponse {
-
+    pub id: String,
+    pub is_pinned: bool,
+    #[serde(rename = "type")]
+    pub chat_type: String, // "private"
+    pub latest_message: String,
+    pub updated_at: String, // ISO 8601 格式的时间字符串
+    pub avatar: String,
+    pub remark: String, // 备注名，如果没有备注则显示用户名
 }
 
 // 群聊响应模型
 #[derive(Serialize, Deserialize)]
 pub struct GroupChatResponse {
-
+    pub id: String,                    // 群组ID
+    pub is_pinned: bool,               // 是否置顶
+    #[serde(rename = "type")]
+    pub chat_type: String,             // 聊天类型，固定为"group"
+    pub latest_message: String,        // 最新消息内容
+    pub updated_at: String,            // 最新消息时间戳
+    pub avatar: String,                // 群组头像URL
+    pub remark: String,                // 群组名称或用户自定义备注
 }
 
 

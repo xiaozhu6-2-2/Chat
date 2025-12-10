@@ -280,4 +280,53 @@ impl PrivateChatRepository for MySqlPool {
             None => Ok(vec![])
         }
     }
+
+    // 获取未读消息数量
+    async fn get_unread_message_count_by_chat(&self, pid: &str, uid: &str) -> AppResult<i32> {
+        // 首先获取会话信息以确定哪个uid是接收方
+        let chat_info = sqlx::query!(
+            "SELECT uid1, uid2 FROM private_chat WHERE pid = ?",
+            pid
+        ).fetch_optional(self).await?;
+
+        match chat_info {
+            Some(_chat) => {
+                let count = sqlx::query!(
+                    "SELECT COUNT(*) as count
+                    FROM private_message
+                    WHERE pid = ?
+                    AND sender_uid != ?
+                    AND (is_read IS NULL OR is_read = 0)",
+                    pid,
+                    uid
+                ).fetch_one(self).await?;
+
+                Ok(count.count as i32)
+            }
+            None => Ok(0)
+        }
+    }
+
+    // 查找会话的最新消息
+    async fn find_latest_message_by_chat(&self, pid: &str) -> AppResult<Option<PrivateMessage>> {
+        let message = sqlx::query_as!(
+            PrivateMessage,
+            "SELECT
+                msg_id,
+                pid,
+                content,
+                sender_uid,
+                send_time,
+                is_revoked,
+                is_read,
+                type as `mes_type: PrivateMsgType`
+            FROM private_message
+            WHERE pid = ?
+            ORDER BY send_time DESC
+            LIMIT 1",
+            pid
+        ).fetch_optional(self).await?;
+
+        Ok(message)
+    }
 }

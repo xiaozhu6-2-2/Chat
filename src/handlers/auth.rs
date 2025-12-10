@@ -25,7 +25,7 @@ use crate::models::repository::UserRepository;
 // 分离模块导入
 use crate::models::requests::{RegisterRequest, LoginRequest};
 use crate::models::responses::{RegisterResponse, LoginResponse, SessionKeyResponse, };
-use crate::models::entities::{User};
+use crate::models::entities::{Gender, GenderOptionExt, User};
 use crate::models::others::{Claims};
 use crate::models::errors::{AppError, AppResult};
 use crate::state::AppState;
@@ -82,10 +82,10 @@ pub async fn register(
         account: account,
         password: password_hash,
         username: payload.username,
-        gender: None,
-        region: None,
+        gender: Option::<Gender>::from_optional_string(Some(payload.gender)),
+        region: Some(payload.region),
         email: None,
-        create_time: None,
+        create_time: Some(chrono::Utc::now().naive_utc()),
         avatar: None,
         bio: None,
 
@@ -238,203 +238,3 @@ pub async fn get_session_key(
 
     Ok(Json(SessionKeyResponse { public_key: pk }))
 }
-
-// // 单元测试
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use std::sync::Once;
-//     static INIT: Once = Once::new();
-
-//     // 一个用于初始化测试环境的函数
-//     fn set_jwt_secret() {
-//         // 使用 Once 确保设置只执行一次
-//         INIT.call_once(|| {
-//             unsafe {
-//                 std::env::set_var("JWT_SECRET", "your_super_secret_test_key_long_enough");
-//             }
-//         });
-//     }
-
-//     #[tokio::test] 
-//     // 测试私钥解密(预期:成功)
-//     async fn test_private_key_decrypt_success () {
-//         // 1. 准备测试数据 (Arrange)
-//         let private_key = RsaPrivateKey::new(&mut OsRng, 2048).expect("密钥生成失败");
-//         let public_key = private_key.to_public_key();
-//         let original_data = "Hello, World!";
-
-//         // 使用公钥加密数据
-//         let padding = Pkcs1v15Encrypt;
-//         let encrypted_data = public_key.encrypt(&mut OsRng, padding, original_data.as_bytes()).unwrap();
-//         let encrypted_b64 = general_purpose::STANDARD.encode(encrypted_data);
-
-//         // 2. 执行被测函数 (Act)
-//         let decrypted_data = private_key_decrypt(&private_key, &encrypted_b64).await.unwrap();
-
-//         // 3. 断言结果 (Assert)
-//         assert_eq!(decrypted_data, original_data);
-//     }
-
-//     #[tokio::test]
-//     // 测试私钥解密(预期:解密失败)
-//     async fn test_private_key_decrypt_invalid_data() {
-//         let private_key = RsaPrivateKey::new(&mut OsRng, 2048).unwrap();
-//         // 未经过公钥加密
-//         let invalid_data = "ThisIsNotValidBase64!!";
-
-//         // 测试解密失败的情况，应该返回 Err
-//         let result = private_key_decrypt(&private_key, invalid_data).await;
-//         assert!(result.is_err());
-//         // 可以更精确地断言错误类型
-//         assert!(matches!(result, Err(AppError::DecryptionFailure(_))));
-//     }
-
-//     #[test]
-//     // 测试生成token
-//     fn test_generate_jwt() {
-//         // 设置测试所需的环境变量
-//         set_jwt_secret();
-
-//         let account = "test_user";
-//         let token = generate_jwt(account).unwrap();
-
-//         // 简单断言token非空
-//         assert!(!token.is_empty());
-//     }
-
-//     #[tokio::test]
-//     async fn test_validate_credentials() {
-//         // 用于管理实现UserRepository的类的生命周期
-//         use async_trait::async_trait;
-        
-//         // 模拟用户仓库用于测试
-//         struct MockUserRepository {
-//             behavior: TestBehavior, // 要测试的行为，用来定义find_user_by_account的返回值
-//         }
-        
-//         #[async_trait]
-//         impl UserRepository for MockUserRepository {
-//             async fn find_user_by_account(&self, account: &str) -> AppResult<User> {
-//                 match self.behavior {
-//                     TestBehavior::Success => {
-//                         // 创建正确的密码哈希
-//                         let salt = SaltString::generate(&mut OsRng);
-//                         let argon2 = Argon2::default();
-//                         let password_hash = argon2.hash_password(b"correct_password", &salt)
-//                             .unwrap()
-//                             .to_string();
-                        
-//                         Ok(User {
-//                             uid: "666".to_string(),
-//                             account: account.to_string(),
-//                             password: password_hash,
-//                             username: "test_user".to_string(),
-//                             // ... 其他必要字段
-//                         })
-//                     }
-//                     TestBehavior::WrongPassword => {
-//                         // 使用不同密码创建哈希
-//                         let salt = SaltString::generate(&mut OsRng);
-//                         let argon2 = Argon2::default();
-//                         let password_hash = argon2.hash_password(b"different_password", &salt)
-//                             .unwrap()
-//                             .to_string();
-                        
-//                         Ok(User {
-//                             uid: "777".to_string(),
-//                             account: account.to_string(),
-//                             password: password_hash,
-//                             username: "test_user".to_string(),
-//                             // ... 其他必要字段
-//                         })
-//                     }
-//                     TestBehavior::UserNotFound => {
-//                         Err(AppError::UserNotFound(account.to_string()))
-//                     }
-//                     TestBehavior::InvalidHash => {
-//                         // 返回无效的哈希字符串
-//                         Ok(User {
-//                             uid: "888".to_string(),
-//                             account: account.to_string(),
-//                             password: "invalid_hash_format".to_string(),
-//                             username: "test_user".to_string(),
-//                             // ... 其他必要字段
-//                         })
-//                     }
-//                 }
-//             }
-
-//             async fn insert_user(&self, user: User) -> AppResult<()> {
-//                     Ok(())
-//             }
-//         }
-        
-//         enum TestBehavior {
-//             Success,
-//             WrongPassword,
-//             UserNotFound,
-//             InvalidHash,
-//         }
-        
-//         // 测试1: 正确凭据验证成功
-//         let mock_repo = MockUserRepository { behavior: TestBehavior::Success };
-//         let result = validate_credentials(&mock_repo, "test_account", "correct_password").await;
-//         assert!(result.is_ok());
-//         assert_eq!(result.unwrap(), "test_user");
-        
-//         // 测试2: 错误密码返回InvalidPassword
-//         let mock_repo = MockUserRepository { behavior: TestBehavior::WrongPassword };
-//         let result = validate_credentials(&mock_repo, "test_account", "correct_password").await;
-//         assert!(result.is_err());
-//         assert!(matches!(result, Err(AppError::InvalidPassword)));
-        
-//         // 测试3: 用户不存在返回UserNotFound
-//         let mock_repo = MockUserRepository { behavior: TestBehavior::UserNotFound };
-//         let result = validate_credentials(&mock_repo, "non_existent", "password").await;
-//         assert!(result.is_err());
-//         assert!(matches!(result, Err(AppError::UserNotFound(_))));
-        
-//         // 测试4: 无效哈希格式返回HashFailure
-//         let mock_repo = MockUserRepository { behavior: TestBehavior::InvalidHash };
-//         let result = validate_credentials(&mock_repo, "test_account", "password").await;
-//         assert!(result.is_err());
-//         assert!(matches!(result, Err(AppError::HashFailure(_))));
-//     }
-
-//     #[tokio::test]
-//     async fn test_validate_credentials_edge_cases() {
-//         use async_trait::async_trait;
-        
-//         // 测试空密码
-//         struct EmptyPasswordMock;
-        
-//         #[async_trait]
-//         impl UserRepository for EmptyPasswordMock {
-//             async fn find_user_by_account(&self, account: &str) -> AppResult<User> {
-//                 let salt = SaltString::generate(&mut OsRng);
-//                 let argon2 = Argon2::default();
-//                 let password_hash = argon2.hash_password(b"", &salt).unwrap().to_string();
-                
-//                 Ok(User {
-//                     uid: "999".to_string(),
-//                     account: account.to_string(),
-//                     password: password_hash,
-//                     username: "test_user".to_string(),
-//                 })
-//             }
-//             async fn insert_user(&self, user: User) -> AppResult<()> {
-//                     Ok(())
-//             }
-//         }
-        
-//         let mock_repo = EmptyPasswordMock;
-//         let result = validate_credentials(&mock_repo, "test_account", "").await;
-//         // 根据业务逻辑决定预期结果
-//         assert!(result.is_ok()); //或 assert!(result.is_err());
-        
-//         // 测试超长密码（如果业务需要）
-//         // 测试特殊字符密码
-//         // 测试Unicode密码等
-//     }
-// }
