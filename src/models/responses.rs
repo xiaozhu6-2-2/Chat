@@ -170,15 +170,37 @@ pub struct UpdateFriendBlacklistResponse {
 
 }
 
+
+// 创建群组响应模型
+#[derive(Serialize, Deserialize)]
+pub struct CreateGroupResponse {
+    pub gid: String,
+    pub groupname: String,
+    pub manager_uid: String,
+    pub avatar: String,
+    pub groupintro: String,
+    pub created_at: String,
+}
+
+// 搜索群组项
+#[derive(Serialize, Deserialize)]
+pub struct SearchGroupItem {
+    pub gid: String,
+    pub group_name: String,
+    pub avatar: Option<String>,
+    pub bio: Option<String>,
+}
+
 // 搜索群组响应模型
 #[derive(Serialize, Deserialize)]
 pub struct SearchGroupResponse {
-
+    pub groups: Vec<SearchGroupItem>,
+    pub total: i64,
 }
 
-// 群组资料响应模型
+// 群组名片响应模型
 #[derive(Serialize, Deserialize)]
-pub struct GroupProfileResponse {
+pub struct GroupCardResponse {
     pub gid: String,
     pub group_name: String,
     pub manager_uid: String,
@@ -187,10 +209,150 @@ pub struct GroupProfileResponse {
     pub created_at: Option<NaiveDateTime>,
 }
 
+// 群组资料响应模型（仅群成员可用）
+#[derive(Serialize, Deserialize)]
+pub struct GroupProfileResponse {
+    pub gid: String,
+    pub group_name: String,
+    pub manager_uid: String,
+    pub avatar: String,
+    pub group_intro: String,
+    pub created_at: String,
+    pub do_not_disturb: bool,
+    pub is_pinned: bool,
+    pub remark: Option<String>,
+    pub nickname: Option<String>,
+    pub join_time: String,
+}
+
+// 群组列表项
+#[derive(Serialize, Deserialize)]
+pub struct GroupListItem {
+    pub gid: String,
+    pub group_name: String,
+    pub avatar: String,
+    pub bio: String,
+}
+
 // 群组列表响应模型
 #[derive(Serialize, Deserialize)]
 pub struct GroupListResponse {
+    pub groups: Vec<GroupListItem>,
+    pub total: i64,
+}
 
+// 发送群聊申请响应模型
+#[derive(Serialize, Deserialize)]
+pub struct GroupRequestResponse {
+    pub success: bool,
+    pub req_id: String,
+    pub gid: String,
+    pub sender_uid: String,
+    pub apply_text: String,
+    pub create_time: String,
+    pub status: String,
+}
+
+// 群聊申请列表项
+#[derive(Serialize, Deserialize)]
+pub struct GroupRequestItem {
+    pub req_id: String,
+    pub gid: String,
+    pub sender_uid: String,
+    pub apply_text: Option<String>,
+    pub create_time: String,
+    pub status: String,
+}
+
+// 获取群聊申请列表响应模型
+#[derive(Serialize, Deserialize)]
+pub struct GroupRequestListResponse {
+    pub requests: Vec<GroupRequestItem>,
+    pub total: i64,
+}
+
+// 处理群聊申请响应模型（仅返回状态码，不返回具体内容）
+pub type GroupRespondResponse = ();
+
+// 退出群聊响应模型
+#[derive(Serialize, Deserialize)]
+pub struct LeaveGroupResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+// 踢出群成员响应模型
+#[derive(Serialize, Deserialize)]
+pub struct KickMemberResponse {
+    pub message: String,
+}
+
+// 解散群聊响应模型
+#[derive(Serialize, Deserialize)]
+pub struct DisbandGroupResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+// 群成员设置响应模型
+#[derive(Serialize, Deserialize)]
+pub struct MemberSettingResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+// 修改群聊设置响应模型
+#[derive(Serialize, Deserialize)]
+pub struct SettingGourpResponse {
+    pub message: String,
+}
+
+// 群公告项模型
+#[derive(Serialize, Deserialize)]
+pub struct AnnouncementItem {
+    pub msg_id: String,                 // 消息ID
+    pub content: String,                // 公告内容
+    pub sender_uid: String,             // 发送者UID
+    pub send_time: String,              // 发送时间戳
+    pub mentioned_uids: Vec<String>,    // 提及的用户ID列表
+    pub quote_msg_id: String,           // 引用消息ID
+}
+
+// 获取群公告响应模型
+#[derive(Serialize, Deserialize)]
+pub struct GetAnnouncementsResponse {
+    pub announcements: Vec<AnnouncementItem>, // 公告列表
+    pub total: i32,             // 总数
+}
+
+// 群成员项模型
+#[derive(Serialize, Deserialize)]
+pub struct MemberItem {
+    pub role: String,        // 角色（admin, owner, member）
+    pub uid: String,         // 用户ID
+    pub username: String,    // 用户名
+    pub avatar: String,      // 头像URL
+    pub nickname: String,    // 群昵称
+}
+
+// 获取群成员列表响应模型
+#[derive(Serialize, Deserialize)]
+pub struct GetMembersResponse {
+    pub members: Vec<MemberItem>,  // 成员列表
+    pub total: i32,               // 总数
+}
+
+// 转让群主响应模型
+#[derive(Serialize, Deserialize)]
+pub struct TransferOwnershipResponse {
+    pub message: String,       // 操作结果消息
+}
+
+// 设置管理员响应模型
+#[derive(Serialize, Deserialize)]
+pub struct SettingAdminResponse {
+    // 可以添加响应字段，如果需要的话
+    // 目前为空响应体
 }
 
 // 聊天列表响应模型
@@ -210,6 +372,8 @@ pub struct PrivateChatResponse {
 pub struct GroupChatResponse {
 
 }
+
+
 
 // 私聊历史响应模型
 #[derive(Serialize, Deserialize)]

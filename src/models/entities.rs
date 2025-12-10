@@ -77,7 +77,7 @@ pub struct GroupChat {
 }
 
 // 申请状态枚举
-#[derive(Debug, Clone, Deserialize, Serialize, sqlx::Type)]
+#[derive(Debug, Clone, Deserialize, Serialize, sqlx::Type, PartialEq)]
 #[sqlx(type_name = "TEXT", rename_all = "lowercase")]
 pub enum ReqStatus {
     Pending,

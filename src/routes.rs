@@ -52,9 +52,23 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/friends/remove", post(handlers::friends::remove_friend))// 删除好友
         .route("/auth/friends/update", post(handlers::friends::update_friend_remark_blacklist_group))// 更新好友备注/黑名单/分组
 
-        // .route("/auth/groups/search", post(handlers::groups::search_group))// 搜索群聊
+        .route("/auth/groups/create", post(handlers::groups::create_group))// 创建群聊
+        .route("/auth/groups/search", post(handlers::groups::search_group))// 搜索群聊
+        .route("/auth/groups/card", post(handlers::groups::get_group_card))//获取群聊名片
         .route("/auth/groups/profile", post(handlers::groups::get_group_profile))// 获取群聊资料
-        // .route("/auth/groups/grouplist", post(handlers::groups::get_group_list))// 获取群聊列表
+        .route("/auth/groups/grouplist", get(handlers::groups::get_group_list))// 获取群聊列表
+        .route("/auth/groups/send_group_request", post(handlers::groups::send_group_request))// 发送加入群聊申请
+        .route("/auth/groups/group_request_list", post(handlers::groups::get_group_requestlist))// 获取群聊加入申请列表
+        .route("/auth/groups/respond", post(handlers::groups::handle_group_request))// 处理加入群聊申请
+        .route("/auth/groups/leave", post(handlers::groups::leave_group))// 退出群聊
+        .route("/auth/groups/kick_member", post(handlers::groups::kick_member))// 踢出群成员
+        .route("/auth/groups/disband", post(handlers::groups::disband_group))// 解散群聊
+        .route("/auth/groups/member_set", post(handlers::groups::member_set))// 群聊成员修改本地设置
+        .route("/auth/groups/setting", post(handlers::groups::set_group))// 修改群聊资料  
+        .route("/auth/groups/get_announcements", post(handlers::groups::get_announcements))//获取群公告列表
+        .route("/auth/groups/get_members", post(handlers::groups::get_members))//获取群成员列表
+        .route("/auth/groups/transfer_ownership", post(handlers::groups::transfer_ownership))//转让群主
+        .route("/auth/groups/set_admin", post(handlers::groups::set_admin))//设置管理员
 
         // .route("/auth/online/friends-online", post(handlers::online::get_friends_online))// 获取好友列表在线状态
         // .route("/auth/online/group-online", post(handlers::online::get_group_online))// 获取群聊在线状态
