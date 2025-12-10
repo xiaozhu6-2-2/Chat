@@ -168,13 +168,19 @@ pub async fn get_group_profile(
     Extension(claims): Extension<Claims>,
     Json(payload): Json<GroupProfileRequest>,
 ) -> AppResult<Json<GroupProfileResponse>> {
+    // 从 claims 中获取用户账号
+    let user_account = &claims.sub;
+
+    // 通过账号查找用户信息，获取 uid
+    let user = state.db_pool.find_user_by_account(user_account).await?;
+
     // 首先验证用户是否是该群组的成员
-    let member = state.db_pool.find_member(&payload.gid, &claims.sub).await?;
+    let member = state.db_pool.find_member(&payload.gid, &user.uid).await?;
 
     // 如果用户不是群组成员，返回错误
     if member.is_none() {
         return Err(AppError::NotGroupMember {
-            uid: claims.sub.clone(),
+            uid: user.uid.clone(),
             gid: payload.gid.clone(),
         });
     }
