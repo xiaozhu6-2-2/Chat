@@ -214,6 +214,7 @@ pub struct ChatItem {
 #[derive(Serialize, Deserialize)]
 pub struct ChatListResponse {
     pub chats: Vec<ChatItem>,
+    pub total: i32,
 }
 
 // 私聊响应模型

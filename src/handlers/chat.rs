@@ -161,8 +161,11 @@ pub async fn get_chat_list(
         }
     });
 
+    let total = chat_items.len() as i32;
+    
     Ok(Json(ChatListResponse {
         chats: chat_items,
+        total,
     }))
 }
 
