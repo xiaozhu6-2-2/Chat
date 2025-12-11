@@ -194,8 +194,10 @@ pub struct SearchGroupItem {
 // 搜索群组响应模型
 #[derive(Serialize, Deserialize)]
 pub struct SearchGroupResponse {
+    pub total_pages: i64,     // 总页数
+    pub current_page: i64,   // 当前页码
+    pub total_items: i64,    // 总条目数
     pub groups: Vec<SearchGroupItem>,
-    pub total: i64,
 }
 
 // 群组名片响应模型

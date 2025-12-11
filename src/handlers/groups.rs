@@ -11,9 +11,15 @@ use crate::state::AppState;
 
 pub async fn create_group(
     State(state): State<AppState>,
-    Extension(_claims): Extension<Claims>,
+    Extension(claims): Extension<Claims>,
     Json(payload): Json<CreateGroupRequest>,
 ) -> AppResult<Json<CreateGroupResponse>>{
+    // 1. 从 claims 中获取用户账号
+    let user_account = &claims.sub;
+
+    // 2. 通过账号查找用户信息，获取 uid
+    let user = state.db_pool.find_user_by_account(user_account).await?;
+
     // 生成群组ID
     let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
     let gid = snowflake.next_id()?.to_string();
@@ -26,7 +32,7 @@ pub async fn create_group(
     let group = crate::models::entities::GroupChat {
         gid: gid.clone(),
         group_name: payload.group_name.clone(),
-        manager_uid: payload.manager_uid.clone(),
+        manager_uid: user.uid.clone(),
         group_avatar: payload.avatar.clone(),
         group_intro: payload.group_intro.clone(),
         create_time: Some(created_at),
@@ -37,9 +43,9 @@ pub async fn create_group(
 
     // 创建群主成员记录
     let manager_member = crate::models::entities::GroupMember {
-        uid: payload.manager_uid.clone(),
+        uid: user.uid.clone(),
         gid: gid.clone(),
-        role: crate::models::entities::Role::Admin,
+        role: crate::models::entities::Role::Owner,
         nickname: None,
         level: Some(1),
         join_time: Some(created_at),
@@ -56,7 +62,7 @@ pub async fn create_group(
     Ok(Json(CreateGroupResponse {
         gid,
         groupname: payload.group_name,
-        manager_uid: payload.manager_uid,
+        manager_uid: user.uid,
         avatar: payload.avatar.unwrap_or_default(),
         groupintro: payload.group_intro.unwrap_or_default(),
         created_at: payload.created_at,
@@ -80,8 +86,9 @@ pub async fn search_group(
         let mut all_results = Vec::new();
         let mut seen_gids = std::collections::HashSet::new();
 
-        // 1. GID 精准搜索（如果查询是纯数字）
-        if payload.query.chars().all(|c| c.is_ascii_digit()) {
+        // 1. GID 精准搜索（如果查询是数字且长度合适）
+        let is_numeric_query = payload.query.chars().all(|c| c.is_ascii_digit());
+        if is_numeric_query && payload.query.len() > 8 {
             if let Ok(Some(group)) = state.db_pool.find_group_by_gid(&payload.query).await {
                 seen_gids.insert(group.gid.clone());
                 all_results.push(group);
@@ -138,8 +145,10 @@ pub async fn search_group(
         .collect();
 
     Ok(Json(SearchGroupResponse {
+        total_pages,
+        current_page: offset,
+        total_items: total_groups,
         groups: response_groups,
-        total: total_groups,
     }))
 }
 
@@ -252,23 +261,29 @@ pub async fn get_group_list(
 
 pub async fn send_group_request(
     State(state): State<AppState>,
-    Extension(_claims): Extension<Claims>,
+    Extension(claims): Extension<Claims>,
     Json(payload): Json<GroupRequestRequest>,
 ) -> AppResult<Json<GroupRequestResponse>> {
-    // 1. 验证群组是否存在
+    // 1. 从 claims 中获取用户账号
+    let user_account = &claims.sub;
+
+    // 2. 通过账号查找用户信息，获取 uid
+    let user = state.db_pool.find_user_by_account(user_account).await?;
+
+    // 3. 验证群组是否存在
     let _group = state.db_pool.find_group_by_gid(&payload.gid).await?
         .ok_or_else(|| AppError::NotFound(format!("群组{}不存在", payload.gid)))?;
 
-    // 2. 验证用户是否已经是群组成员
-    let existing_member = state.db_pool.find_member(&payload.gid, &payload.uid).await?;
+    // 4. 验证用户是否已经是群组成员
+    let existing_member = state.db_pool.find_member(&payload.gid, &user.uid).await?;
     if existing_member.is_some() {
         return Err(AppError::BadRequest("用户已经是群组成员".to_string()));
     }
 
-    // 3. 检查是否已有待处理的申请（数据库层面已过滤为待处理状态）
+    // 5. 检查是否已有待处理的申请（数据库层面已过滤为待处理状态）
     let existing_requests = state.db_pool.find_pending_requests_by_group(&payload.gid).await?;
     for req in existing_requests {
-        if req.applicant_uid == payload.uid {
+        if req.applicant_uid == user.uid {
             return Err(AppError::BadRequest("已经有待处理的加入申请".to_string()));
         }
     }
@@ -285,7 +300,7 @@ pub async fn send_group_request(
     let group_request = crate::models::entities::GroupJoinRequest {
         req_id: req_id.clone(),
         gid: payload.gid.clone(),
-        applicant_uid: payload.uid.clone(),
+        applicant_uid: user.uid.clone(),
         approver_uid: None,
         status: ReqStatus::Pending,
         apply_text: Some(payload.apply_text.clone()),
@@ -301,7 +316,7 @@ pub async fn send_group_request(
         success: true,
         req_id,
         gid: payload.gid,
-        sender_uid: payload.uid,
+        sender_uid: user.uid,
         apply_text: payload.apply_text,
         create_time: payload.create_time,
         status: "pending".to_string(),
@@ -310,17 +325,23 @@ pub async fn send_group_request(
 
 pub async fn get_group_requestlist(
     State(state): State<AppState>,
-    Extension(_claims): Extension<Claims>,
+    Extension(claims): Extension<Claims>,
     Json(payload): Json<GroupRequestListRequest>,
 ) -> AppResult<Json<GroupRequestListResponse>> {
-    // 1. 验证群组是否存在
+    // 1. 从 claims 中获取用户账号
+    let user_account = &claims.sub;
+
+    // 2. 通过账号查找用户信息，获取 uid
+    let user = state.db_pool.find_user_by_account(user_account).await?;
+
+    // 3. 验证群组是否存在
     let _group = state.db_pool.find_group_by_gid(&payload.gid).await?
         .ok_or_else(|| AppError::NotFound(format!("群组{}不存在", payload.gid)))?;
 
-    // 2. 验证请求者是否是群主或管理员
-    let member = state.db_pool.find_member(&payload.gid, &payload.uid).await?
+    // 4. 验证请求者是否是群主或管理员
+    let member = state.db_pool.find_member(&payload.gid, &user.uid).await?
         .ok_or_else(|| AppError::NotGroupMember {
-            uid: payload.uid.clone(),
+            uid: user.uid.clone(),
             gid: payload.gid.clone(),
         })?;
 
@@ -364,38 +385,44 @@ pub async fn get_group_requestlist(
 
 pub async fn handle_group_request(
     State(state): State<AppState>,
-    Extension(_claims): Extension<Claims>,
+    Extension(claims): Extension<Claims>,
     Json(payload): Json<GroupRespondRequest>,
 ) -> AppResult<Json<GroupRespondResponse>> {
-    // 1. 查找申请记录
+    // 1. 从 claims 中获取用户账号
+    let user_account = &claims.sub;
+
+    // 2. 通过账号查找用户信息，获取 uid
+    let user = state.db_pool.find_user_by_account(user_account).await?;
+
+    // 3. 查找申请记录
     let request = state.db_pool.find_group_request_by_id(&payload.req_id).await?
         .ok_or_else(|| AppError::NotFound(format!("申请{}不存在", payload.req_id)))?;
 
-    // 2. 验证申请是否还是待处理状态
+    // 4. 验证申请是否还是待处理状态
     if request.status != ReqStatus::Pending {
         return Err(AppError::BadRequest("申请已经被处理".to_string()));
     }
 
-    // 3. 验证 action 参数
+    // 5. 验证 action 参数
     let status = match payload.action.as_str() {
         "accept" => ReqStatus::Accepted,
         "reject" => ReqStatus::Rejected,
         _ => return Err(AppError::BadRequest("无效的action参数,必须是 'accept' 或 'reject'".to_string())),
     };
 
-    // 4. 解析处理时间
+    // 6. 解析处理时间
     let handle_time = chrono::NaiveDateTime::parse_from_str(&payload.handle_time, "%Y-%m-%d %H:%M:%S")
         .map_err(|_| AppError::BadRequest("Invalid handle_time format. Use YYYY-MM-DD HH:MM:SS".to_string()))?;
 
-    // 5. 更新申请状态
+    // 7. 更新申请状态
     state.db_pool.update_request_status(
         &payload.req_id,
         Some(status).to_optional_string().unwrap_or_default().as_str(),
-        &payload.approver_uid,
+        &user.uid,
         handle_time
     ).await?;
 
-    // 6. 如果是接受申请，将用户加入群组
+    // 8. 如果是接受申请，将用户加入群组
     if payload.action == "accept" {
         let member = crate::models::entities::GroupMember {
             uid: request.applicant_uid.clone(),
@@ -413,7 +440,7 @@ pub async fn handle_group_request(
         state.db_pool.save_member(member).await?;
     }
 
-    // 7. 返回成功响应（空响应体，只返回状态码）
+    // 9. 返回成功响应（空响应体，只返回状态码）
     Ok(Json(()))
 }
 
@@ -827,22 +854,17 @@ pub async fn transfer_ownership(
     // 2. 通过账号查找用户信息，获取 uid
     let user = state.db_pool.find_user_by_account(user_account).await?;
 
-    // 3. 验证当前用户是否是群主
-    if user.uid != payload.manager_uid {
-        return Err(AppError::BadRequest("只有群主可以转让群主身份".to_string()));
-    }
-
-    // 4. 验证不能转让给自己
-    if payload.manager_uid == payload.uid {
+    // 3. 验证不能转让给自己
+    if user.uid == payload.uid {
         return Err(AppError::BadRequest("不能转让群主给自己".to_string()));
     }
 
-    // 5. 查找群聊信息，验证群主身份
+    // 4. 查找群聊信息，验证群主身份
     let group = state.db_pool.find_group_by_gid(&payload.gid).await?;
     let group = group.ok_or_else(|| AppError::NotFound(format!("群聊 {} 不存在", payload.gid)))?;
 
     // 验证当前用户确实是群主
-    if group.manager_uid != payload.manager_uid {
+    if group.manager_uid != user.uid {
         return Err(AppError::InsufficientPermission("您不是该群的群主".to_string()));
     }
 
@@ -858,7 +880,7 @@ pub async fn transfer_ownership(
         "UPDATE group_member SET role = ? WHERE gid = ? AND uid = ?",
         "Member",
         payload.gid,
-        payload.manager_uid
+        user.uid
     )
     .execute(&mut *tx)
     .await?;
@@ -886,7 +908,7 @@ pub async fn transfer_ownership(
     tx.commit().await?;
 
     // 8. 查找用户名用于返回消息
-    let manager_name = match state.db_pool.find_user_by_uid(&payload.manager_uid).await {
+    let manager_name = match state.db_pool.find_user_by_uid(&user.uid).await {
         Ok(user) => user.username,
         Err(_) => "原群主".to_string(),
     };

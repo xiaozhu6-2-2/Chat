@@ -122,7 +122,6 @@ pub struct GroupCardRequest {
 // 创建群组请求模型
 #[derive(Deserialize, Serialize)]
 pub struct CreateGroupRequest {
-    pub manager_uid: String,
     pub group_name: String,          // 必填
     pub avatar: Option<String>,      // 可选
     pub created_at: String,
@@ -152,14 +151,12 @@ pub struct GroupRequestRequest {
 #[derive(Deserialize, Serialize)]
 pub struct GroupRequestListRequest {
     pub gid: String,
-    pub uid: String,
 }
 
 // 处理群聊申请请求模型
 #[derive(Deserialize, Serialize)]
 pub struct GroupRespondRequest {
     pub req_id: String,
-    pub approver_uid: String,
     pub action: String,  // "accept" 或 "reject"
     pub handle_time: String,
 }
@@ -221,7 +218,6 @@ pub struct GetMembersRequest {
 #[derive(Deserialize, Serialize)]
 pub struct TransferOwnershipRequest {
     pub gid: String,         // 群组ID
-    pub manager_uid: String,  // 转让者uid（当前群主）
     pub uid: String,         // 被转让者uid
 }
 
