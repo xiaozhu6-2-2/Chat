@@ -232,6 +232,27 @@ pub struct SettingAdminRequest {
     pub uid: String,         // 要设置为管理员的用户uid
 }
 
+// 获取禁言状态请求模型
+#[derive(Deserialize, Serialize)]
+pub struct GetBanStatusRequest {
+    pub gid: String,         // 群组ID
+}
+
+// 禁言成员请求模型
+#[derive(Deserialize, Serialize)]
+pub struct BanningMemberRequest {
+    pub gid: String,         // 群组ID
+    pub uid: String,         // 被禁言的群成员ID
+    pub time: String,        // 禁言时长（秒），-1表示永久禁言
+}
+
+// 解除禁言请求模型
+#[derive(Deserialize, Serialize)]
+pub struct RemoveMuteRequest {
+    pub gid: String,         // 群组ID
+    pub uid: String,         // 被解除禁言的群成员ID
+}
+
 // 聊天列表请求模型
 #[derive(Deserialize, Serialize)]
 pub struct ChatListRequest {

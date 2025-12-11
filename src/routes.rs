@@ -69,7 +69,9 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/groups/get_members", post(handlers::groups::get_members))//获取群成员列表
         .route("/auth/groups/transfer_ownership", post(handlers::groups::transfer_ownership))//转让群主
         .route("/auth/groups/set_admin", post(handlers::groups::set_admin))//设置管理员
-
+        .route("/auth/groups/get_ban_status", post(handlers::groups::get_ban_status))//获取用户禁言状态
+        .route("/auth/groups/ban_member", post(handlers::groups::ban_member))//禁言群成员
+        .route("/auth/groups/remove_mute_admin", post(handlers::groups::remove_mute_admin))//解除禁言
         // .route("/auth/online/friends-online", post(handlers::online::get_friends_online))// 获取好友列表在线状态
         // .route("/auth/online/group-online", post(handlers::online::get_group_online))// 获取群聊在线状态
 

@@ -289,11 +289,11 @@ impl GroupChatRepository for MySqlPool {
     }
     // 解除禁言
     async fn remove_mute(&self, ban_id: &str) -> AppResult<()>{
-        
+
         let mut tx=self.begin().await?;
 
         sqlx::query!(
-            "DELETE FROM mute_record WHERE ban_id = ?",
+            "UPDATE mute_record SET mute_duration = 0 WHERE ban_id = ?",
             ban_id
         ).execute(&mut *tx).await?;
 

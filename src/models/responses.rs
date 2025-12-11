@@ -355,6 +355,25 @@ pub struct SettingAdminResponse {
     // 目前为空响应体
 }
 
+// 获取禁言状态响应模型
+#[derive(Serialize, Deserialize)]
+pub struct GetBanStatusResponse {
+    pub is_banned: bool,       // 是否被禁言
+    pub remain: String,        // 剩余时间戳（如果未禁言则为空）
+}
+
+// 禁言成员响应模型
+#[derive(Serialize, Deserialize)]
+pub struct BanningMemberResponse {
+    // 空响应体，成功时返回200 OK
+}
+
+// 解除禁言响应模型
+#[derive(Serialize, Deserialize)]
+pub struct RemoveMuteResponse {
+    // 空响应体，成功时返回200 OK
+}
+
 // 聊天类型枚举
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]

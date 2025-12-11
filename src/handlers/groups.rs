@@ -2,8 +2,8 @@ use axum::Extension;
 use axum::{extract::State, Json};
 
 use crate::models::others::Claims;
-use crate::models::requests::{CreateGroupRequest, DisbandGroupRequest, GetAnnouncementsRequest, GetMembersRequest, GroupProfileRequest, GroupRequestListRequest, GroupRequestRequest, GroupRespondRequest, KickMemberRequest, LeaveGroupRequest, MemberSettingRequest, SettingAdminRequest, SettingGroupRequest, TransferOwnershipRequest};
-use crate::models::responses::{AnnouncementItem, CreateGroupResponse, DisbandGroupResponse, GetAnnouncementsResponse, GetMembersResponse, GroupListItem, GroupListResponse, GroupProfileResponse, GroupRequestItem, GroupRequestListResponse, GroupRequestResponse, GroupRespondResponse, KickMemberResponse, LeaveGroupResponse, MemberItem, MemberSettingResponse, SettingAdminResponse, SettingGourpResponse, TransferOwnershipResponse};
+use crate::models::requests::{BanningMemberRequest, CreateGroupRequest, DisbandGroupRequest, GetAnnouncementsRequest, GetBanStatusRequest, GetMembersRequest, GroupProfileRequest, GroupRequestListRequest, GroupRequestRequest, GroupRespondRequest, KickMemberRequest, LeaveGroupRequest, MemberSettingRequest, RemoveMuteRequest, SettingAdminRequest, SettingGroupRequest, TransferOwnershipRequest};
+use crate::models::responses::{AnnouncementItem, BanningMemberResponse, CreateGroupResponse, DisbandGroupResponse, GetAnnouncementsResponse, GetBanStatusResponse, GetMembersResponse, GroupListItem, GroupListResponse, GroupProfileResponse, GroupRequestItem, GroupRequestListResponse, GroupRequestResponse, GroupRespondResponse, KickMemberResponse, LeaveGroupResponse, MemberItem, MemberSettingResponse, RemoveMuteResponse, SettingAdminResponse, SettingGourpResponse, TransferOwnershipResponse};
 use crate::models::entities::{ReqStatus, ReqStatusOptionExt, Role};
 use crate::models::{errors::{AppResult, AppError}, responses::{SearchGroupResponse, SearchGroupItem}, responses::GroupCardResponse, requests::SearchGroupRequest, requests::GroupCardRequest, requests::GroupListRequest};
 use crate::models::repository::{GroupChatRepository, GroupMessageRepository, UserRepository};
@@ -954,4 +954,178 @@ pub async fn set_admin(
 
     // 9. 返回成功响应
     Ok(Json(SettingAdminResponse {}))
+}
+
+pub async fn get_ban_status(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<GetBanStatusRequest>,
+) -> AppResult<Json<GetBanStatusResponse>> {
+    // 1. 从 claims 中获取用户账号
+    let user_account = &claims.sub;
+
+    // 2. 通过账号查找用户信息，获取 uid
+    let user = state.db_pool.find_user_by_account(user_account).await?;
+
+    // 3. 查找用户在群中的禁言记录
+    let mute_record = state.db_pool.find_mute_records_by_user(&payload.gid, &user.uid).await?;
+
+    // 4. 判断是否被禁言
+    if let Some(record) = mute_record {
+        // 检查禁言是否已过期
+        let now = chrono::Utc::now().naive_utc();
+
+        // 获取开始时间，如果不存在则使用当前时间
+        let start_time = record.start_time.unwrap_or(now);
+
+        // 如果 mute_duration 为 -1，表示永久禁言
+        if record.mute_duration == -1 {
+            Ok(Json(GetBanStatusResponse {
+                is_banned: true,
+                remain: "-1".to_string(),
+            }))
+        } else if record.mute_duration == 0 {
+            // 0 表示未禁言
+            Ok(Json(GetBanStatusResponse {
+                is_banned: false,
+                remain: "0".to_string(),
+            }))
+        } else {
+            // 计算结束时间
+            let end_time = start_time + chrono::Duration::seconds(record.mute_duration);
+
+            if end_time > now {
+                // 仍在禁言期，返回剩余时间戳
+                let remain_timestamp = end_time.timestamp();
+                Ok(Json(GetBanStatusResponse {
+                    is_banned: true,
+                    remain: remain_timestamp.to_string(),
+                }))
+            } else {
+                // 禁言已过期
+                Ok(Json(GetBanStatusResponse {
+                    is_banned: false,
+                    remain: "0".to_string(),
+                }))
+            }
+        }
+    } else {
+        // 没有禁言记录
+        Ok(Json(GetBanStatusResponse {
+            is_banned: false,
+            remain: "0".to_string(),
+        }))
+    }
+}
+
+pub async fn ban_member(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<BanningMemberRequest>,
+) -> AppResult<Json<BanningMemberResponse>> {
+    // 1. 从 claims 中获取用户账号
+    let user_account = &claims.sub;
+
+    // 2. 通过账号查找用户信息，获取 uid
+    let user = state.db_pool.find_user_by_account(user_account).await?;
+
+    // 3. 验证操作者是否是群主或管理员
+    let operator_member = state.db_pool.find_member(&payload.gid, &user.uid).await?
+        .ok_or_else(|| AppError::NotGroupMember {
+            uid: user.uid.clone(),
+            gid: payload.gid.clone(),
+        })?;
+
+    // 只有群主和管理员可以禁言
+    match operator_member.role {
+        Role::Owner | Role::Admin => {
+            // 继续处理
+        }
+        Role::Member => {
+            return Err(AppError::InsufficientPermission("只有群主和管理员可以禁言成员".to_string()));
+        }
+    }
+
+    // 4. 验证被禁言用户是否在群中
+    let target_member = state.db_pool.find_member(&payload.gid, &payload.uid).await?
+        .ok_or_else(|| AppError::NotFound(format!("用户 {} 不是该群成员", payload.uid)))?;
+
+    // 5. 检查权限（管理员不能禁言群主）
+    if operator_member.role == Role::Admin && target_member.role == Role::Owner {
+        return Err(AppError::InsufficientPermission("管理员不能禁言群主".to_string()));
+    }
+
+    // 6. 管理员不能禁言其他管理员
+    if operator_member.role == Role::Admin && target_member.role == Role::Admin {
+        return Err(AppError::InsufficientPermission("管理员不能禁言其他管理员".to_string()));
+    }
+
+    // 7. 解析禁言时长
+    let mute_duration = if payload.time == "-1" {
+        -1 // 永久禁言
+    } else {
+        payload.time.parse::<i64>()
+            .map_err(|_| AppError::BadRequest("禁言时长格式错误".to_string()))?
+    };
+
+    // 8. 生成禁言ID
+    let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
+    let ban_id = snowflake.next_id()?.to_string();
+
+    // 9. 创建禁言记录
+    let mute_record = crate::models::entities::MuteRecord {
+        ban_id,
+        gid: payload.gid.clone(),
+        uid: payload.uid.clone(),
+        mute_duration,
+        start_time: Some(chrono::Utc::now().naive_utc()),
+    };
+
+    // 10. 保存禁言记录
+    state.db_pool.add_mute_record(mute_record).await?;
+
+    // 11. 返回成功响应
+    Ok(Json(BanningMemberResponse {}))
+}
+
+pub async fn remove_mute_admin(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<RemoveMuteRequest>,
+) -> AppResult<Json<RemoveMuteResponse>> {
+    // 1. 从 claims 中获取用户账号
+    let user_account = &claims.sub;
+
+    // 2. 通过账号查找用户信息，获取 uid
+    let user = state.db_pool.find_user_by_account(user_account).await?;
+
+    // 3. 验证操作者是否是群主或管理员
+    let operator_member = state.db_pool.find_member(&payload.gid, &user.uid).await?
+        .ok_or_else(|| AppError::NotGroupMember {
+            uid: user.uid.clone(),
+            gid: payload.gid.clone(),
+        })?;
+
+    // 只有群主和管理员可以解除禁言
+    match operator_member.role {
+        Role::Owner | Role::Admin => {
+            // 继续处理
+        }
+        Role::Member => {
+            return Err(AppError::InsufficientPermission("只有群主和管理员可以解除禁言".to_string()));
+        }
+    }
+
+    // 4. 查找目标用户的禁言记录
+    let mute_record = state.db_pool.find_mute_records_by_user(&payload.gid, &payload.uid).await?;
+
+    // 验证是否有禁言记录
+    let mute_record = mute_record
+        .ok_or_else(|| AppError::NotFound(format!("用户 {} 在该群中没有禁言记录", payload.uid)))?;
+
+    // 5. 解除禁言（将 mute_duration 设置为 0）
+    state.db_pool.remove_mute(&mute_record.ban_id).await?;
+
+    // 6. 返回成功响应
+    Ok(Json(RemoveMuteResponse {}))
 }
