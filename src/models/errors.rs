@@ -56,6 +56,10 @@ pub enum AppError {
     PageOutOfRange { page: i64, total_pages: i64 },
     #[error("资源未找到: {0}")]
     NotFound(String),
+    #[error("用户'{uid}'不是群组'{gid}'的成员")]
+    NotGroupMember { uid: String, gid: String },
+    #[error("权限不足: {0}")]
+    InsufficientPermission(String),
     #[error("请求参数错误: {0}")]
     BadRequest(String),
     #[error("权限验证失败: {0}")]
@@ -87,6 +91,8 @@ impl IntoResponse for AppError {
             Self::TaskManagerError(fault) => (StatusCode::INTERNAL_SERVER_ERROR, format!("群聊任务管理发生错误{}", fault), None),
             Self::PageOutOfRange { page, total_pages } => (StatusCode::BAD_REQUEST, format!("分页参数超出范围: 请求页码 {}, 总页数 {}", page, total_pages), None),
             Self::NotFound(msg) => (StatusCode::NOT_FOUND, format!("资源未找到: {}", msg), None),
+            Self::NotGroupMember { uid, gid } => (StatusCode::FORBIDDEN, format!("用户'{}'不是群组'{}'的成员", uid, gid), None),
+            Self::InsufficientPermission(msg) => (StatusCode::FORBIDDEN, format!("权限不足: {}", msg), None),
             Self::BadRequest(msg) => (StatusCode::BAD_REQUEST, format!("请求参数错误: {}", msg), None),
             Self::Forbidden(msg) => (StatusCode::FORBIDDEN, format!("权限验证失败: {}", msg), None),
 

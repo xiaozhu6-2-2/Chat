@@ -97,7 +97,6 @@ impl GroupMessageRepository for MySqlPool {
         ).fetch_all(self).await?;
 
         Ok(find_message)
-
     }
     // 按gid和时间范围查找群聊消息
     async fn find_messages_by_group_and_time_range(&self, gid: &str, start: NaiveDateTime, end: NaiveDateTime) -> AppResult<Vec<GroupMessage>>{
@@ -140,6 +139,28 @@ impl GroupMessageRepository for MySqlPool {
         tx.commit().await?;
 
         Ok(())
+    }
+    //按gid查找查看群公告
+    async fn find_announces_by_group(&self, gid: &str) -> AppResult<Vec<GroupMessage>>{
+
+        let find_message=sqlx::query_as!(
+            GroupMessage,
+            "SELECT 
+                msg_id,
+                gid,
+                content,
+                sender_uid,
+                send_time,
+                is_revoked,
+                type as `msg_type: GroupMsgType`,
+                mentioned_uids,
+                quote_msg_id,
+                is_announcement
+            FROM group_message WHERE gid = ? AND is_announcement = true",
+            gid
+        ).fetch_all(self).await?;
+
+        Ok(find_message)
     }
 //-------------------------消息已读状态管理--------------------------------
     // 标记消息为已读

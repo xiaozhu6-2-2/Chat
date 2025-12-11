@@ -66,12 +66,12 @@ impl GroupChatRepository for MySqlPool {
         Ok(find_group)
     }
 
-    // 按照群名查找群聊
+    // 按照群名查找群聊(模糊搜索)
     async fn find_group_by_name(&self, name: &str) -> AppResult<Vec<GroupChat>>{
         
         let find_group=sqlx::query_as!(
             GroupChat,
-            "SELECT gid,group_name,manager_uid,group_avatar,group_intro,create_time FROM group_chat WHERE group_name = ?",
+            "SELECT gid,group_name,manager_uid,group_avatar,group_intro,create_time FROM group_chat WHERE group_name LIKE ?",
             name
         ).fetch_all(self).await?;
         
@@ -289,11 +289,11 @@ impl GroupChatRepository for MySqlPool {
     }
     // 解除禁言
     async fn remove_mute(&self, ban_id: &str) -> AppResult<()>{
-        
+
         let mut tx=self.begin().await?;
 
         sqlx::query!(
-            "DELETE FROM mute_record WHERE ban_id = ?",
+            "UPDATE mute_record SET mute_duration = 0 WHERE ban_id = ?",
             ban_id
         ).execute(&mut *tx).await?;
 
@@ -379,7 +379,7 @@ impl GroupChatRepository for MySqlPool {
                 apply_text,
                 create_time,
                 handle_time 
-            FROM group_join_request WHERE gid = ?",
+            FROM group_join_request WHERE gid = ? AND status = 'pending'",
             gid
         ).fetch_all(self).await?;
 

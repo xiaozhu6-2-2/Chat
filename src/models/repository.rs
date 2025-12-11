@@ -132,6 +132,8 @@ pub trait GroupMessageRepository: Send + Sync {
     async fn find_messages_by_group_and_time_range(&self, gid: &str, start: NaiveDateTime, end: NaiveDateTime) -> AppResult<Vec<GroupMessage>>;
     // 标记消息为已撤回
     async fn mark_message_as_revoked(&self, msg_id: &str) -> AppResult<()>;
+    //按gid查找查看群公告
+    async fn find_announces_by_group(&self, gid: &str) -> AppResult<Vec<GroupMessage>>;
 //-------------------------消息已读状态管理--------------------------------
     // 标记消息为已读
     async fn mark_message_as_read(&self, msg_id: &str, gid: &str, uid: &str) -> AppResult<()>;

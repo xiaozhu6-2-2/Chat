@@ -108,19 +108,139 @@ pub struct UpdateFriendBlacklistRequest {
 // 搜索群组请求模型
 #[derive(Deserialize, Serialize)]
 pub struct SearchGroupRequest {
-
+    pub query: String,
+    pub limit: i64,
+    pub offset: i64,
 }
 
-// 群组资料请求模型
+// 群组名片请求模型
+#[derive(Deserialize, Serialize)]
+pub struct GroupCardRequest {
+    pub gid: String,
+}
+
+// 创建群组请求模型
+#[derive(Deserialize, Serialize)]
+pub struct CreateGroupRequest {
+    pub group_name: String,          // 必填
+    pub avatar: Option<String>,      // 可选
+    pub group_intro: Option<String>, // 可选
+}
+
+//群组信息请求模型
 #[derive(Deserialize, Serialize)]
 pub struct GroupProfileRequest {
-
+    pub gid: String,
 }
 
 // 群组列表请求模型
 #[derive(Deserialize, Serialize)]
-pub struct GroupListRequest {
+pub struct GroupListRequest;
 
+//发送加入群聊申请请求模型
+#[derive(Deserialize, Serialize)]
+pub struct GroupRequestRequest {
+    pub gid: String,
+    pub apply_text: String,
+}
+
+// 获取群聊申请列表请求模型
+#[derive(Deserialize, Serialize)]
+pub struct GroupRequestListRequest {
+    pub gid: String,
+}
+
+// 处理群聊申请请求模型
+#[derive(Deserialize, Serialize)]
+pub struct GroupRespondRequest {
+    pub req_id: String,
+    pub action: String,  // "accept" 或 "reject"
+}
+
+// 退出群聊请求模型
+#[derive(Deserialize, Serialize)]
+pub struct LeaveGroupRequest {
+    pub gid: String,
+}
+
+// 踢出群成员请求模型
+#[derive(Deserialize, Serialize)]
+pub struct KickMemberRequest {
+    pub gid: String,          // 群组ID
+    pub uid: String,          // 被踢出的群员ID
+    pub approver_uid: String,  // 执行踢人的管理员ID
+}
+
+// 解散群聊请求模型
+#[derive(Deserialize, Serialize)]
+pub struct DisbandGroupRequest {
+    pub gid: String,  // 群组ID
+}
+
+// 群成员设置请求模型
+#[derive(Deserialize, Serialize)]
+pub struct MemberSettingRequest {
+    pub gid: String,           // 群组ID
+    pub do_not_disturb: bool,  // 是否免打扰
+    pub is_pinned: bool,       // 是否置顶
+    pub remark: String,        // 备注
+    pub nickname: String,      // 群昵称
+}
+
+// 修改群聊设置请求模型
+#[derive(Deserialize, Serialize)]
+pub struct SettingGroupRequest {
+    pub gid: String,            // 群组ID
+    pub group_name: String,     // 群名称
+    pub group_avater: String,   // 群头像URL
+    pub group_intro: String,    // 群简介
+}
+
+// 获取群公告请求模型
+#[derive(Deserialize, Serialize)]
+pub struct GetAnnouncementsRequest {
+    pub gid: String,         // 群组ID
+}
+
+// 获取群成员列表请求模型
+#[derive(Deserialize, Serialize)]
+pub struct GetMembersRequest {
+    pub gid: String,         // 群组ID
+}
+
+// 转让群主请求模型
+#[derive(Deserialize, Serialize)]
+pub struct TransferOwnershipRequest {
+    pub gid: String,         // 群组ID
+    pub uid: String,         // 被转让者uid
+}
+
+// 设置管理员请求模型
+#[derive(Deserialize, Serialize)]
+pub struct SettingAdminRequest {
+    pub gid: String,         // 群组ID
+    pub uid: String,         // 要设置为管理员的用户uid
+}
+
+// 获取禁言状态请求模型
+#[derive(Deserialize, Serialize)]
+pub struct GetBanStatusRequest {
+    pub gid: String,         // 群组ID
+}
+
+// 禁言成员请求模型
+#[derive(Deserialize, Serialize)]
+pub struct BanningMemberRequest {
+    pub gid: String,         // 群组ID
+    pub uid: String,         // 被禁言的群成员ID
+    pub time: String,        // 禁言时长（秒），-1表示永久禁言
+}
+
+// 解除禁言请求模型
+#[derive(Deserialize, Serialize)]
+pub struct RemoveMuteRequest {
+    pub gid: String,         // 群组ID
+    pub uid: String,         // 被解除禁言的群成员ID
 }
 
 // 聊天列表请求模型
