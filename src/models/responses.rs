@@ -175,10 +175,6 @@ pub struct UpdateFriendBlacklistResponse {
 #[derive(Serialize, Deserialize)]
 pub struct CreateGroupResponse {
     pub gid: String,
-    pub groupname: String,
-    pub manager_uid: String,
-    pub avatar: String,
-    pub groupintro: String,
     pub created_at: String,
 }
 
@@ -246,10 +242,8 @@ pub struct GroupListResponse {
 // 发送群聊申请响应模型
 #[derive(Serialize, Deserialize)]
 pub struct GroupRequestResponse {
-    pub success: bool,
     pub req_id: String,
     pub gid: String,
-    pub sender_uid: String,
     pub apply_text: String,
     pub create_time: String,
     pub status: String,
@@ -273,40 +267,40 @@ pub struct GroupRequestListResponse {
     pub total: i64,
 }
 
-// 处理群聊申请响应模型（仅返回状态码，不返回具体内容）
-pub type GroupRespondResponse = ();
+// 处理群聊申请响应模型
+#[derive(Serialize, Deserialize)]
+pub struct GroupRespondResponse {
+    pub success: bool,
+}
 
 // 退出群聊响应模型
 #[derive(Serialize, Deserialize)]
 pub struct LeaveGroupResponse {
     pub success: bool,
-    pub message: String,
 }
 
 // 踢出群成员响应模型
 #[derive(Serialize, Deserialize)]
 pub struct KickMemberResponse {
-    pub message: String,
+    // 空结构体，只返回成功状态
 }
 
 // 解散群聊响应模型
 #[derive(Serialize, Deserialize)]
 pub struct DisbandGroupResponse {
     pub success: bool,
-    pub message: String,
 }
 
 // 群成员设置响应模型
 #[derive(Serialize, Deserialize)]
 pub struct MemberSettingResponse {
     pub success: bool,
-    pub message: String,
 }
 
 // 修改群聊设置响应模型
 #[derive(Serialize, Deserialize)]
 pub struct SettingGourpResponse {
-    pub message: String,
+    // 空结构体，只返回成功状态
 }
 
 // 群公告项模型
@@ -347,33 +341,32 @@ pub struct GetMembersResponse {
 // 转让群主响应模型
 #[derive(Serialize, Deserialize)]
 pub struct TransferOwnershipResponse {
-    pub message: String,       // 操作结果消息
+    pub success: bool,
 }
 
 // 设置管理员响应模型
 #[derive(Serialize, Deserialize)]
 pub struct SettingAdminResponse {
-    // 可以添加响应字段，如果需要的话
-    // 目前为空响应体
+    pub success: bool,
 }
 
 // 获取禁言状态响应模型
 #[derive(Serialize, Deserialize)]
 pub struct GetBanStatusResponse {
     pub is_banned: bool,       // 是否被禁言
-    pub remain: String,        // 剩余时间戳（如果未禁言则为空）
+    pub expired: String,        // 剩余时间戳（如果未禁言则为空）
 }
 
 // 禁言成员响应模型
 #[derive(Serialize, Deserialize)]
 pub struct BanningMemberResponse {
-    // 空响应体，成功时返回200 OK
+    pub success: bool,
 }
 
 // 解除禁言响应模型
 #[derive(Serialize, Deserialize)]
 pub struct RemoveMuteResponse {
-    // 空响应体，成功时返回200 OK
+    pub success: bool,
 }
 
 // 聊天类型枚举

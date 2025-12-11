@@ -24,9 +24,8 @@ pub async fn create_group(
     let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
     let gid = snowflake.next_id()?.to_string();
 
-    // 解析创建时间
-    let created_at = chrono::NaiveDateTime::parse_from_str(&payload.created_at, "%Y-%m-%d %H:%M:%S")
-        .map_err(|_| AppError::BadRequest("Invalid created_at format. Use YYYY-MM-DD HH:MM:SS".to_string()))?;
+    // 获取当前时间
+    let now = chrono::Utc::now().naive_utc();
 
     // 创建群组实体
     let group = crate::models::entities::GroupChat {
@@ -35,7 +34,7 @@ pub async fn create_group(
         manager_uid: user.uid.clone(),
         group_avatar: payload.avatar.clone(),
         group_intro: payload.group_intro.clone(),
-        create_time: Some(created_at),
+        create_time: Some(now),
     };
 
     // 保存群组到数据库
@@ -48,7 +47,7 @@ pub async fn create_group(
         role: crate::models::entities::Role::Owner,
         nickname: None,
         level: Some(1),
-        join_time: Some(created_at),
+        join_time: Some(now),
         do_not_disturb: Some(0),
         group_by: None,
         remark: None,
@@ -61,11 +60,7 @@ pub async fn create_group(
     // 返回响应
     Ok(Json(CreateGroupResponse {
         gid,
-        groupname: payload.group_name,
-        manager_uid: user.uid,
-        avatar: payload.avatar.unwrap_or_default(),
-        groupintro: payload.group_intro.unwrap_or_default(),
-        created_at: payload.created_at,
+        created_at: now.format("%Y-%m-%d %H:%M:%S").to_string(),
     }))
 }
 
@@ -74,9 +69,14 @@ pub async fn search_group(
     Extension(_claims): Extension<Claims>,
     Json(payload): Json<SearchGroupRequest>,
 ) -> AppResult<Json<SearchGroupResponse>> {
-    // 处理分页参数
-    let limit = if payload.limit > 0 { payload.limit } else { 20 }; // 默认每页20条
-    let offset = if payload.offset >= 0 { payload.offset } else { 0 }; // 默认第0页
+    // 验证分页参数
+    if payload.offset < 0 || payload.limit <= 0 || payload.limit > 100 {
+        return Err(AppError::BadRequest("请求参数错误".to_string()));
+    }
+
+    // 设置分页参数
+    let limit = payload.limit;
+    let offset = payload.offset;
 
     let search_results = if payload.query.is_empty() {
         // 如果查询为空，返回空结果
@@ -288,9 +288,8 @@ pub async fn send_group_request(
         }
     }
 
-    // 4. 解析创建时间
-    let create_time = chrono::NaiveDateTime::parse_from_str(&payload.create_time, "%Y-%m-%d %H:%M:%S")
-        .map_err(|_| AppError::BadRequest("Invalid create_time format. Use YYYY-MM-DD HH:MM:SS".to_string()))?;
+    // 4. 获取当前时间
+    let now = chrono::Utc::now().naive_utc();
 
     // 5. 生成申请ID
     let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
@@ -304,7 +303,7 @@ pub async fn send_group_request(
         approver_uid: None,
         status: ReqStatus::Pending,
         apply_text: Some(payload.apply_text.clone()),
-        create_time: Some(create_time),
+        create_time: Some(now),
         handle_time: None,
     };
 
@@ -313,12 +312,10 @@ pub async fn send_group_request(
 
     // 8. 构建响应
     Ok(Json(GroupRequestResponse {
-        success: true,
         req_id,
         gid: payload.gid,
-        sender_uid: user.uid,
         apply_text: payload.apply_text,
-        create_time: payload.create_time,
+        create_time: now.format("%Y-%m-%d %H:%M:%S").to_string(),
         status: "pending".to_string(),
     }))
 }
@@ -410,16 +407,15 @@ pub async fn handle_group_request(
         _ => return Err(AppError::BadRequest("无效的action参数,必须是 'accept' 或 'reject'".to_string())),
     };
 
-    // 6. 解析处理时间
-    let handle_time = chrono::NaiveDateTime::parse_from_str(&payload.handle_time, "%Y-%m-%d %H:%M:%S")
-        .map_err(|_| AppError::BadRequest("Invalid handle_time format. Use YYYY-MM-DD HH:MM:SS".to_string()))?;
+    // 6. 获取当前时间
+    let now = chrono::Utc::now().naive_utc();
 
     // 7. 更新申请状态
     state.db_pool.update_request_status(
         &payload.req_id,
         Some(status).to_optional_string().unwrap_or_default().as_str(),
         &user.uid,
-        handle_time
+        now
     ).await?;
 
     // 8. 如果是接受申请，将用户加入群组
@@ -430,7 +426,7 @@ pub async fn handle_group_request(
             role: crate::models::entities::Role::Member,
             nickname: None,
             level: Some(1),
-            join_time: Some(handle_time),
+            join_time: Some(now),
             do_not_disturb: Some(0),
             group_by: None,
             remark: None,
@@ -441,26 +437,34 @@ pub async fn handle_group_request(
     }
 
     // 9. 返回成功响应（空响应体，只返回状态码）
-    Ok(Json(()))
+    Ok(Json(GroupRespondResponse {
+        success: true,
+    }))
 }
 
 pub async fn leave_group(
     State(state): State<AppState>,
-    Extension(_claims): Extension<Claims>,
+    Extension(claims): Extension<Claims>,
     Json(payload): Json<LeaveGroupRequest>,
 ) -> AppResult<Json<LeaveGroupResponse>> {
-    // 1. 验证群组是否存在
+    // 1. 从 claims 中获取用户账号
+    let user_account = &claims.sub;
+
+    // 2. 通过账号查找用户信息，获取 uid
+    let user = state.db_pool.find_user_by_account(user_account).await?;
+
+    // 3. 验证群组是否存在
     let group = state.db_pool.find_group_by_gid(&payload.gid).await?
         .ok_or_else(|| AppError::NotFound(format!("群组{}不存在", payload.gid)))?;
 
-    // 2. 查找用户在群组中的成员信息
-    let member = state.db_pool.find_member(&payload.gid, &payload.uid).await?
+    // 4. 查找用户在群组中的成员信息
+    let member = state.db_pool.find_member(&payload.gid, &user.uid).await?
         .ok_or_else(|| AppError::NotGroupMember {
-            uid: payload.uid.clone(),
+            uid: user.uid.clone(),
             gid: payload.gid.clone(),
         })?;
 
-    // 3. 检查用户角色
+    // 5. 检查用户角色
     match member.role {
         crate::models::entities::Role::Owner => {
             // 群主不能直接退出群组
@@ -473,13 +477,12 @@ pub async fn leave_group(
         }
     }
 
-    // 4. 删除成员记录
-    state.db_pool.remove_member(&payload.gid, &payload.uid).await?;
+    // 6. 删除成员记录
+    state.db_pool.remove_member(&payload.gid, &user.uid).await?;
 
-    // 5. 返回成功响应
+    // 7. 返回成功响应
     Ok(Json(LeaveGroupResponse {
         success: true,
-        message: "成功退出群组".to_string(),
     }))
 }
 
@@ -536,9 +539,7 @@ pub async fn kick_member(
     state.db_pool.remove_member(&payload.gid, &payload.uid).await?;
 
     // 7. 返回响应
-    Ok(Json(KickMemberResponse {
-        message: format!("{}被{}踢出群聊", payload.uid, payload.approver_uid),
-    }))
+    Ok(Json(KickMemberResponse {}))
 }
 
 pub async fn disband_group(
@@ -567,7 +568,6 @@ pub async fn disband_group(
     // 7. 返回成功响应
     Ok(Json(DisbandGroupResponse {
         success: true,
-        message: "群聊解散成功".to_string(),
     }))
 }
 
@@ -618,7 +618,6 @@ pub async fn member_set(
     // 6. 返回成功响应
     Ok(Json(MemberSettingResponse {
         success: true,
-        message: "成员设置更新成功".to_string(),
     }))
 }
 
@@ -627,23 +626,18 @@ pub async fn set_group(
     Extension(claims): Extension<Claims>,
     Json(payload): Json<SettingGroupRequest>,
 ) -> AppResult<Json<SettingGourpResponse>> {
-    // 1. 验证修改者身份（从 claims 获取账号，然后转换为 uid）
+    // 1. 从 claims 中获取用户账号
     let user_account = &claims.sub;
     let user = state.db_pool.find_user_by_account(user_account).await?;
-
-    // 验证请求中的 uid 是否与当前用户一致
-    if user.uid != payload.uid {
-        return Err(AppError::BadRequest("无权限修改群聊信息".to_string()));
-    }
 
     // 2. 查找群聊是否存在
     let group = state.db_pool.find_group_by_gid(&payload.gid).await?;
     let group = group.ok_or_else(|| AppError::NotFound(format!("群聊 {} 不存在", payload.gid)))?;
 
     // 3. 查找用户在群中的角色
-    let member = state.db_pool.find_member(&payload.gid, &payload.uid).await?;
+    let member = state.db_pool.find_member(&payload.gid, &user.uid).await?;
     let member = member.ok_or_else(|| AppError::NotGroupMember {
-        uid: payload.uid.clone(),
+        uid: user.uid.clone(),
         gid: payload.gid.clone(),
     })?;
 
@@ -691,16 +685,8 @@ pub async fn set_group(
 
     state.db_pool.save_group(updated_group).await?;
 
-    // 7. 查找用户信息用于返回消息
-    let modifier_name = match state.db_pool.find_user_by_uid(&payload.uid).await {
-        Ok(user) => user.username,
-        Err(_) => "未知用户".to_string(),
-    };
-
-    // 8. 返回成功响应
-    Ok(Json(SettingGourpResponse {
-        message: format!("{}修改了群聊信息", modifier_name),
-    }))
+    // 7. 返回成功响应
+    Ok(Json(SettingGourpResponse {}))
 }
 
 pub async fn get_announcements(
@@ -907,20 +893,9 @@ pub async fn transfer_ownership(
     // 提交事务
     tx.commit().await?;
 
-    // 8. 查找用户名用于返回消息
-    let manager_name = match state.db_pool.find_user_by_uid(&user.uid).await {
-        Ok(user) => user.username,
-        Err(_) => "原群主".to_string(),
-    };
-
-    let target_name = match state.db_pool.find_user_by_uid(&payload.uid).await {
-        Ok(user) => user.username,
-        Err(_) => "新群主".to_string(),
-    };
-
-    // 9. 返回成功响应
+    // 8. 返回成功响应
     Ok(Json(TransferOwnershipResponse {
-        message: format!("{}转让群主给{}", manager_name, target_name),
+        success: true,
     }))
 }
 
@@ -975,7 +950,9 @@ pub async fn set_admin(
     tx.commit().await?;
 
     // 9. 返回成功响应
-    Ok(Json(SettingAdminResponse {}))
+    Ok(Json(SettingAdminResponse {
+        success: true,
+    }))
 }
 
 pub async fn get_ban_status(
@@ -1004,13 +981,13 @@ pub async fn get_ban_status(
         if record.mute_duration == -1 {
             Ok(Json(GetBanStatusResponse {
                 is_banned: true,
-                remain: "-1".to_string(),
+                expired: "-1".to_string(),
             }))
         } else if record.mute_duration == 0 {
             // 0 表示未禁言
             Ok(Json(GetBanStatusResponse {
                 is_banned: false,
-                remain: "0".to_string(),
+                expired: "0".to_string(),
             }))
         } else {
             // 计算结束时间
@@ -1021,13 +998,13 @@ pub async fn get_ban_status(
                 let remain_timestamp = end_time.timestamp();
                 Ok(Json(GetBanStatusResponse {
                     is_banned: true,
-                    remain: remain_timestamp.to_string(),
+                    expired: remain_timestamp.to_string(),
                 }))
             } else {
                 // 禁言已过期
                 Ok(Json(GetBanStatusResponse {
                     is_banned: false,
-                    remain: "0".to_string(),
+                    expired: "0".to_string(),
                 }))
             }
         }
@@ -1035,7 +1012,7 @@ pub async fn get_ban_status(
         // 没有禁言记录
         Ok(Json(GetBanStatusResponse {
             is_banned: false,
-            remain: "0".to_string(),
+            expired: "0".to_string(),
         }))
     }
 }
@@ -1107,7 +1084,9 @@ pub async fn ban_member(
     state.db_pool.add_mute_record(mute_record).await?;
 
     // 11. 返回成功响应
-    Ok(Json(BanningMemberResponse {}))
+    Ok(Json(BanningMemberResponse {
+        success: true,
+    }))
 }
 
 pub async fn remove_mute_admin(
@@ -1149,5 +1128,7 @@ pub async fn remove_mute_admin(
     state.db_pool.remove_mute(&mute_record.ban_id).await?;
 
     // 6. 返回成功响应
-    Ok(Json(RemoveMuteResponse {}))
+    Ok(Json(RemoveMuteResponse {
+        success: true,
+    }))
 }

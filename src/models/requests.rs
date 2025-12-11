@@ -124,7 +124,6 @@ pub struct GroupCardRequest {
 pub struct CreateGroupRequest {
     pub group_name: String,          // 必填
     pub avatar: Option<String>,      // 可选
-    pub created_at: String,
     pub group_intro: Option<String>, // 可选
 }
 
@@ -142,9 +141,7 @@ pub struct GroupListRequest;
 #[derive(Deserialize, Serialize)]
 pub struct GroupRequestRequest {
     pub gid: String,
-    pub uid: String,
     pub apply_text: String,
-    pub create_time: String,
 }
 
 // 获取群聊申请列表请求模型
@@ -158,14 +155,12 @@ pub struct GroupRequestListRequest {
 pub struct GroupRespondRequest {
     pub req_id: String,
     pub action: String,  // "accept" 或 "reject"
-    pub handle_time: String,
 }
 
 // 退出群聊请求模型
 #[derive(Deserialize, Serialize)]
 pub struct LeaveGroupRequest {
     pub gid: String,
-    pub uid: String,
 }
 
 // 踢出群成员请求模型
@@ -199,7 +194,6 @@ pub struct SettingGroupRequest {
     pub group_name: String,     // 群名称
     pub group_avater: String,   // 群头像URL
     pub group_intro: String,    // 群简介
-    pub uid: String,            // 修改者uid
 }
 
 // 获取群公告请求模型
