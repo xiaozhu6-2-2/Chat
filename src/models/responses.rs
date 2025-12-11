@@ -111,7 +111,6 @@ pub struct FriendItem {
 // 好友列表响应模型
 #[derive(Serialize, Deserialize)]
 pub struct FriendListResponse {
-    pub total: i64,
     pub friends: Vec<FriendItem>,
     pub blacklist: Vec<FriendItem>,
 }

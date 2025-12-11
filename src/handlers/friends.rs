@@ -272,7 +272,6 @@ pub async fn get_friend_list(
 
     // 7. 构建并返回响应
     let response = FriendListResponse {
-        total: (friends.len() + blacklist.len()) as i64,
         friends,
         blacklist,
     };
