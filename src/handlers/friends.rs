@@ -15,9 +15,22 @@ pub async fn search_user(
     Extension(_claims): Extension<Claims>,
     Json(payload): Json<SearchUserRequest>,
 ) -> AppResult<Json<SearchUserResponse>> {
+    // 验证分页参数
+    if payload.limit < 0 {
+        return Err(crate::models::errors::AppError::BadRequest(
+            "Limit cannot be negative".to_string()
+        ));
+    }
+
+    if payload.offset < 0 {
+        return Err(crate::models::errors::AppError::BadRequest(
+            "Offset cannot be negative".to_string()
+        ));
+    }
+
     // 处理分页参数
     let limit = if payload.limit > 0 { payload.limit } else { 20 }; // 默认每页20条
-    let offset = if payload.offset >= 0 { payload.offset } else { 0 }; // 默认第0页
+    let offset = payload.offset; // 默认第0页
 
     let search_results = if payload.query.is_empty() {
         // 如果查询为空，返回空结果
@@ -259,7 +272,6 @@ pub async fn get_friend_list(
 
     // 7. 构建并返回响应
     let response = FriendListResponse {
-        total: (friends.len() + blacklist.len()) as i64,
         friends,
         blacklist,
     };
