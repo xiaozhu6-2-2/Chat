@@ -2,7 +2,7 @@
 use async_trait::async_trait;
 use bb8_redis::RedisConnectionManager;
 use bb8_redis::bb8::Pool;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::models::{entities::{FriendRequest, Friends, GroupChat, GroupJoinRequest, GroupMember, GroupMessage, MuteRecord, PrivateChat, PrivateMessage, User, UserOnline, FileInfo, FileReference, FileAssociation, FilePrivalege, ReferenceType, AssociationType, FileStatus}, errors::AppResult};
@@ -20,7 +20,7 @@ pub trait UserRepository: Send + Sync {
     // 根据地区查找用户
     async fn find_user_by_region(&self, region: &str) -> AppResult<Vec<User>>;
     // 根据创建时间查找用户
-    async fn find_user_by_create_time_range(&self, start:NaiveDateTime, end:NaiveDateTime) -> AppResult<Vec<User>>;
+    async fn find_user_by_create_time_range(&self, start:DateTime<Utc>, end:DateTime<Utc>) -> AppResult<Vec<User>>;
     // 插入用户
     async fn insert_user(&self, user: User) -> AppResult<()>;
     // 保存用户更改
@@ -65,7 +65,7 @@ pub trait FriendshipRepository: Send + Sync {
     async fn find_friend_request_by_sender(&self, sender_uid: &str) -> AppResult<Vec<FriendRequest>>;
 
     // 更新好友申请状态
-    async fn update_request_status(&self, req_id: &str, status: &str, handle_time: NaiveDateTime) -> AppResult<()>;
+    async fn update_request_status(&self, req_id: &str, status: &str, handle_time: DateTime<Utc>) -> AppResult<()>;
 
 }
 
@@ -116,7 +116,7 @@ pub trait GroupChatRepository: Send + Sync {
     // 查找群聊未处理申请
     async fn find_pending_requests_by_group(&self, gid: &str) -> AppResult<Vec<GroupJoinRequest>>;
     // 更新群聊申请状态
-    async fn update_request_status(&self, req_id: &str, status: &str, approver_uid: &str, handle_time: NaiveDateTime) -> AppResult<()>;
+    async fn update_request_status(&self, req_id: &str, status: &str, approver_uid: &str, handle_time: DateTime<Utc>) -> AppResult<()>;
 }
 
 // 群聊消息聚合根
@@ -130,7 +130,7 @@ pub trait GroupMessageRepository: Send + Sync {
     // 按gid查找群聊消息
     async fn find_messages_by_group(&self, gid: &str) -> AppResult<Vec<GroupMessage>>;
     // 按gid和时间范围查找群聊消息
-    async fn find_messages_by_group_and_time_range(&self, gid: &str, start: NaiveDateTime, end: NaiveDateTime) -> AppResult<Vec<GroupMessage>>;
+    async fn find_messages_by_group_and_time_range(&self, gid: &str, start: DateTime<Utc>, end: DateTime<Utc>) -> AppResult<Vec<GroupMessage>>;
     // 按gid分页查找群聊消息
     async fn find_messages_by_group_with_pagination(&self, gid: &str, limit: i64, offset: i64) -> AppResult<Vec<GroupMessage>>;
     // 获取群聊消息总数
@@ -155,7 +155,7 @@ pub trait GroupMessageRepository: Send + Sync {
     // 查找群聊的最新消息
     async fn find_latest_message_by_group(&self, gid: &str) -> AppResult<Option<GroupMessage>>;
     // 批量标记群聊消息为已读
-    async fn mark_messages_as_read_by_group_and_time(&self, gid: &str, uid: &str, timestamp: chrono::NaiveDateTime) -> AppResult<u64>;
+    async fn mark_messages_as_read_by_group_and_time(&self, gid: &str, uid: &str, timestamp: DateTime<Utc>) -> AppResult<u64>;
 }
 
 // 私聊会话聚合根
@@ -192,7 +192,7 @@ pub trait PrivateChatRepository: Send + Sync {
     // 获取私聊会话的消息总数
     async fn get_message_count_by_chat(&self, pid: &str) -> AppResult<i64>;
     // 批量标记私聊消息为已读
-    async fn mark_messages_as_read_by_chat_and_time(&self, pid: &str, uid: &str, timestamp: chrono::NaiveDateTime) -> AppResult<u64>;
+    async fn mark_messages_as_read_by_chat_and_time(&self, pid: &str, uid: &str, timestamp: DateTime<Utc>) -> AppResult<u64>;
 }
 
 // 在线状态聚合根

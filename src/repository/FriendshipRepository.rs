@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use sqlx::MySqlPool;
 use async_trait::async_trait;
 
@@ -275,7 +275,7 @@ impl FriendshipRepository for MySqlPool {
     }
 
     // 更新好友申请状态
-    async fn update_request_status(&self, req_id: &str, status: &str, handle_time: NaiveDateTime) -> AppResult<()> {
+    async fn update_request_status(&self, req_id: &str, status: &str, handle_time: DateTime<Utc>) -> AppResult<()> {
         // 事务
         let mut tx = self.begin().await?;
 

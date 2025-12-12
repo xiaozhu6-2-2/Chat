@@ -21,7 +21,7 @@ pub async fn get_user_info(
         gender: user.gender.to_optional_string(),  // 使用新的转换方法
         region: user.region,
         email: user.email,
-        create_time: user.create_time,
+        create_time: user.create_time.map(|dt| dt.timestamp()),
         avatar: user.avatar,
         bio: user.bio,
     }))

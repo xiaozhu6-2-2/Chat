@@ -171,7 +171,7 @@ pub async fn get_group_card(
         manager_uid: group.manager_uid,
         avatar: group.group_avatar,
         group_intro: group.group_intro,
-        created_at: group.create_time,
+        created_at: group.create_time.map(|dt| dt.timestamp()),
     }))
 }
 
@@ -218,8 +218,8 @@ pub async fn get_group_profile(
         remark: member_info.remark,
         nickname: member_info.nickname,
         join_time: member_info.join_time
-            .map(|dt| dt.to_string())
-            .unwrap_or_default(),
+            .map(|dt| dt.timestamp())
+            .unwrap_or(0),
     }))
 }
 
@@ -292,7 +292,7 @@ pub async fn send_group_request(
     }
 
     // 4. 获取当前时间
-    let now = chrono::Utc::now().naive_utc();
+    let now = chrono::Utc::now();
 
     // 5. 生成申请ID
     let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
@@ -318,7 +318,7 @@ pub async fn send_group_request(
         req_id,
         gid: payload.gid,
         apply_text: payload.apply_text,
-        create_time: now.format("%Y-%m-%d %H:%M:%S").to_string(),
+        create_time: now.timestamp(),
         status: "pending".to_string(),
     }))
 }
@@ -367,8 +367,8 @@ pub async fn get_group_requestlist(
             sender_uid: req.applicant_uid,
             apply_text: req.apply_text,
             create_time: req.create_time
-                .map(|dt| dt.to_string())
-                .unwrap_or_default(),
+                .map(|dt| dt.timestamp())
+                .unwrap_or(0),
             status: Some(req.status).to_optional_string().unwrap_or_default(),
         })
         .collect();
@@ -411,7 +411,7 @@ pub async fn handle_group_request(
     };
 
     // 6. 获取当前时间
-    let now = chrono::Utc::now().naive_utc();
+    let now = chrono::Utc::now();
 
     // 7. 更新申请状态
     state.db_pool.update_request_status(
@@ -740,7 +740,7 @@ pub async fn get_announcements(
                 msg_id: msg.msg_id,
                 content: msg.content,
                 sender_uid: msg.sender_uid,
-                send_time: msg.send_time.map(|t| t.to_string()).unwrap_or_default(),
+                send_time: msg.send_time.map(|t| t.timestamp()).unwrap_or(0),
                 mentioned_uids,
                 quote_msg_id: msg.quote_msg_id.unwrap_or_default(),
             }
@@ -975,7 +975,7 @@ pub async fn get_ban_status(
     // 4. 判断是否被禁言
     if let Some(record) = mute_record {
         // 检查禁言是否已过期
-        let now = chrono::Utc::now().naive_utc();
+        let now = chrono::Utc::now();
 
         // 获取开始时间，如果不存在则使用当前时间
         let start_time = record.start_time.unwrap_or(now);
@@ -1063,12 +1063,7 @@ pub async fn ban_member(
     }
 
     // 7. 解析禁言时长
-    let mute_duration = if payload.time == "-1" {
-        -1 // 永久禁言
-    } else {
-        payload.time.parse::<i64>()
-            .map_err(|_| AppError::BadRequest("禁言时长格式错误".to_string()))?
-    };
+    let mute_duration = payload.time;
 
     // 8. 生成禁言ID
     let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
@@ -1080,7 +1075,7 @@ pub async fn ban_member(
         gid: payload.gid.clone(),
         uid: payload.uid.clone(),
         mute_duration,
-        start_time: Some(chrono::Utc::now().naive_utc()),
+        start_time: Some(chrono::Utc::now()),
     };
 
     // 10. 保存禁言记录

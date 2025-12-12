@@ -1,5 +1,6 @@
 use sqlx::MySqlPool;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 
 use crate::models::errors::AppResult;
 use crate::models::repository::PrivateChatRepository;
@@ -343,7 +344,7 @@ impl PrivateChatRepository for MySqlPool {
     }
 
     // 批量标记私聊消息为已读
-    async fn mark_messages_as_read_by_chat_and_time(&self, pid: &str, uid: &str, timestamp: chrono::NaiveDateTime) -> AppResult<u64> {
+    async fn mark_messages_as_read_by_chat_and_time(&self, pid: &str, uid: &str, timestamp: DateTime<Utc>) -> AppResult<u64> {
         let mut tx = self.begin().await?;
 
         let result = sqlx::query!(

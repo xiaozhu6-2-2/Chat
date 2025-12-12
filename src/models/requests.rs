@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+// 不再需要 chrono 导入，使用 i64 时间戳
 // src/models.rs
 // 库模块导入
 use serde::{Deserialize, Serialize};
@@ -67,7 +67,7 @@ pub struct FriendProfileRequest {
 pub struct FriendRequestRequest {
     pub receiver_id: String,// 接收者id
     pub message: String,// 申请消息
-    pub create_time: NaiveDateTime,// 好友请求创建时间
+    pub create_time: i64,// 好友请求创建时间（时间戳）
 }
 
 // 回复好友请求请求模型
@@ -75,7 +75,7 @@ pub struct FriendRequestRequest {
 pub struct RespondFriendRequestRequest {
     pub req_id: String,      // 好友请求ID
     pub action: String,      // 操作类型: "accept" 或 "reject"
-    pub handle_time: String, // 处理时间戳
+    pub handle_time: i64, // 处理时间戳
 }
 
 // 好友请求列表请求模型
@@ -233,7 +233,7 @@ pub struct GetBanStatusRequest {
 pub struct BanningMemberRequest {
     pub gid: String,         // 群组ID
     pub uid: String,         // 被禁言的群成员ID
-    pub time: String,        // 禁言时长（秒），-1表示永久禁言
+    pub time: i64,        // 禁言时长（秒），-1表示永久禁言
 }
 
 // 解除禁言请求模型
@@ -283,7 +283,7 @@ pub struct ReadRequest {
     pub chat_id: String,
     #[serde(rename = "type")]
     pub chat_type: String,
-    pub timestamp: String,
+    pub timestamp: i64,
 }
 
 // 获取群聊已读状态请求模型

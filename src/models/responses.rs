@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+// 不再需要 chrono 导入，使用 i64 时间戳
 // src/models.rs
 // 库模块导入
 use serde::{Deserialize, Serialize};
@@ -33,7 +33,7 @@ pub struct UserInfoResponse {
     pub gender: Option<String>,        
     pub region: Option<String>,        
     pub email: Option<String>,         
-    pub create_time: Option<NaiveDateTime>,  
+    pub create_time: Option<i64>,  
     pub avatar: Option<String>,        
     pub bio: Option<String>,         
 }
@@ -86,7 +86,7 @@ pub struct FriendProfileResponse {
     pub remark: String,// 对好友的备注
     pub group_by: String,// 对好友的分组
     pub is_blacklisted: bool,// 对好友的黑名单状态
-    pub created_at: Option<NaiveDateTime>,// 好友账号的创建时间
+    pub created_at: Option<i64>,// 好友账号的创建时间
     pub bio: Option<String>,// 好友的简介
     pub avatar: Option<String>,// 好友的头像
     pub gender: Option<String>,// 好友的性别
@@ -103,7 +103,7 @@ pub struct FriendItem {
     pub remark: String,
     pub group_by: String,
     pub is_blacklisted: bool,
-    pub created_at: Option<NaiveDateTime>,
+    pub created_at: Option<i64>,
     pub bio: Option<String>,
     pub avatar: Option<String>,
 }
@@ -122,7 +122,7 @@ pub struct FriendRequestResponse {
     pub sender_uid: String,
     pub receiver_uid: String,
     pub apply_text: Option<String>,
-    pub create_time: String,
+    pub create_time: i64,
     pub status: Option<String>,
 }
 
@@ -139,7 +139,7 @@ pub struct FriendRequestItem {
     pub req_id: String,
     pub sender_uid: String,
     pub apply_text: Option<String>,
-    pub create_time: Option<String>,
+    pub create_time: Option<i64>,
     pub status: String,
 }
 
@@ -203,7 +203,7 @@ pub struct GroupCardResponse {
     pub manager_uid: String,
     pub avatar: Option<String>,
     pub group_intro: Option<String>,
-    pub created_at: Option<NaiveDateTime>,
+    pub created_at: Option<i64>,
 }
 
 // 群组资料响应模型（仅群成员可用）
@@ -219,7 +219,7 @@ pub struct GroupProfileResponse {
     pub is_pinned: bool,
     pub remark: Option<String>,
     pub nickname: Option<String>,
-    pub join_time: String,
+    pub join_time: i64,
 }
 
 // 群组列表项
@@ -244,7 +244,7 @@ pub struct GroupRequestResponse {
     pub req_id: String,
     pub gid: String,
     pub apply_text: String,
-    pub create_time: String,
+    pub create_time: i64,
     pub status: String,
 }
 
@@ -255,7 +255,7 @@ pub struct GroupRequestItem {
     pub gid: String,
     pub sender_uid: String,
     pub apply_text: Option<String>,
-    pub create_time: String,
+    pub create_time: i64,
     pub status: String,
 }
 
@@ -308,7 +308,7 @@ pub struct AnnouncementItem {
     pub msg_id: String,                 // 消息ID
     pub content: String,                // 公告内容
     pub sender_uid: String,             // 发送者UID
-    pub send_time: String,              // 发送时间戳
+    pub send_time: i64,              // 发送时间戳
     pub mentioned_uids: Vec<String>,    // 提及的用户ID列表
     pub quote_msg_id: String,           // 引用消息ID
 }
@@ -431,7 +431,7 @@ pub struct PrivateMessagePayload {
     // 消息元数据
     pub message_id: String,
     pub chat_id: String,
-    pub timestamp: String,     // 使用字符串时间戳
+    pub timestamp: i64,     // 使用时间戳
     // 发送者信息
     pub sender_id: String,
     pub sender_name: String,
@@ -470,7 +470,7 @@ pub struct GroupMessagePayload {
     // 消息元数据
     pub message_id: String,
     pub chat_id: String,
-    pub timestamp: String,     // 使用字符串时间戳
+    pub timestamp: i64,     // 使用时间戳
     // 发送者信息
     pub sender_id: String,
     pub sender_name: String,

@@ -1,6 +1,6 @@
 use sqlx::MySqlPool;
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 
 use crate::models::{entities::{User, Gender}, errors::{AppError, AppResult}, repository::UserRepository};
 
@@ -72,7 +72,7 @@ impl UserRepository for MySqlPool {
     }
 
     // 根据创建时间查找用户
-    async fn find_user_by_create_time_range(&self, start: NaiveDateTime, end: NaiveDateTime) -> AppResult<Vec<User>> {
+    async fn find_user_by_create_time_range(&self, start: DateTime<Utc>, end: DateTime<Utc>) -> AppResult<Vec<User>> {
         let users = sqlx::query_as!(
             User,
             "SELECT

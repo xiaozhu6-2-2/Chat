@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use sqlx::MySqlPool;
 use async_trait::async_trait;
 
@@ -139,7 +139,7 @@ impl GroupMessageRepository for MySqlPool {
     }
 
     // 按gid和时间范围查找群聊消息
-    async fn find_messages_by_group_and_time_range(&self, gid: &str, start: NaiveDateTime, end: NaiveDateTime) -> AppResult<Vec<GroupMessage>>{
+    async fn find_messages_by_group_and_time_range(&self, gid: &str, start: DateTime<Utc>, end: DateTime<Utc>) -> AppResult<Vec<GroupMessage>>{
 
         let find_message_by_time=sqlx::query_as!(
             GroupMessage,
@@ -350,7 +350,7 @@ impl GroupMessageRepository for MySqlPool {
     }
 
     // 批量标记群聊消息为已读
-    async fn mark_messages_as_read_by_group_and_time(&self, gid: &str, uid: &str, timestamp: chrono::NaiveDateTime) -> AppResult<u64> {
+    async fn mark_messages_as_read_by_group_and_time(&self, gid: &str, uid: &str, timestamp: DateTime<Utc>) -> AppResult<u64> {
         let mut tx = self.begin().await?;
 
         // 使用 INSERT IGNORE 批量插入已读记录

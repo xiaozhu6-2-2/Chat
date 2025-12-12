@@ -85,7 +85,7 @@ pub async fn register(
         gender: Option::<Gender>::from_optional_string(Some(payload.gender)),
         region: Some(payload.region),
         email: None,
-        create_time: Some(chrono::Utc::now().naive_utc()),
+        create_time: Some(chrono::Utc::now()),
         avatar: None,
         bio: None,
 

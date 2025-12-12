@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use sqlx::MySqlPool;
 use async_trait::async_trait;
 
@@ -395,7 +395,7 @@ impl GroupChatRepository for MySqlPool {
         Ok(find_request)
     }
     // 更新群聊申请状态
-    async fn update_request_status(&self, req_id: &str, status: &str, approver_uid: &str, handle_time: NaiveDateTime) -> AppResult<()>{
+    async fn update_request_status(&self, req_id: &str, status: &str, approver_uid: &str, handle_time: DateTime<Utc>) -> AppResult<()>{
 
         let mut tx=self.begin().await?;
 

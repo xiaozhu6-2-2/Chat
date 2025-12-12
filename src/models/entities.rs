@@ -2,7 +2,7 @@
 // 库模块导入
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 
 // 分离模块导入
 
@@ -53,7 +53,7 @@ pub struct User {
     pub gender: Option<Gender>, 
     pub region: Option<String>,
     pub email: Option<String>,
-    pub create_time: Option<NaiveDateTime>,
+    pub create_time: Option<DateTime<Utc>>,
     pub avatar: Option<String>,
     pub bio: Option<String>,// 简介
 }
@@ -73,7 +73,7 @@ pub struct GroupChat {
     pub manager_uid: String, // 群主
     pub group_avatar: Option<String>,
     pub group_intro: Option<String>,
-    pub create_time: Option<NaiveDateTime>,
+    pub create_time: Option<DateTime<Utc>>,
 }
 
 // 申请状态枚举
@@ -136,8 +136,8 @@ pub struct GroupJoinRequest {
     pub approver_uid: Option<String>,
     pub status: ReqStatus,// 枚举pending, accepted, rejected, expired
     pub apply_text: Option<String>,
-    pub create_time: Option<NaiveDateTime>,
-    pub handle_time: Option<NaiveDateTime>,
+    pub create_time: Option<DateTime<Utc>>,
+    pub handle_time: Option<DateTime<Utc>>,
 }
 
 // 角色权限
@@ -158,7 +158,7 @@ pub struct GroupMember {
     pub role: Role,// 权限
     pub nickname: Option<String>,// 群昵称
     pub level: Option<u8>,// 在群聊的等级
-    pub join_time: Option<NaiveDateTime>,
+    pub join_time: Option<DateTime<Utc>>,
     pub do_not_disturb: Option<i8>,// 免打扰
     pub group_by: Option<String>,// 分组标签
     pub remark: Option<String>,// 备注
@@ -186,7 +186,7 @@ pub struct GroupMessage {
     pub gid: String,
     pub content: String,
     pub sender_uid: String,
-    pub send_time: Option<NaiveDateTime>,
+    pub send_time: Option<DateTime<Utc>>,
     pub is_revoked: Option<i8>,// 是否撤回
     #[sqlx(rename = "type")]
     pub msg_type: GroupMsgType,// 枚举类型 text image file voice video link emoji annoucement
@@ -210,7 +210,7 @@ pub struct MuteRecord {
     pub gid: String,
     pub uid: String,
     pub mute_duration: i64,// 禁言时间
-    pub start_time: Option<NaiveDateTime>,
+    pub start_time: Option<DateTime<Utc>>,
 }
 
 // 私聊会话模型(private_chat表)
@@ -219,7 +219,7 @@ pub struct PrivateChat {
     pub pid: String,
     pub uid1: String,// uid小的
     pub uid2: String,// uid大的
-    pub create_time: Option<NaiveDateTime>,
+    pub create_time: Option<DateTime<Utc>>,
     pub is_pinned_by_uid1: Option<i8>,// uid1置顶状态
     pub is_pinned_by_uid2: Option<i8>,// uid2置顶状态
     pub do_not_disturb_uid1: Option<i8>,
@@ -247,7 +247,7 @@ pub struct PrivateMessage {
     pub pid: String,
     pub content: String,
     pub sender_uid: String,
-    pub send_time: Option<NaiveDateTime>,
+    pub send_time: Option<DateTime<Utc>>,
     pub is_revoked: Option<i8>,
     pub is_read: Option<i8>,
     #[sqlx(rename = "type")]
@@ -260,7 +260,7 @@ pub struct Friends {
     pub fid: String,// 主键
     pub uid: String,// 较小的那个
     pub to_uid: String,// 较大的那个
-    pub create_time: Option<NaiveDateTime>,
+    pub create_time: Option<DateTime<Utc>>,
     pub is_blacklist: Option<i8>,// 黑名单，拒收消息
     pub to_is_blacklist: Option<i8>,// 大uid to 小uid的黑名单
     pub remark: Option<String>,// 小uid to 大uid的备注
@@ -277,8 +277,8 @@ pub struct FriendRequest {
     pub receiver_uid: String,
     pub status: ReqStatus,// 枚举pending, accepted, rejected, expired
     pub apply_text: Option<String>,
-    pub create_time: Option<NaiveDateTime>,
-    pub handle_time: Option<NaiveDateTime>,
+    pub create_time: Option<DateTime<Utc>>,
+    pub handle_time: Option<DateTime<Utc>>,
 }
 
 // 文件访问权限
@@ -316,7 +316,7 @@ pub struct FileReference {
     pub file_id: String,                     // 关联的文件记录ID
     pub user_uid: String,                    // 用户ID
     pub reference_type: ReferenceType,       // 引用类型
-    pub created_at: Option<NaiveDateTime>,   // 创建时间
+    pub created_at: Option<DateTime<Utc>>,   // 创建时间
 }
 
 // 文件信息表
@@ -332,8 +332,8 @@ pub struct FileInfo {
     pub file_hash: String,// 文件哈希（用于去重）
     pub access_level: FilePrivalege,
     pub thumbnail_path: Option<String>,// 缩略图路径
-    pub upload_time: Option<NaiveDateTime>,
-    pub last_access_time: Option<NaiveDateTime>,
+    pub upload_time: Option<DateTime<Utc>>,
+    pub last_access_time: Option<DateTime<Utc>>,
     pub download_count: i64,
     pub status: FileStatus,
 }
@@ -358,5 +358,5 @@ pub struct FileAssociation {
     pub file_id: String,
     pub association_type: AssociationType,
     pub associated_id: String,
-    pub created_at: Option<NaiveDateTime>,
+    pub created_at: Option<DateTime<Utc>>,
 }

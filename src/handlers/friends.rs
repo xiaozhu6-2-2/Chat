@@ -1,6 +1,6 @@
 use axum::Extension;
 use axum::{extract::State, Json};
-use chrono::{NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 
 use crate::models::entities::{GenderOptionExt, ReqStatus, ReqStatusOptionExt, Friends};
 use crate::models::others::Claims;
@@ -166,7 +166,7 @@ pub async fn get_friend_profile(
         remark,
         group_by,
         is_blacklisted,
-        created_at: friendship.create_time,
+        created_at: friendship.create_time.map(|dt| dt.timestamp()),
         bio: friend_user.bio,
         avatar: friend_user.avatar,
         gender: friend_user.gender.to_optional_string(),
@@ -238,7 +238,7 @@ pub async fn get_friend_list(
                     remark: remark.clone(),
                     group_by: group_by.clone(),
                     is_blacklisted: false, // 普通好友
-                    created_at: *created_at,
+                    created_at: created_at.map(|dt| dt.timestamp()),
                     bio: friend_user.bio.clone(),
                     avatar: friend_user.avatar.clone(),
                 };
@@ -261,7 +261,7 @@ pub async fn get_friend_list(
                     remark: remark.clone(),
                     group_by: group_by.clone(),
                     is_blacklisted: true, // 黑名单好友
-                    created_at: *created_at,
+                    created_at: created_at.map(|dt| dt.timestamp()),
                     bio: friend_user.bio.clone(),
                     avatar: friend_user.avatar.clone(),
                 };
@@ -336,7 +336,7 @@ pub async fn send_friend_request(
         receiver_uid: payload.receiver_id.clone(), // receiver_id 直接就是 uid
         status: ReqStatus::Pending,
         apply_text: Some(payload.message),
-        create_time: Some(payload.create_time),
+        create_time: DateTime::from_timestamp(payload.create_time, 0),
         handle_time: None, // 处理时间设为 NULL
     };
 
@@ -349,7 +349,7 @@ pub async fn send_friend_request(
         sender_uid: friend_request.sender_uid,
         receiver_uid: friend_request.receiver_uid,
         apply_text: friend_request.apply_text,
-        create_time: friend_request.create_time.unwrap_or_default().to_string(),
+        create_time: friend_request.create_time.map(|dt| dt.timestamp()).unwrap_or(0),
         status: Some(ReqStatus::Pending).to_optional_string(),
     };
 
@@ -403,10 +403,10 @@ pub async fn respond_friend_request(
         }
     }
 
-    // 6. 解析 handle_time
-    let handle_time = NaiveDateTime::parse_from_str(&payload.handle_time, "%Y-%m-%d %H:%M:%S")
-        .map_err(|_| crate::models::errors::AppError::BadRequest(
-            "Invalid handle_time format. Use YYYY-MM-DD HH:MM:SS".to_string()
+    // 6. 转换 handle_time
+    let handle_time = DateTime::from_timestamp(payload.handle_time, 0)
+        .ok_or_else(|| crate::models::errors::AppError::BadRequest(
+            "Invalid handle_time timestamp".to_string()
         ))?;
 
     // 7. 根据 action 处理请求
@@ -440,7 +440,7 @@ pub async fn respond_friend_request(
                 fid: fid.clone(),
                 uid,
                 to_uid,
-                create_time: Some(Utc::now().naive_utc()),
+                create_time: Some(Utc::now()),
                 is_blacklist: Some(0),
                 to_is_blacklist: Some(0),
                 remark: None,
@@ -509,7 +509,7 @@ pub async fn get_friend_request_list(
             req_id: req.req_id,
             sender_uid: req.sender_uid,
             apply_text: req.apply_text,
-            create_time: req.create_time.map(|dt| dt.to_string()),
+            create_time: req.create_time.map(|dt| dt.timestamp()),
             status: req.status.to_string(),
         })
         .collect();
@@ -520,7 +520,7 @@ pub async fn get_friend_request_list(
             req_id: req.req_id,
             sender_uid: req.sender_uid,
             apply_text: req.apply_text,
-            create_time: req.create_time.map(|dt| dt.to_string()),
+            create_time: req.create_time.map(|dt| dt.timestamp()),
             status: req.status.to_string(),
         })
         .collect();

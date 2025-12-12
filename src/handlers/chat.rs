@@ -70,7 +70,7 @@ pub async fn get_chat_list(
                     crate::models::entities::PrivateMsgType::Annoucement => "[公告]".to_string(),
                 };
                 let timestamp = msg.send_time
-                    .map(|dt| dt.and_utc().timestamp())
+                    .map(|dt| dt.timestamp())
                     .unwrap_or_else(|| Utc::now().timestamp())
                     .to_string();
                 (content, timestamp)
@@ -128,7 +128,7 @@ pub async fn get_chat_list(
                     crate::models::entities::GroupMsgType::Annoucement => "[公告]".to_string(),
                 };
                 let timestamp = msg.send_time
-                    .map(|dt| dt.and_utc().timestamp())
+                    .map(|dt| dt.timestamp())
                     .unwrap_or_else(|| Utc::now().timestamp())
                     .to_string();
                 (content, timestamp)
@@ -233,7 +233,7 @@ pub async fn get_private_chat(
             crate::models::entities::PrivateMsgType::Annoucement => "[公告]".to_string(),
         };
         let timestamp = msg.send_time
-            .map(|dt| dt.and_utc().timestamp())
+            .map(|dt| dt.timestamp())
             .unwrap_or_else(|| Utc::now().timestamp())
             .to_string();
         (content, timestamp)
@@ -297,7 +297,7 @@ pub async fn get_group_chat(
             crate::models::entities::GroupMsgType::Annoucement => "[公告]".to_string(),
         };
         let timestamp = msg.send_time
-            .map(|dt| dt.and_utc().timestamp())
+            .map(|dt| dt.timestamp())
             .unwrap_or_else(|| Utc::now().timestamp())
             .to_string();
         (content, timestamp)

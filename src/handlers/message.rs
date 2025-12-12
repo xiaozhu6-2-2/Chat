@@ -114,10 +114,10 @@ pub async fn get_private_history(
                 private_chat.uid1.clone()
             };
 
-            // 处理时间戳，转为ISO 8601格式字符串
+            // 处理时间戳，转为 Unix 时间戳
             let timestamp = msg.send_time
-                .map(|dt| dt.and_utc().to_rfc3339())
-                .unwrap_or_else(|| "1970-01-01T00:00:00+00:00".to_string());
+                .map(|dt| dt.timestamp())
+                .unwrap_or(0);
 
             // 处理布尔值
             let is_revoked = msg.is_revoked.unwrap_or(0) == 1;
@@ -288,10 +288,10 @@ pub async fn get_group_history(
                 GroupMsgType::Annoucement => "annoucement",
             };
 
-            // 处理时间戳，转为ISO 8601格式字符串
+            // 处理时间戳，转为 Unix 时间戳
             let timestamp = msg.send_time
-                .map(|dt| dt.and_utc().to_rfc3339())
-                .unwrap_or_else(|| "1970-01-01T00:00:00+00:00".to_string());
+                .map(|dt| dt.timestamp())
+                .unwrap_or(0);
 
             // 处理布尔值
             let is_revoked = msg.is_revoked.unwrap_or(0) == 1;
@@ -360,9 +360,8 @@ pub async fn mark_msg_read(
     let current_user = state.db_pool.find_user_by_account(&claims.sub).await?;
 
     // 解析时间戳
-    let timestamp = chrono::DateTime::parse_from_rfc3339(&payload.timestamp)
-        .map_err(|_| AppError::BadRequest("无效的时间戳格式".to_string()))?
-        .naive_local();
+    let timestamp = chrono::DateTime::from_timestamp(payload.timestamp, 0)
+        .ok_or_else(|| AppError::BadRequest("无效的时间戳".to_string()))?;
 
     match payload.chat_type.as_str() {
         "private" => {
