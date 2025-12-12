@@ -71,11 +71,10 @@ pub async fn get_chat_list(
                 };
                 let timestamp = msg.send_time
                     .map(|dt| dt.timestamp())
-                    .unwrap_or_else(|| Utc::now().timestamp())
-                    .to_string();
+                    .unwrap_or_else(|| Utc::now().timestamp());
                 (content, timestamp)
             } else {
-                ("暂无消息".to_string(), Utc::now().timestamp().to_string())
+                ("暂无消息".to_string(), Utc::now().timestamp())
             };
 
             // 检查是否需要添加到列表：有未读消息或置顶的会话
@@ -129,11 +128,10 @@ pub async fn get_chat_list(
                 };
                 let timestamp = msg.send_time
                     .map(|dt| dt.timestamp())
-                    .unwrap_or_else(|| Utc::now().timestamp())
-                    .to_string();
+                    .unwrap_or_else(|| Utc::now().timestamp());
                 (content, timestamp)
             } else {
-                ("暂无消息".to_string(), Utc::now().timestamp().to_string())
+                ("暂无消息".to_string(), Utc::now().timestamp())
             };
 
             // 检查是否需要添加到列表：有未读消息或置顶的会话
@@ -234,11 +232,10 @@ pub async fn get_private_chat(
         };
         let timestamp = msg.send_time
             .map(|dt| dt.timestamp())
-            .unwrap_or_else(|| Utc::now().timestamp())
-            .to_string();
+            .unwrap_or_else(|| Utc::now().timestamp());
         (content, timestamp)
     } else {
-        ("暂无消息".to_string(), Utc::now().timestamp().to_string())
+        ("暂无消息".to_string(), Utc::now().timestamp())
     };
 
     Ok(Json(PrivateChatResponse {
@@ -298,11 +295,10 @@ pub async fn get_group_chat(
         };
         let timestamp = msg.send_time
             .map(|dt| dt.timestamp())
-            .unwrap_or_else(|| Utc::now().timestamp())
-            .to_string();
+            .unwrap_or_else(|| Utc::now().timestamp());
         (content, timestamp)
     } else {
-        ("暂无消息".to_string(), Utc::now().timestamp().to_string())
+        ("暂无消息".to_string(), Utc::now().timestamp())
     };
 
     Ok(Json(GroupChatResponse {

@@ -174,7 +174,7 @@ pub struct UpdateFriendBlacklistResponse {
 #[derive(Serialize, Deserialize)]
 pub struct CreateGroupResponse {
     pub gid: String,
-    pub created_at: String,
+    pub created_at: i64,
 }
 
 // 搜索群组项
@@ -214,7 +214,7 @@ pub struct GroupProfileResponse {
     pub manager_uid: String,
     pub avatar: String,
     pub group_intro: String,
-    pub created_at: String,
+    pub created_at: Option<i64>,
     pub do_not_disturb: bool,
     pub is_pinned: bool,
     pub remark: Option<String>,
@@ -384,7 +384,7 @@ pub struct ChatItem {
     #[serde(rename = "type")]
     pub chat_type: ChatType, // "private" or "group"
     pub latest_message: String,
-    pub updated_at: String, // 时间戳字符串
+    pub updated_at: i64, // 时间戳
     pub unread_messages: i32,
     pub avatar: String,
     pub remark: String, // 备注/名字
@@ -405,7 +405,7 @@ pub struct PrivateChatResponse {
     #[serde(rename = "type")]
     pub chat_type: String, // "private"
     pub latest_message: String,
-    pub updated_at: String, // ISO 8601 格式的时间字符串
+    pub updated_at: i64, // 时间戳
     pub avatar: String,
     pub remark: String, // 备注名，如果没有备注则显示用户名
 }
@@ -418,7 +418,7 @@ pub struct GroupChatResponse {
     #[serde(rename = "type")]
     pub chat_type: String,             // 聊天类型，固定为"group"
     pub latest_message: String,        // 最新消息内容
-    pub updated_at: String,            // 最新消息时间戳
+    pub updated_at: i64,            // 最新消息时间戳
     pub avatar: String,                // 群组头像URL
     pub remark: String,                // 群组名称或用户自定义备注
 }
@@ -564,7 +564,7 @@ pub struct OnlineFriendItem {
     pub avatar: String,
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_seen_at: Option<String>,
+    pub last_seen_at: Option<i64>,
 }
 
 // 在线群成员项模型
@@ -575,7 +575,7 @@ pub struct OnlineGroupMemberItem {
     pub avatar: String,
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_seen_at: Option<String>,
+    pub last_seen_at: Option<i64>,
 }
 
 // 群组在线状态响应模型

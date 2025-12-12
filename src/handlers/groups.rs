@@ -62,8 +62,8 @@ pub async fn create_group(
     Ok(Json(CreateGroupResponse {
         gid,
         created_at: created_group.create_time
-            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-            .unwrap_or_else(|| "".to_string()),
+            .map(|dt| dt.timestamp())
+            .unwrap_or(0),
     }))
 }
 
@@ -211,8 +211,7 @@ pub async fn get_group_profile(
         avatar: group.group_avatar.unwrap_or_default(),
         group_intro: group.group_intro.unwrap_or_default(),
         created_at: group.create_time
-            .map(|dt| dt.to_string())
-            .unwrap_or_default(),
+            .map(|dt| dt.timestamp()),
         do_not_disturb: member_info.do_not_disturb.unwrap_or(0) == 1,
         is_pinned: member_info.is_pinned.unwrap_or(0) == 1,
         remark: member_info.remark,
