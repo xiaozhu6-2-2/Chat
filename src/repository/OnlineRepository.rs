@@ -96,7 +96,65 @@ impl OnlineRepository for OnlineManager {
         }
 
         let _ : () = pipe.query_async(&mut *conn).await.map_err(|e| AppError::RedisOperationFailure(e.to_string()))?;
-    
+
         Ok(())
+    }
+
+    // 批量查询用户在线状态
+    async fn batch_check_online_status(
+        redis_pool : &Pool<RedisConnectionManager>,
+        accounts: &[String]
+    ) -> AppResult<Vec<String>> {
+        // 获取Redis连接
+        let mut conn = redis_pool.get().await.map_err(|e| AppError::RedisGetConnFailure(e.to_string()))?;
+
+        // 全局在线状态key
+        let global_key = "global:online:users";
+
+        // 使用 SMISMEMBER 批量检查成员是否存在
+        // 由于 redis crate 可能不支持批量操作，我们使用循环查询
+        let mut online_accounts = Vec::new();
+
+        // 使用 pipeline 优化批量查询
+        let mut pipe = bb8_redis::redis::pipe();
+
+        // 为每个账号添加 SMISMEMBER 命令
+        for account in accounts {
+            pipe.sismember(global_key, account);
+        }
+
+        // 执行批量查询
+        let results: Vec<bool> = pipe.query_async(&mut *conn).await
+            .map_err(|e| AppError::RedisOperationFailure(e.to_string()))?;
+
+        // 根据结果返回在线的账号
+        for (account, is_online) in accounts.iter().zip(results) {
+            if is_online {
+                online_accounts.push(account.clone());
+            }
+        }
+
+        Ok(online_accounts)
+    }
+
+    // 获取群聊在线成员
+    async fn get_group_online_members(
+        redis_pool : &Pool<RedisConnectionManager>,
+        gid: &str
+    ) -> AppResult<Vec<String>> {
+        // 获取Redis连接
+        let mut conn = redis_pool.get().await.map_err(|e| AppError::RedisGetConnFailure(e.to_string()))?;
+
+        // 群聊在线状态key
+        let group_key = format!("group:online:{}", gid);
+
+        // 使用 SMEMBERS 获取所有在线成员
+        let online_members: Vec<String> = bb8_redis::redis::cmd("SMEMBERS")
+            .arg(&group_key)
+            .query_async(&mut *conn)
+            .await
+            .map_err(|e| AppError::RedisOperationFailure(e.to_string()))?;
+
+        Ok(online_members)
     }
 }

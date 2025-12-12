@@ -41,7 +41,7 @@ impl PrivateChatRepository for MySqlPool {
         let chat = sqlx::query_as!(
             PrivateChat,
             "SELECT
-                pid, uid1, uid2, create_time, is_pinned_by_uid1, is_pinned_by_uid2
+                pid, uid1, uid2, create_time, is_pinned_by_uid1, is_pinned_by_uid2, do_not_disturb_uid1, do_not_disturb_uid2
             FROM private_chat WHERE pid = ?",
             pid
         ).fetch_optional(self).await?;
@@ -61,7 +61,7 @@ impl PrivateChatRepository for MySqlPool {
         let chat = sqlx::query_as!(
             PrivateChat,
             "SELECT
-                pid, uid1, uid2, create_time, is_pinned_by_uid1, is_pinned_by_uid2
+                pid, uid1, uid2, create_time, is_pinned_by_uid1, is_pinned_by_uid2, do_not_disturb_uid1, do_not_disturb_uid2
             FROM private_chat
             WHERE uid1 = ? AND uid2 = ?",
             smaller_uid,
@@ -76,7 +76,7 @@ impl PrivateChatRepository for MySqlPool {
         let chats = sqlx::query_as!(
             PrivateChat,
             "SELECT
-                pid, uid1, uid2, create_time, is_pinned_by_uid1, is_pinned_by_uid2
+                pid, uid1, uid2, create_time, is_pinned_by_uid1, is_pinned_by_uid2, do_not_disturb_uid1, do_not_disturb_uid2
             FROM private_chat
             WHERE uid1 = ? OR uid2 = ?
             ORDER BY create_time DESC",
@@ -279,5 +279,87 @@ impl PrivateChatRepository for MySqlPool {
             }
             None => Ok(vec![])
         }
+    }
+
+    // 获取未读消息数量
+    async fn get_unread_message_count_by_chat(&self, pid: &str, uid: &str) -> AppResult<i32> {
+        // 首先获取会话信息以确定哪个uid是接收方
+        let chat_info = sqlx::query!(
+            "SELECT uid1, uid2 FROM private_chat WHERE pid = ?",
+            pid
+        ).fetch_optional(self).await?;
+
+        match chat_info {
+            Some(_chat) => {
+                let count = sqlx::query!(
+                    "SELECT COUNT(*) as count
+                    FROM private_message
+                    WHERE pid = ?
+                    AND sender_uid != ?
+                    AND (is_read IS NULL OR is_read = 0)",
+                    pid,
+                    uid
+                ).fetch_one(self).await?;
+
+                Ok(count.count as i32)
+            }
+            None => Ok(0)
+        }
+    }
+
+    // 查找会话的最新消息
+    async fn find_latest_message_by_chat(&self, pid: &str) -> AppResult<Option<PrivateMessage>> {
+        let message = sqlx::query_as!(
+            PrivateMessage,
+            "SELECT
+                msg_id,
+                pid,
+                content,
+                sender_uid,
+                send_time,
+                is_revoked,
+                is_read,
+                type as `mes_type: PrivateMsgType`
+            FROM private_message
+            WHERE pid = ?
+            ORDER BY send_time DESC
+            LIMIT 1",
+            pid
+        ).fetch_optional(self).await?;
+
+        Ok(message)
+    }
+
+    // 获取私聊会话的消息总数
+    async fn get_message_count_by_chat(&self, pid: &str) -> AppResult<i64> {
+        let count = sqlx::query!(
+            "SELECT COUNT(*) as count
+            FROM private_message
+            WHERE pid = ?",
+            pid
+        ).fetch_one(self).await?;
+
+        Ok(count.count as i64)
+    }
+
+    // 批量标记私聊消息为已读
+    async fn mark_messages_as_read_by_chat_and_time(&self, pid: &str, uid: &str, timestamp: chrono::NaiveDateTime) -> AppResult<u64> {
+        let mut tx = self.begin().await?;
+
+        let result = sqlx::query!(
+            "UPDATE private_message
+                SET is_read = 1
+            WHERE pid = ?
+                AND sender_uid != ?
+                AND send_time <= ?
+                AND (is_read IS NULL OR is_read = 0)",
+            pid,
+            uid,
+            timestamp
+        ).execute(&mut *tx).await?;
+
+        tx.commit().await?;
+
+        Ok(result.rows_affected())
     }
 }

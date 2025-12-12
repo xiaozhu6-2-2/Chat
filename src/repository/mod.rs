@@ -4,3 +4,4 @@ pub mod GroupChatRepository;
 pub mod GroupMessageRepository;
 pub mod PrivateChatRepository;
 pub mod OnlineRepository;
+pub mod FileRepository;
