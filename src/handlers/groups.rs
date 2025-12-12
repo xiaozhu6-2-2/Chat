@@ -24,9 +24,6 @@ pub async fn create_group(
     let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
     let gid = snowflake.next_id()?.to_string();
 
-    // 获取当前时间
-    let now = chrono::Utc::now().naive_utc();
-
     // 创建群组实体
     let group = crate::models::entities::GroupChat {
         gid: gid.clone(),
@@ -34,7 +31,7 @@ pub async fn create_group(
         manager_uid: user.uid.clone(),
         group_avatar: payload.avatar.clone(),
         group_intro: payload.group_intro.clone(),
-        create_time: Some(now),
+        create_time: None,  // 让数据库自动生成时间
     };
 
     // 保存群组到数据库
@@ -47,7 +44,7 @@ pub async fn create_group(
         role: crate::models::entities::Role::Owner,
         nickname: None,
         level: Some(1),
-        join_time: Some(now),
+        join_time: None,  // 让数据库自动生成时间
         do_not_disturb: Some(0),
         group_by: None,
         remark: None,
@@ -57,10 +54,16 @@ pub async fn create_group(
     // 保存群主成员信息
     state.db_pool.save_member(manager_member).await?;
 
+    // 从数据库查询群组信息以获取创建时间
+    let created_group = state.db_pool.find_group_by_gid(&gid).await?
+        .ok_or_else(|| AppError::DatabaseFailure(sqlx::Error::RowNotFound))?;
+
     // 返回响应
     Ok(Json(CreateGroupResponse {
         gid,
-        created_at: now.format("%Y-%m-%d %H:%M:%S").to_string(),
+        created_at: created_group.create_time
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_else(|| "".to_string()),
     }))
 }
 
