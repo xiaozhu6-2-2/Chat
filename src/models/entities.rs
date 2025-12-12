@@ -300,15 +300,34 @@ pub enum FileStatus {
     Expired,
 }
 
+// 文件引用类型枚举
+#[derive(Debug, Clone, Deserialize, Serialize, sqlx::Type)]
+#[sqlx(type_name = "VARCHAR", rename_all = "lowercase")]
+pub enum ReferenceType {
+    Original,  // 原始上传者
+    Shared,    // 共享使用者
+}
+
+// 文件引用表
+#[derive(Debug, Clone, Deserialize, Serialize, FromRow)]
+pub struct FileReference {
+    pub reference_id: String,                // 引用ID (雪花ID)
+    pub file_hash: String,                   // 文件哈希 (SHA-256)
+    pub file_id: String,                     // 关联的文件记录ID
+    pub user_uid: String,                    // 用户ID
+    pub reference_type: ReferenceType,       // 引用类型
+    pub created_at: Option<NaiveDateTime>,   // 创建时间
+}
+
 // 文件信息表
 #[derive(Debug, Clone, Deserialize, Serialize, FromRow)]
 pub struct FileInfo {
     pub file_id: String,
-    pub upload_uid: String,
+    pub uploader_uid: String,  // 上传者UID
     pub original_name: String,// 原始文件名
     pub file_name: String,// 存储文件名
     pub file_path: String,// 存储路径
-    pub file_size: i128,// 文件大小
+    pub file_size: i64,// 文件大小
     pub mime_type: String,// mime类型
     pub file_hash: String,// 文件哈希（用于去重）
     pub access_level: FilePrivalege,
