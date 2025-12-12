@@ -130,6 +130,10 @@ pub trait GroupMessageRepository: Send + Sync {
     async fn find_messages_by_group(&self, gid: &str) -> AppResult<Vec<GroupMessage>>;
     // 按gid和时间范围查找群聊消息
     async fn find_messages_by_group_and_time_range(&self, gid: &str, start: NaiveDateTime, end: NaiveDateTime) -> AppResult<Vec<GroupMessage>>;
+    // 按gid分页查找群聊消息
+    async fn find_messages_by_group_with_pagination(&self, gid: &str, limit: i64, offset: i64) -> AppResult<Vec<GroupMessage>>;
+    // 获取群聊消息总数
+    async fn get_message_count_by_group(&self, gid: &str) -> AppResult<i64>;
     // 标记消息为已撤回
     async fn mark_message_as_revoked(&self, msg_id: &str) -> AppResult<()>;
     //按gid查找查看群公告
@@ -145,8 +149,12 @@ pub trait GroupMessageRepository: Send + Sync {
     async fn get_unread_message_count_by_group(&self, gid: &str, uid: &str) -> AppResult<i32>;
     // 查找消息已读用户数量
     async fn get_message_read_count(&self, msg_id: &str) -> AppResult<u64>;
+    // 批量获取多个消息的已读数量
+    async fn get_message_read_counts(&self, msg_ids: &[String]) -> AppResult<Vec<(String, i64)>>;
     // 查找群聊的最新消息
     async fn find_latest_message_by_group(&self, gid: &str) -> AppResult<Option<GroupMessage>>;
+    // 批量标记群聊消息为已读
+    async fn mark_messages_as_read_by_group_and_time(&self, gid: &str, uid: &str, timestamp: chrono::NaiveDateTime) -> AppResult<u64>;
 }
 
 // 私聊会话聚合根
@@ -180,6 +188,10 @@ pub trait PrivateChatRepository: Send + Sync {
     async fn get_unread_message_count_by_chat(&self, pid: &str, uid: &str) -> AppResult<i32>;
     // 查找会话的最新消息
     async fn find_latest_message_by_chat(&self, pid: &str) -> AppResult<Option<PrivateMessage>>;
+    // 获取私聊会话的消息总数
+    async fn get_message_count_by_chat(&self, pid: &str) -> AppResult<i64>;
+    // 批量标记私聊消息为已读
+    async fn mark_messages_as_read_by_chat_and_time(&self, pid: &str, uid: &str, timestamp: chrono::NaiveDateTime) -> AppResult<u64>;
 }
 
 // 在线状态聚合根
@@ -204,4 +216,16 @@ pub trait OnlineRepository: Send + Sync {
         redis_pool : &Pool<RedisConnectionManager>,
         group_ids : &[String]
     ) -> AppResult<()>;
+
+    // 批量查询用户在线状态
+    async fn batch_check_online_status(
+        redis_pool : &Pool<RedisConnectionManager>,
+        accounts: &[String]
+    ) -> AppResult<Vec<String>>;
+
+    // 获取群聊在线成员
+    async fn get_group_online_members(
+        redis_pool : &Pool<RedisConnectionManager>,
+        gid: &str
+    ) -> AppResult<Vec<String>>;
 }

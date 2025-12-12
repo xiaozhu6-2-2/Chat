@@ -98,6 +98,46 @@ impl GroupMessageRepository for MySqlPool {
 
         Ok(find_message)
     }
+
+    // 获取群聊消息总数
+    async fn get_message_count_by_group(&self, gid: &str) -> AppResult<i64>{
+        let result = sqlx::query!(
+            "SELECT COUNT(*) as count FROM group_message WHERE gid = ?",
+            gid
+        )
+        .fetch_one(self)
+        .await?;
+
+        Ok(result.count as i64)
+    }
+
+    // 按gid分页查找群聊消息
+    async fn find_messages_by_group_with_pagination(&self, gid: &str, limit: i64, offset: i64) -> AppResult<Vec<GroupMessage>>{
+        let messages = sqlx::query_as!(
+            GroupMessage,
+            "SELECT
+                msg_id,
+                gid,
+                content,
+                sender_uid,
+                send_time,
+                is_revoked,
+                type as `msg_type: GroupMsgType`,
+                mentioned_uids,
+                quote_msg_id,
+                is_announcement
+            FROM group_message
+            WHERE gid = ?
+            ORDER BY send_time ASC
+            LIMIT ? OFFSET ?",
+            gid,
+            limit,
+            offset * limit  // 计算偏移量
+        ).fetch_all(self).await?;
+
+        Ok(messages)
+    }
+
     // 按gid和时间范围查找群聊消息
     async fn find_messages_by_group_and_time_range(&self, gid: &str, start: NaiveDateTime, end: NaiveDateTime) -> AppResult<Vec<GroupMessage>>{
 
@@ -237,6 +277,36 @@ impl GroupMessageRepository for MySqlPool {
 
     }
 
+    // 批量获取多个消息的已读数量
+    async fn get_message_read_counts(&self, msg_ids: &[String]) -> AppResult<Vec<(String, i64)>> {
+        if msg_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // 构建占位符字符串 (?, ?, ?, ...)
+        let placeholders = msg_ids.iter()
+            .map(|_| "?")
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let query_str = format!(
+            "SELECT msg_id, COUNT(*) as count
+             FROM group_message_read
+             WHERE msg_id IN ({})
+             GROUP BY msg_id",
+            placeholders
+        );
+
+        // 将 msg_ids 转换为可以绑定到查询的参数
+        let mut query = sqlx::query_as::<_, (String, i64)>(&query_str);
+        for msg_id in msg_ids {
+            query = query.bind(msg_id);
+        }
+
+        let results = query.fetch_all(self).await?;
+        Ok(results)
+    }
+
     // 获取用户未读消息数量
     async fn get_unread_message_count_by_group(&self, gid: &str, uid: &str) -> AppResult<i32> {
         let count = sqlx::query!(
@@ -277,5 +347,32 @@ impl GroupMessageRepository for MySqlPool {
         ).fetch_optional(self).await?;
 
         Ok(message)
+    }
+
+    // 批量标记群聊消息为已读
+    async fn mark_messages_as_read_by_group_and_time(&self, gid: &str, uid: &str, timestamp: chrono::NaiveDateTime) -> AppResult<u64> {
+        let mut tx = self.begin().await?;
+
+        // 使用 INSERT IGNORE 批量插入已读记录
+        let result = sqlx::query!(
+            "INSERT IGNORE INTO group_message_read (msg_id, gid, uid)
+            SELECT gm.msg_id, gm.gid, ?
+            FROM group_message gm
+            LEFT JOIN group_message_read gmr
+                ON gm.msg_id = gmr.msg_id
+                AND gm.gid = gmr.gid
+                AND gmr.uid = ?
+            WHERE gm.gid = ?
+                AND gm.send_time <= ?
+                AND gmr.msg_id IS NULL",
+            uid,
+            uid,
+            gid,
+            timestamp
+        ).execute(&mut *tx).await?;
+
+        tx.commit().await?;
+
+        Ok(result.rows_affected())
     }
 }

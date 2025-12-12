@@ -264,19 +264,33 @@ pub struct GroupChatRequest {
 // 私聊历史请求模型
 #[derive(Deserialize, Serialize)]
 pub struct PrivateHistoryRequest {
-
+    pub pid: String,
+    pub limit: i64,// 每页的条目数
+    pub offset: i64,// 请求的页数
 }
 
 // 群聊历史请求模型
 #[derive(Deserialize, Serialize)]
 pub struct GroupHistoryRequest {
-
+    pub gid: String,
+    pub limit: i64,// 每页的条目数
+    pub offset: i64,// 请求的页数
 }
 
 // 标记已读请求模型
 #[derive(Deserialize, Serialize)]
 pub struct ReadRequest {
+    pub chat_id: String,
+    #[serde(rename = "type")]
+    pub chat_type: String,
+    pub timestamp: String,
+}
 
+// 获取群聊已读状态请求模型
+#[derive(Deserialize, Serialize)]
+pub struct FetchGroupReadRequest {
+    pub gid: String,
+    pub message_ids: Vec<String>,
 }
 
 // 上传文件请求模型
@@ -312,7 +326,7 @@ pub struct FriendsOnlineRequest {
 // 群组在线状态请求模型
 #[derive(Deserialize, Serialize)]
 pub struct GroupOnlineRequest {
-
+    pub gid: String,
 }
 
 

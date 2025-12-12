@@ -329,4 +329,37 @@ impl PrivateChatRepository for MySqlPool {
 
         Ok(message)
     }
+
+    // 获取私聊会话的消息总数
+    async fn get_message_count_by_chat(&self, pid: &str) -> AppResult<i64> {
+        let count = sqlx::query!(
+            "SELECT COUNT(*) as count
+            FROM private_message
+            WHERE pid = ?",
+            pid
+        ).fetch_one(self).await?;
+
+        Ok(count.count as i64)
+    }
+
+    // 批量标记私聊消息为已读
+    async fn mark_messages_as_read_by_chat_and_time(&self, pid: &str, uid: &str, timestamp: chrono::NaiveDateTime) -> AppResult<u64> {
+        let mut tx = self.begin().await?;
+
+        let result = sqlx::query!(
+            "UPDATE private_message
+                SET is_read = 1
+            WHERE pid = ?
+                AND sender_uid != ?
+                AND send_time <= ?
+                AND (is_read IS NULL OR is_read = 0)",
+            pid,
+            uid,
+            timestamp
+        ).execute(&mut *tx).await?;
+
+        tx.commit().await?;
+
+        Ok(result.rows_affected())
+    }
 }

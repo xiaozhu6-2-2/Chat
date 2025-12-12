@@ -425,22 +425,104 @@ pub struct GroupChatResponse {
 
 
 
+// 私聊消息载荷模型
+#[derive(Serialize, Deserialize)]
+pub struct PrivateMessagePayload {
+    // 消息元数据
+    pub message_id: String,
+    pub chat_id: String,
+    pub timestamp: String,     // 使用字符串时间戳
+    // 发送者信息
+    pub sender_id: String,
+    pub sender_name: String,
+    pub sender_avatar: String,
+    // 接收者信息
+    pub receiver_id: String,
+    // 消息内容
+    pub content_type: String,  // 消息类型
+    pub detail: String,        // 消息内容
+    // 实时消息状态
+    pub quote_msg_id: Option<String>,  // 回复消息ID
+}
+
+// 私聊消息项模型
+#[derive(Serialize, Deserialize)]
+pub struct PrivateMessageItem {
+    #[serde(rename = "type")]
+    pub message_type: String,  // 固定为 "Private"
+    pub payload: PrivateMessagePayload,
+    pub is_revoked: bool,  // 是否撤回
+    pub is_read: bool,     // 是否已读
+}
+
 // 私聊历史响应模型
 #[derive(Serialize, Deserialize)]
 pub struct PrivateHistoryResponse {
+    pub total_pages: i64,      // 总页数
+    pub current_page: i64,     // 当前页数
+    pub total_items: i64,      // 总条目
+    pub messages: Vec<PrivateMessageItem>,
+}
 
+// 群聊消息载荷模型
+#[derive(Serialize, Deserialize)]
+pub struct GroupMessagePayload {
+    // 消息元数据
+    pub message_id: String,
+    pub chat_id: String,
+    pub timestamp: String,     // 使用字符串时间戳
+    // 发送者信息
+    pub sender_id: String,
+    pub sender_name: String,
+    pub sender_avatar: String,
+    // 接收者信息（群组ID）
+    pub receiver_id: String,
+    // 消息内容
+    pub content_type: String,  // 消息类型
+    pub detail: String,        // 消息内容
+    // 群聊特有属性
+    pub is_announcement: bool,  // 是否为公告（字符串 "true"/"false"）
+    pub mentioned_uids: Vec<String>,  // @的用户ID列表
+    pub quote_msg_id: Option<String>,  // 回复消息ID
+}
+
+// 群聊消息项模型
+#[derive(Serialize, Deserialize)]
+pub struct GroupMessageItem {
+    #[serde(rename = "type")]
+    pub message_type: String,  // 固定为 "Group"
+    pub payload: GroupMessagePayload,
+    pub is_revoked: bool,  // 是否撤回
+    pub is_read: bool,     // 是否已读
+    pub read_count: i64,   // 已读人数
 }
 
 // 群聊历史响应模型
 #[derive(Serialize, Deserialize)]
 pub struct GroupHistoryResponse {
-
+    pub total_pages: i64,      // 总页数
+    pub current_page: i64,     // 当前页数
+    pub total_items: i64,      // 总条目
+    pub messages: Vec<GroupMessageItem>,
 }
 
 // 标记已读响应模型
 #[derive(Serialize, Deserialize)]
 pub struct ReadResponse {
 
+}
+
+// 群聊已读数量项模型
+#[derive(Serialize, Deserialize)]
+pub struct GroupReadCountItem {
+    pub message_id: String,
+    pub read_count: i64,
+}
+
+// 获取群聊已读状态响应模型
+#[derive(Serialize, Deserialize)]
+pub struct FetchGroupReadResponse {
+    pub read_counts: Vec<GroupReadCountItem>,
 }
 
 // 上传文件响应模型
@@ -470,11 +552,35 @@ pub struct DeleteFileResponse {
 // 好友在线状态响应模型
 #[derive(Serialize, Deserialize)]
 pub struct FriendsOnlineResponse {
+    pub online_friends: Vec<OnlineFriendItem>,
+    pub total: i64,
+}
 
+// 在线好友项模型
+#[derive(Serialize, Deserialize)]
+pub struct OnlineFriendItem {
+    pub user_id: String,
+    pub username: String,
+    pub avatar: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_seen_at: Option<String>,
+}
+
+// 在线群成员项模型
+#[derive(Serialize, Deserialize)]
+pub struct OnlineGroupMemberItem {
+    pub user_id: String,
+    pub username: String,
+    pub avatar: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_seen_at: Option<String>,
 }
 
 // 群组在线状态响应模型
 #[derive(Serialize, Deserialize)]
 pub struct GroupOnlineResponse {
-
+    pub online_group_members: Vec<OnlineGroupMemberItem>,
+    pub total: i64,
 }

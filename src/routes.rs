@@ -39,9 +39,10 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/chat/soloprivate", post(handlers::chat::get_private_chat))// 获取指定私聊会话
         .route("/auth/chat/sologroup", post(handlers::chat::get_group_chat))// 获取指定群聊会话
 
-        // .route("/auth/message/private_history", post(handlers::message::get_private_history))// 获取私聊会话历史消息
-        // .route("/auth/message/group_history", post(handlers::message::get_group_history))// 获取群聊会话历史消息
-        // .route("/auth/message/read", post(handlers::message::mark_msg_read))// 设置消息为已读
+        .route("/auth/message/private_history", post(handlers::message::get_private_history))// 获取私聊会话历史消息
+        .route("/auth/message/group_history", post(handlers::message::get_group_history))// 获取群聊会话历史消息
+        .route("/auth/message/read", post(handlers::message::mark_msg_read))// 设置消息为已读
+        .route("/auth/message/read_count", post(handlers::message::fetch_group_read))// 获取群聊已读状态
 
         .route("/auth/friends/search", post(handlers::friends::search_user))// 搜索用户
         .route("/auth/friends/profile", post(handlers::friends::get_friend_profile))// 获取好友资料
@@ -72,8 +73,8 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/groups/get_ban_status", post(handlers::groups::get_ban_status))//获取用户禁言状态
         .route("/auth/groups/ban_member", post(handlers::groups::ban_member))//禁言群成员
         .route("/auth/groups/remove_mute_admin", post(handlers::groups::remove_mute_admin))//解除禁言
-        // .route("/auth/online/friends-online", post(handlers::online::get_friends_online))// 获取好友列表在线状态
-        // .route("/auth/online/group-online", post(handlers::online::get_group_online))// 获取群聊在线状态
+        .route("/auth/online/friends-online", get(handlers::online::get_friends_online))// 获取好友列表在线状态
+        .route("/auth/online/group-online", post(handlers::online::get_group_online))// 获取群聊在线状态
 
         // .route("/auth/file/upload", post(handlers::file::upload_file))// 上传文件
         // .route("/auth/file/preview", post(handlers::file::preview_file))// 预览文件
