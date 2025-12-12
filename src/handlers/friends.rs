@@ -1,6 +1,6 @@
 use axum::Extension;
 use axum::{extract::State, Json};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 
 use crate::models::entities::{GenderOptionExt, ReqStatus, ReqStatusOptionExt, Friends};
 use crate::models::others::Claims;
@@ -336,7 +336,7 @@ pub async fn send_friend_request(
         receiver_uid: payload.receiver_id.clone(), // receiver_id 直接就是 uid
         status: ReqStatus::Pending,
         apply_text: Some(payload.message),
-        create_time: DateTime::from_timestamp(payload.create_time, 0),
+        create_time: None,  // 让数据库使用 DEFAULT CURRENT_TIMESTAMP
         handle_time: None, // 处理时间设为 NULL
     };
 
@@ -403,11 +403,8 @@ pub async fn respond_friend_request(
         }
     }
 
-    // 6. 转换 handle_time
-    let handle_time = DateTime::from_timestamp(payload.handle_time, 0)
-        .ok_or_else(|| crate::models::errors::AppError::BadRequest(
-            "Invalid handle_time timestamp".to_string()
-        ))?;
+    // 6. 生成 handle_time（使用服务器时间）
+    let handle_time = chrono::Utc::now();
 
     // 7. 根据 action 处理请求
     match payload.action.as_str() {

@@ -67,7 +67,6 @@ pub struct FriendProfileRequest {
 pub struct FriendRequestRequest {
     pub receiver_id: String,// 接收者id
     pub message: String,// 申请消息
-    pub create_time: i64,// 好友请求创建时间（时间戳）
 }
 
 // 回复好友请求请求模型
@@ -75,7 +74,6 @@ pub struct FriendRequestRequest {
 pub struct RespondFriendRequestRequest {
     pub req_id: String,      // 好友请求ID
     pub action: String,      // 操作类型: "accept" 或 "reject"
-    pub handle_time: i64, // 处理时间戳
 }
 
 // 好友请求列表请求模型
