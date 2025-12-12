@@ -2,7 +2,7 @@ use chrono::NaiveDateTime;
 use sqlx::MySqlPool;
 use async_trait::async_trait;
 
-use crate::models::errors::AppResult;
+use crate::models::errors::{AppResult, AppError};
 use crate::models::repository::GroupChatRepository;
 use crate::models::entities::{GroupChat, GroupJoinRequest, GroupMember, MuteRecord};
 use crate::models::entities::Role;
@@ -18,22 +18,20 @@ impl GroupChatRepository for MySqlPool {
         
         //插入或更新
         sqlx::query!(
-            "INSERT INTO group_chat 
-            (gid, group_name, manager_uid, group_avatar, group_intro, create_time) 
-            VALUES (?,?,?,?,?,?)
+            "INSERT INTO group_chat
+            (gid, group_name, manager_uid, group_avatar, group_intro)
+            VALUES (?,?,?,?,?)
             ON DUPLICATE KEY UPDATE
             group_name = VALUES(group_name),
             manager_uid = VALUES(manager_uid),
             group_avatar = VALUES(group_avatar),
-            group_intro = VALUES(group_intro),
-            create_time = VALUES(create_time)
+            group_intro = VALUES(group_intro)
             ",
                 group.gid,
                 group.group_name,
                 group.manager_uid,
                 group.group_avatar,
                 group.group_intro,
-                group.create_time,
         ).execute(&mut *tx).await?;
 
         //提交事务
@@ -101,26 +99,31 @@ impl GroupChatRepository for MySqlPool {
         //事务
         let mut tx=self.begin().await?;
 
+        // 将 Role 枚举转换为字符串
+        let role_str = match member.role {
+            crate::models::entities::Role::Owner => "Owner",
+            crate::models::entities::Role::Admin => "Admin",
+            crate::models::entities::Role::Member => "Member",
+        };
+
         //插入或更新
         sqlx::query!(
             "INSERT INTO group_member
-            (uid, gid, role, nickname, level, join_time, do_not_disturb, group_by, remark, is_pinned)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (uid, gid, role, nickname, level, do_not_disturb, group_by, remark, is_pinned)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
             role = VALUES(role),
             nickname = VALUES(nickname),
             level = VALUES(level),
-            join_time = VALUES(join_time),
             do_not_disturb = VALUES(do_not_disturb),
             group_by = VALUES(group_by),
             remark = VALUES(remark),
             is_pinned = VALUES(is_pinned)",
             member.uid,
             member.gid,
-            member.role,
+            role_str,  // 使用转换后的字符串
             member.nickname,
             member.level,
-            member.join_time,
             member.do_not_disturb,
             member.group_by,
             member.remark,
@@ -207,17 +210,23 @@ impl GroupChatRepository for MySqlPool {
         //事务
         let mut tx=self.begin().await?;
 
+        // 验证 role 值是否正确
+        let validated_role = match role {
+            "Owner" | "Admin" | "Member" => role,
+            _ => return Err(AppError::BadRequest(format!("无效的角色类型: {}", role))),
+        };
+
         sqlx::query!(
             "UPDATE group_member
                 SET role = ?
             WHERE gid = ? AND uid = ?",
-            role,
+            validated_role,
             gid,
             uid
         ).execute(&mut *tx).await?;
 
         tx.commit().await?;
-        
+
         Ok(())
     }
     // 退出群聊
