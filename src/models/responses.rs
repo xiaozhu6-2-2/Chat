@@ -281,7 +281,7 @@ pub struct LeaveGroupResponse {
 // 踢出群成员响应模型
 #[derive(Serialize, Deserialize)]
 pub struct KickMemberResponse {
-    // 空结构体，只返回成功状态
+    pub success: bool,
 }
 
 // 解散群聊响应模型
@@ -299,7 +299,7 @@ pub struct MemberSettingResponse {
 // 修改群聊设置响应模型
 #[derive(Serialize, Deserialize)]
 pub struct SettingGourpResponse {
-    // 空结构体，只返回成功状态
+    pub success: bool,
 }
 
 // 群公告项模型
@@ -353,7 +353,7 @@ pub struct SettingAdminResponse {
 #[derive(Serialize, Deserialize)]
 pub struct GetBanStatusResponse {
     pub is_banned: bool,       // 是否被禁言
-    pub expired: String,        // 剩余时间戳（如果未禁言则为空）
+    pub expired: i64,        // 剩余时间戳（如果未禁言则为空）
 }
 
 // 禁言成员响应模型

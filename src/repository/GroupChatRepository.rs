@@ -337,16 +337,23 @@ impl GroupChatRepository for MySqlPool {
 
         let mut tx=self.begin().await?;
 
+        // 将 ReqStatus 枚举转换为字符串
+        let status_str = match request.status {
+            crate::models::entities::ReqStatus::Pending => "pending",
+            crate::models::entities::ReqStatus::Accepted => "accepted",
+            crate::models::entities::ReqStatus::Rejected => "rejected",
+            crate::models::entities::ReqStatus::Expired => "expired",
+        };
+
         sqlx::query!(
-            "INSERT INTO group_join_request(req_id, gid, applicant_uid, approver_uid, status, apply_text, create_time, handle_time) 
-            VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO group_join_request(req_id, gid, applicant_uid, approver_uid, status, apply_text, handle_time)
+            VALUES (?,?,?,?,?,?,?)",
             request.req_id,
             request.gid,
             request.applicant_uid,
             request.approver_uid,
-            request.status,
+            status_str,  // 使用转换后的字符串
             request.apply_text,
-            request.create_time,
             request.handle_time
         ).execute(&mut *tx).await?;
 
