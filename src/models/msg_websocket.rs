@@ -4,22 +4,27 @@ use serde_json::Value;
 // 公共的消息数据负载
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MesPayload {
-    message_id: Option<String>,
-    chat_id: Option<String>,
-    timestamp: Option<i64>,
+    // 消息元数据
+    message_id: Option<String>,// 前端传来一个临时message_id用于ACK，真正的message_id由后端生成
+    chat_id: Option<String>,// 前端传来，不改变
+    timestamp: Option<i64>,// 后端生成
 
+    // 发送者信息（前端写入）
     sender_id: Option<String>,
     sender_name: Option<String>,
     sender_avatar: Option<String>,
 
+    // 接收者信息
     receiver_id: Option<String>,
 
-    content_type: Option<String>,
-    details: Option<String>,
+    // 消息
+    content_type: Option<String>,// 消息类型
+    details: Option<String>,// 消息内容
 
-    is_announcement: bool,
-    mentioned_uids: Vec<String>,
-    quote_msg_id: String,
+    // 实时状态信息
+    is_announcement: bool,// 是否是群聊公告
+    mentioned_uids: Vec<String>,// @uid列表
+    quote_msg_id: String,// 引用的信息
 }
 // 实现类方法
 impl MesPayload {

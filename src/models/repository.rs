@@ -67,6 +67,15 @@ pub trait FriendshipRepository: Send + Sync {
     // 更新好友申请状态
     async fn update_request_status(&self, req_id: &str, status: &str, handle_time: DateTime<Utc>) -> AppResult<()>;
 
+    // 在事务中处理好友请求接受的所有操作（更新状态、创建好友关系、创建私聊会话）
+    async fn accept_friend_request_with_chat(
+        &self,
+        req_id: &str,
+        handle_time: DateTime<Utc>,
+        friendship: Friends,
+        private_chat: PrivateChat
+    ) -> AppResult<()>;
+
 }
 
 // 群聊管理聚合根

@@ -131,6 +131,7 @@ pub struct FriendRequestResponse {
 pub struct RespondFriendRequestResponse {
     pub uid: String,// 用户id
     pub fid: String,// 好友关系id
+    pub pid: String,// 私聊会话id
 }
 
 // 好友请求项

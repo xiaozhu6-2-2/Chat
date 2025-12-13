@@ -1,8 +1,7 @@
 use axum::Extension;
 use axum::{extract::State, Json};
-use chrono::Utc;
 
-use crate::models::entities::{GenderOptionExt, ReqStatus, ReqStatusOptionExt, Friends};
+use crate::models::entities::{GenderOptionExt, ReqStatus, ReqStatusOptionExt, Friends, PrivateChat};
 use crate::models::others::Claims;
 use crate::models::repository::{UserRepository, FriendshipRepository};
 use crate::models::requests::{FriendRequestRequest, RemoveFriendRequest, RespondFriendRequestRequest, UpdateFriendRemarkBlacklistGroupByRequest};
@@ -432,12 +431,16 @@ pub async fn respond_friend_request(
                 (friend_request.receiver_uid.clone(), friend_request.sender_uid.clone())
             };
 
-            // 创建好友关系
+            // 生成私聊会话 ID
+            let snowflake_chat = crate::utils::snowflake::Snowflake::new(1, None)?;
+            let pid = snowflake_chat.next_id()?.to_string();
+
+            // 创建好友关系实体
             let friendship = Friends {
                 fid: fid.clone(),
-                uid,
-                to_uid,
-                create_time: Some(Utc::now()),
+                uid: uid.clone(),
+                to_uid: to_uid.clone(),
+                create_time: None, // 让数据库自动设置
                 is_blacklist: Some(0),
                 to_is_blacklist: Some(0),
                 remark: None,
@@ -446,20 +449,31 @@ pub async fn respond_friend_request(
                 to_group_by: None,
             };
 
-            // 保存好友关系
-            state.db_pool.save_friendship(friendship).await?;
+            // 创建私聊会话实体
+            let private_chat = PrivateChat {
+                pid: pid.clone(),
+                uid1: uid.clone(),
+                uid2: to_uid.clone(),
+                create_time: None, // 让数据库自动设置
+                is_pinned_by_uid1: Some(0),
+                is_pinned_by_uid2: Some(0),
+                do_not_disturb_uid1: Some(0),
+                do_not_disturb_uid2: Some(0),
+            };
 
-            // 更新好友请求状态为已接受
-            state.db_pool.update_request_status(
-                &payload.req_id,
-                "accepted",
-                handle_time
+            // 调用 Repository 方法处理所有操作
+            state.db_pool.accept_friend_request_with_chat(
+                &friend_request.req_id,
+                handle_time,
+                friendship,
+                private_chat
             ).await?;
 
             // 返回成功响应，包含另一位用户的 ID 和好友关系 ID
             Ok(Json(RespondFriendRequestResponse {
                 uid: friend_request.sender_uid,
                 fid,
+                pid
             }))
         }
         "reject" => {
@@ -470,10 +484,11 @@ pub async fn respond_friend_request(
                 handle_time
             ).await?;
 
-            // 返回拒绝响应，两个字段都返回 "Rejected"
+            // 返回拒绝响应，三个字段都返回 "Rejected"
             Ok(Json(RespondFriendRequestResponse {
                 uid: "Rejected".to_string(),
                 fid: "Rejected".to_string(),
+                pid: "Rejected".to_string(),
             }))
         }
         _ => {

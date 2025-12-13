@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::models::errors::AppResult;
 use crate::models::repository::FriendshipRepository;
-use crate::models::entities::{Friends, FriendRequest};
+use crate::models::entities::{FriendRequest, Friends, PrivateChat};
 use crate::models::entities::ReqStatus;
 
 #[async_trait]
@@ -288,6 +288,63 @@ impl FriendshipRepository for MySqlPool {
             req_id
         ).execute(&mut *tx).await?;
 
+        tx.commit().await?;
+
+        Ok(())
+    }
+
+    // 在事务中处理好友请求接受的所有操作（更新状态、创建好友关系、创建私聊会话）
+    async fn accept_friend_request_with_chat(
+        &self,
+        req_id: &str,
+        handle_time: DateTime<Utc>,
+        friendship: Friends,
+        private_chat: PrivateChat
+    ) -> AppResult<()> {
+        // 使用事务处理所有操作
+        let mut tx = self.begin().await?;
+
+        // 1. 更新好友请求状态
+        sqlx::query!(
+            "UPDATE friend_request
+            SET status = ?, handle_time = ?
+            WHERE req_id = ?",
+            "accepted",
+            handle_time,
+            req_id
+        ).execute(&mut *tx).await?;
+
+        // 2. 保存好友关系（不设置create_time，让数据库自动设置）
+        sqlx::query!(
+            "INSERT INTO friends
+            (fid, uid, to_uid, is_blacklist, to_is_blacklist, remark, to_remark, group_by, to_group_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            friendship.fid,
+            friendship.uid,
+            friendship.to_uid,
+            friendship.is_blacklist,
+            friendship.to_is_blacklist,
+            friendship.remark,
+            friendship.to_remark,
+            friendship.group_by,
+            friendship.to_group_by
+        ).execute(&mut *tx).await?;
+
+        // 3. 保存私聊会话（不设置create_time，让数据库自动设置）
+        sqlx::query!(
+            "INSERT INTO private_chat
+            (pid, uid1, uid2, is_pinned_by_uid1, is_pinned_by_uid2, do_not_disturb_uid1, do_not_disturb_uid2)
+            VALUES (?, ?, ?, ?, ?, ?, ?)",
+            private_chat.pid,
+            private_chat.uid1,
+            private_chat.uid2,
+            private_chat.is_pinned_by_uid1,
+            private_chat.is_pinned_by_uid2,
+            private_chat.do_not_disturb_uid1,
+            private_chat.do_not_disturb_uid2
+        ).execute(&mut *tx).await?;
+
+        // 提交事务
         tx.commit().await?;
 
         Ok(())
