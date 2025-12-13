@@ -84,7 +84,7 @@ pub fn create_routes() -> Router<AppState> {
         .route_layer(middleware::from_fn(auth_middleware));
 
     let ws_route: Router<AppState> = Router::new()
-        .route("/auth/connection/ws",post(handlers::connections::websocket_handler))
+        .route("/auth/connection/ws",get(handlers::connections::websocket_handler))
         .layer(middleware::from_fn(ws_auth_middleware));
 
     Router::new()
