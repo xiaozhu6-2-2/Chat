@@ -5,8 +5,7 @@ use async_trait::async_trait;
 use crate::models::errors::{AppResult, AppError};
 use crate::models::repository::GroupChatRepository;
 use crate::models::entities::{GroupChat, GroupJoinRequest, GroupMember, MuteRecord};
-use crate::models::entities::Role;
-use crate::models::entities::ReqStatus;
+use crate::models::entities::{Role, ReqStatus, EnumConvertible};
 #[async_trait]
 impl GroupChatRepository for MySqlPool {
     //-------------------------群聊基础管理----------------------------
@@ -99,12 +98,8 @@ impl GroupChatRepository for MySqlPool {
         //事务
         let mut tx=self.begin().await?;
 
-        // 将 Role 枚举转换为字符串
-        let role_str = match member.role {
-            crate::models::entities::Role::Owner => "Owner",
-            crate::models::entities::Role::Admin => "Admin",
-            crate::models::entities::Role::Member => "Member",
-        };
+        // 使用新的 to_enum_string() 方法转换 Role 枚举
+        let role_str = member.role.to_enum_string();
 
         //插入或更新
         sqlx::query!(

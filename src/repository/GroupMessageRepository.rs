@@ -4,8 +4,7 @@ use async_trait::async_trait;
 
 use crate::models::errors::AppResult;
 use crate::models::repository::GroupMessageRepository;
-use crate::models::entities::GroupMessage;
-use crate::models::entities::GroupMsgType;
+use crate::models::entities::{GroupMessage, GroupMsgType, EnumConvertible};
 
 #[async_trait]
 impl GroupMessageRepository for MySqlPool {
@@ -43,7 +42,7 @@ impl GroupMessageRepository for MySqlPool {
                 msg.sender_uid,
                 msg.send_time,
                 msg.is_revoked,
-                msg.msg_type,
+                msg.msg_type.to_enum_string(),
                 msg.mentioned_uids,
                 msg.quote_msg_id,
                 msg.is_announcement

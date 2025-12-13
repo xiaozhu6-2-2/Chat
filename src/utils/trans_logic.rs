@@ -18,7 +18,7 @@ use tokio_util::sync::CancellationToken;
 // 分离模块导入
 use crate::models::errors::{AppError, AppResult};
 use crate::models::msg_websocket::{ClientMessage, MesPayload, ServerMessage, MessageAck};
-use crate::models::entities::{PrivateMessage, PrivateMsgType, GroupMessage, GroupMsgType};
+use crate::models::entities::{PrivateMessage, PrivateMsgType, GroupMsgType, EnumConvertible};
 use crate::models::others::GroupBroadcastChannel;
 use crate::models::repository::{UserRepository, FriendshipRepository, GroupChatRepository, PrivateChatRepository, GroupMessageRepository};
 use crate::state::AppState;
@@ -97,35 +97,40 @@ pub async fn handle_private_chat(
         }
     }
 
-    // 2. 获取接收者account（注意：get_receiver_id返回的是account，不是uid）
-    let receiver_account = payload.get_receiver_id()
-        .ok_or_else(|| AppError::RecipientNotFound("接收者account为空".to_string()))?
+    // 2. 获取接收者UID
+    let receiver_id = payload.get_receiver_id()
+        .ok_or_else(|| AppError::RecipientNotFound("接收者UID为空".to_string()))?
         .clone();
 
-    // 3. 通过account获取接收者uid
-    let receiver_user = state.db_pool.find_user_by_account(&receiver_account).await?;
-    let receiver_id = receiver_user.uid;
+    // 3. 获取payload中的chat_id (PID)
+    let payload_chat_id = payload.chat_id.clone()
+        .ok_or_else(|| AppError::NotFound("chat_id为空".to_string()))?;
 
     // 4. 验证权限
     state.db_pool.validate_private_message_permission(&sender_uid, &receiver_id).await?;
 
-    // 5. 生成消息ID
+    // 5. 通过sender和receiver验证chat_id的正确性
+    let private_chat = state.db_pool
+        .find_chat_by_users(&sender_uid, &receiver_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("私聊会话不存在".to_string()))?;
+
+    // 验证payload中的chat_id是否与数据库中的PID一致
+    if private_chat.pid != payload_chat_id {
+        return Err(AppError::Forbidden("chat_id验证失败，不匹配发送者和接收者的私聊".to_string()));
+    }
+
+    let chat_id = private_chat.pid;
+
+    // 6. 生成消息ID
     let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
     let message_id = snowflake.next_id()?.to_string();
 
-    // 6. 获取私聊会话（根据好友关系，会话必然存在）
-    let private_chat = state.db_pool
-        .find_chat_by_users(&sender_uid, &receiver_id)
-        .await?;
+    // 7. 获取接收者的account（用于检查在线状态和发送消息）
+    let receiver_user = state.db_pool.find_user_by_uid(&receiver_id).await?;
+    let receiver_account = receiver_user.account;
 
-    let chat_id = match private_chat {
-        Some(chat) => chat.pid,
-        None => {
-            return Err(AppError::NotFound("私聊会话不存在".to_string()));
-        }
-    };
-
-    // 7. 构建消息实体（send_time设为None，让数据库使用默认值）
+    // 8. 构建消息实体（send_time设为None，让数据库使用默认值）
     // 先克隆需要使用的字段
     let content = payload.details.clone().unwrap_or_default();
     let content_type = payload.content_type.clone();
@@ -141,34 +146,34 @@ pub async fn handle_private_chat(
         mes_type: parse_message_type(&content_type),
     };
 
-    // 8. 保存消息到数据库
+    // 9. 保存消息到数据库
     PrivateChatRepository::save_message(&state.db_pool, message).await?;
 
-    // 9. 从数据库获取刚刚保存的消息（获取数据库生成的时间戳）
+    // 10. 从数据库获取刚刚保存的消息（获取数据库生成的时间戳）
     let saved_message = PrivateChatRepository::find_message_by_id(&state.db_pool, &message_id).await?
         .ok_or_else(|| AppError::NotFound("消息保存失败".to_string()))?;
 
-    // 10. 获取数据库生成的时间戳
+    // 11. 获取数据库生成的时间戳
     let timestamp = saved_message.send_time
         .ok_or_else(|| AppError::NotFound("消息时间戳缺失".to_string()))?
         .timestamp();
 
-    // 11. 获取发送者account（用于发送ACK）
+    // 12. 获取发送者account（用于发送ACK）
     let sender_account = state.db_pool
         .find_user_by_uid(&sender_uid).await?
         .account;
 
-    // 12. 检查接收者是否在线（直接检查WebSocket连接池）
+    // 13. 检查接收者是否在线（直接检查WebSocket连接池）
     let is_receiver_online = state.connection_pool.contains_key(&receiver_account);
 
-    // 13. 发送消息（在线）或保存离线消息
+    // 14. 发送消息（在线）或保存离线消息
     if is_receiver_online {
         // 在线 - 直接发送
         send_private_message_online(payload.clone(), receiver_account, state.clone()).await?;
     }
     // 离线 - 消息已保存到数据库，无需额外操作
 
-    // 14. 发送ACK给发送方
+    // 15. 发送ACK给发送方
     send_message_ack(sender_account, MessageAck {
         temp_message_id,
         message_id,
@@ -191,19 +196,27 @@ pub async fn handle_group_chat(
         }
     }
 
-    // 2. 获取群ID
-    let group_id = payload.get_receiver_id()
-        .ok_or_else(|| AppError::RecipientNotFound("群ID为空".to_string()))?
+    // 2. 获取群ID和chat_id
+    let receiver_id = payload.get_receiver_id()
+        .ok_or_else(|| AppError::RecipientNotFound("接收者ID为空".to_string()))?
         .clone();
 
-    // 3. 验证群成员权限
-    state.db_pool.validate_group_message_permission(&sender_uid, &group_id).await?;
+    let chat_id = payload.chat_id.clone()
+        .ok_or_else(|| AppError::NotFound("chat_id为空".to_string()))?;
 
-    // 4. 生成消息ID
+    // 3. 验证receiver_id和chat_id是否相同
+    if receiver_id != chat_id {
+        return Err(AppError::Forbidden("群聊消息中receiver_id和chat_id必须相同".to_string()));
+    }
+
+    // 4. 验证群成员权限
+    state.db_pool.validate_group_message_permission(&sender_uid, &chat_id).await?;
+
+    // 5. 生成消息ID
     let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
     let message_id = snowflake.next_id()?.to_string();
 
-    // 5. 构建群聊消息实体（send_time设为None，让数据库使用默认值）
+    // 6. 构建群聊消息实体（send_time设为None，让数据库使用默认值）
     // 先克隆需要使用的字段
     let content = payload.details.clone().unwrap_or_default();
     let content_type = payload.content_type.clone();
@@ -214,7 +227,7 @@ pub async fn handle_group_chat(
 
     let message = crate::models::entities::GroupMessage {
         msg_id: message_id.clone(),
-        gid: group_id.clone(),
+        gid: chat_id.clone(),
         content,
         sender_uid: sender_uid.clone(),
         send_time: None, // 让数据库使用DEFAULT CURRENT_TIMESTAMP
@@ -233,27 +246,27 @@ pub async fn handle_group_chat(
         is_announcement: if is_announcement { Some(1) } else { Some(0) },
     };
 
-    // 6. 保存消息到数据库
+    // 7. 保存消息到数据库
     GroupMessageRepository::save_message(&state.db_pool, message).await?;
 
-    // 7. 从数据库获取刚刚保存的消息（获取数据库生成的时间戳）
+    // 8. 从数据库获取刚刚保存的消息（获取数据库生成的时间戳）
     let saved_message = GroupMessageRepository::find_message_by_id(&state.db_pool, &message_id).await?
         .ok_or_else(|| AppError::NotFound("消息保存失败".to_string()))?;
 
-    // 8. 获取数据库生成的时间戳
+    // 9. 获取数据库生成的时间戳
     let timestamp = saved_message.send_time
         .ok_or_else(|| AppError::NotFound("消息时间戳缺失".to_string()))?
         .timestamp();
 
-    // 9. 获取发送者account
+    // 10. 获取发送者account
     let sender_account = state.db_pool
         .find_user_by_uid(&sender_uid).await?
         .account;
 
-    // 10. 广播消息到群聊频道
+    // 11. 广播消息到群聊频道
     send_group_message_broadcast(payload, state.clone()).await?;
 
-    // 11. 发送ACK给发送方
+    // 12. 发送ACK给发送方
     send_message_ack(sender_account, MessageAck {
         temp_message_id,
         message_id,
@@ -422,17 +435,10 @@ pub async fn send_online_state(
 
 // 辅助函数：解析私聊消息类型
 fn parse_message_type(content_type: &Option<String>) -> PrivateMsgType {
-    match content_type.as_deref() {
-        Some("text") => PrivateMsgType::Text,
-        Some("image") => PrivateMsgType::Image,
-        Some("file") => PrivateMsgType::File,
-        Some("voice") => PrivateMsgType::Voice,
-        Some("video") => PrivateMsgType::Video,
-        Some("link") => PrivateMsgType::Link,
-        Some("emoji") => PrivateMsgType::Emoji,
-        Some("annoucement") => PrivateMsgType::Annoucement,
-        _ => PrivateMsgType::Text,
-    }
+    content_type
+        .as_ref()
+        .and_then(|s| PrivateMsgType::from_enum_string(s))
+        .unwrap_or(PrivateMsgType::Text)
 }
 
 // 发送私聊消息给在线用户
@@ -480,17 +486,10 @@ async fn send_message_ack(
 
 // 辅助函数：解析群聊消息类型
 fn parse_group_message_type(content_type: &Option<String>) -> GroupMsgType {
-    match content_type.as_deref() {
-        Some("text") => GroupMsgType::Text,
-        Some("image") => GroupMsgType::Image,
-        Some("file") => GroupMsgType::File,
-        Some("voice") => GroupMsgType::Voice,
-        Some("video") => GroupMsgType::Video,
-        Some("link") => GroupMsgType::Link,
-        Some("emoji") => GroupMsgType::Emoji,
-        Some("annoucement") => GroupMsgType::Annoucement,
-        _ => GroupMsgType::Text,
-    }
+    content_type
+        .as_ref()
+        .and_then(|s| GroupMsgType::from_enum_string(s))
+        .unwrap_or(GroupMsgType::Text)
 }
 
 // 发送群聊消息广播

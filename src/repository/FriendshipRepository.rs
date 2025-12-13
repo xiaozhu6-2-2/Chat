@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use crate::models::errors::AppResult;
 use crate::models::repository::FriendshipRepository;
 use crate::models::entities::{FriendRequest, Friends, PrivateChat};
-use crate::models::entities::ReqStatus;
+use crate::models::entities::{ReqStatus, EnumConvertible};
 
 #[async_trait]
 impl FriendshipRepository for MySqlPool {
@@ -202,7 +202,7 @@ impl FriendshipRepository for MySqlPool {
             request.req_id,
             request.sender_uid,
             request.receiver_uid,
-            request.status,
+            request.status.to_enum_string(),
             request.apply_text,
             request.create_time,
             request.handle_time

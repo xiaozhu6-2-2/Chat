@@ -1,10 +1,10 @@
 use axum::Extension;
 use axum::{extract::State, Json};
 
-use crate::models::entities::Gender;
+use crate::models::entities::{Gender, OptionalEnumExt};
 use crate::models::others::Claims;
 use crate::models::repository::UserRepository;
-use crate::models::{errors::AppResult, responses::UserInfoResponse, responses::UserInfoUpdateResponse, responses::FetchProfileResponse, requests::UserInfoUpdateRequest, requests::FetchProfileRequest, entities::GenderOptionExt};
+use crate::models::{errors::AppResult, responses::UserInfoResponse, responses::UserInfoUpdateResponse, responses::FetchProfileResponse, requests::UserInfoUpdateRequest, requests::FetchProfileRequest};
 use crate::state::AppState;
 
 pub async fn get_user_info(

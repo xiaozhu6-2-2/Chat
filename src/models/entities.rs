@@ -6,6 +6,56 @@ use chrono::{DateTime, Utc};
 
 // 分离模块导入
 
+// 统一的枚举转换基础设施
+
+/// 枚举转换通用 trait
+pub trait EnumConvertible {
+    /// 将枚举转换为字符串
+    fn to_enum_string(&self) -> String;
+    /// 从字符串创建枚举实例
+    fn from_enum_string(s: &str) -> Option<Self>
+    where
+        Self: Sized;
+}
+
+/// 处理 Option<枚举> 类型的扩展 trait
+pub trait OptionalEnumExt<T: EnumConvertible> {
+    /// 将 Option<枚举> 转换为 Option<String>
+    fn to_optional_string(&self) -> Option<String>;
+    /// 从 Option<String> 创建 Option<枚举>
+    fn from_optional_string(s: Option<String>) -> Option<T>;
+}
+
+/// 简化实现枚举转换的宏
+macro_rules! impl_enum_convertible {
+    ($enum_type:ty, { $($variant:ident => $value:expr),* $(,)? }) => {
+        impl EnumConvertible for $enum_type {
+            fn to_enum_string(&self) -> String {
+                match self {
+                    $( Self::$variant => $value.to_string(), )*
+                }
+            }
+
+            fn from_enum_string(s: &str) -> Option<Self> {
+                match s {
+                    $($value => Some(Self::$variant),)*
+                    _ => None,
+                }
+            }
+        }
+
+        impl OptionalEnumExt<$enum_type> for Option<$enum_type> {
+            fn to_optional_string(&self) -> Option<String> {
+                self.as_ref().map(|e| e.to_enum_string())
+            }
+
+            fn from_optional_string(s: Option<String>) -> Option<$enum_type> {
+                s.and_then(|s| <$enum_type>::from_enum_string(&s))
+            }
+        }
+    };
+}
+
 // 性别枚举
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, sqlx::Type)]
 #[sqlx(type_name = "TEXT", rename_all = "lowercase")]
@@ -15,33 +65,13 @@ pub enum Gender {
     Other,
 }
 
-// 为 Option<Gender> 添加转换扩展
-pub trait GenderOptionExt {
-    fn to_optional_string(&self) -> Option<String>;
-    fn from_optional_string(gender: Option<String>) -> Option<Gender>;
-}
+// 使用宏实现 Gender 的转换功能
+impl_enum_convertible!(Gender, {
+    Male => "male",
+    Female => "female",
+    Other => "other"
+});
 
-impl GenderOptionExt for Option<Gender> {
-    fn to_optional_string(&self) -> Option<String> {
-        self.as_ref().map(|g| {
-            match g {
-                Gender::Male => "male".to_string(),
-                Gender::Female => "female".to_string(),
-                Gender::Other => "other".to_string(),
-            }
-        })
-    }
-
-    fn from_optional_string(gender: Option<String>) -> Option<Gender> {
-        match gender.as_deref() {
-            Some("male") => Some(Gender::Male),
-            Some("female") => Some(Gender::Female),
-            Some("other") => Some(Gender::Other),
-            Some(_) => None,
-            None => None,
-        }
-    }
-}
 
 // 用户表模型(user表)
 #[derive(Debug, Clone, Deserialize, Serialize, FromRow, PartialEq)]
@@ -86,6 +116,14 @@ pub enum ReqStatus {
     Expired
 }
 
+// 使用宏实现 ReqStatus 的转换功能
+impl_enum_convertible!(ReqStatus, {
+    Pending => "pending",
+    Accepted => "accepted",
+    Rejected => "rejected",
+    Expired => "expired"
+});
+
 impl std::fmt::Display for ReqStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -93,36 +131,6 @@ impl std::fmt::Display for ReqStatus {
             ReqStatus::Accepted => write!(f, "accepted"),
             ReqStatus::Rejected => write!(f, "rejected"),
             ReqStatus::Expired => write!(f, "expired"),
-        }
-    }
-}
-
-// 为 Option<ReqStatus> 添加转换扩展
-pub trait ReqStatusOptionExt {
-    fn to_optional_string(&self) -> Option<String>;
-    fn from_optional_string(status: Option<String>) -> Option<ReqStatus>;
-}
-
-impl ReqStatusOptionExt for Option<ReqStatus> {
-    fn to_optional_string(&self) -> Option<String> {
-        self.as_ref().map(|s| {
-            match s {
-                ReqStatus::Pending => "pending".to_string(),
-                ReqStatus::Accepted => "accepted".to_string(),
-                ReqStatus::Rejected => "rejected".to_string(),
-                ReqStatus::Expired => "expired".to_string(),
-            }
-        })
-    }
-
-    fn from_optional_string(status: Option<String>) -> Option<ReqStatus> {
-        match status.as_deref() {
-            Some("pending") => Some(ReqStatus::Pending),
-            Some("accepted") => Some(ReqStatus::Accepted),
-            Some("rejected") => Some(ReqStatus::Rejected),
-            Some("expired") => Some(ReqStatus::Expired),
-            Some(_) => None,
-            None => None,
         }
     }
 }
@@ -148,6 +156,13 @@ pub enum Role {
     Admin,
     Owner
 }
+
+// 使用宏实现 Role 的转换功能（统一使用小写形式）
+impl_enum_convertible!(Role, {
+    Member => "member",
+    Admin => "admin",
+    Owner => "owner"
+});
 
 
 // 群聊成员模型(group_member表)
@@ -178,6 +193,18 @@ pub enum GroupMsgType {
     Emoji,
     Annoucement
 }
+
+// 使用宏实现 GroupMsgType 的转换功能
+impl_enum_convertible!(GroupMsgType, {
+    Text => "text",
+    Image => "image",
+    File => "file",
+    Voice => "voice",
+    Video => "video",
+    Link => "link",
+    Emoji => "emoji",
+    Annoucement => "annoucement"
+});
 
 // 群聊消息表(group_message表)
 #[derive(Debug, Clone, Deserialize, Serialize, FromRow)]
@@ -240,6 +267,18 @@ pub enum PrivateMsgType {
     Annoucement
 }
 
+// 使用宏实现 PrivateMsgType 的转换功能
+impl_enum_convertible!(PrivateMsgType, {
+    Text => "text",
+    Image => "image",
+    File => "file",
+    Voice => "voice",
+    Video => "video",
+    Link => "link",
+    Emoji => "emoji",
+    Annoucement => "annoucement"
+});
+
 // 私聊消息表(private_message表)
 #[derive(Debug, Clone, Deserialize, Serialize, FromRow)]
 pub struct PrivateMessage {
@@ -291,6 +330,14 @@ pub enum FilePrivalege {
     Private,
 }
 
+// 使用宏实现 FilePrivalege 的转换功能
+impl_enum_convertible!(FilePrivalege, {
+    Public => "public",
+    Friend => "friend",
+    Group => "group",
+    Private => "private"
+});
+
 // 文件状态
 #[derive(Debug, Clone, Deserialize, Serialize, sqlx::Type)]
 #[sqlx(type_name = "TEXT", rename_all = "lowercase")]
@@ -300,6 +347,13 @@ pub enum FileStatus {
     Expired,
 }
 
+// 使用宏实现 FileStatus 的转换功能
+impl_enum_convertible!(FileStatus, {
+    Active => "active",
+    Deleted => "deleted",
+    Expired => "expired"
+});
+
 // 文件引用类型枚举
 #[derive(Debug, Clone, Deserialize, Serialize, sqlx::Type)]
 #[sqlx(type_name = "VARCHAR", rename_all = "lowercase")]
@@ -307,6 +361,12 @@ pub enum ReferenceType {
     Original,  // 原始上传者
     Shared,    // 共享使用者
 }
+
+// 使用宏实现 ReferenceType 的转换功能
+impl_enum_convertible!(ReferenceType, {
+    Original => "original",
+    Shared => "shared"
+});
 
 // 文件引用表
 #[derive(Debug, Clone, Deserialize, Serialize, FromRow)]
@@ -351,6 +411,14 @@ pub enum AssociationType {
     #[sqlx(rename = "group_avatar")]
     GroupAvatar,
 }
+
+// 使用宏实现 AssociationType 的转换功能（确保字符串值与数据库 ENUM 值匹配）
+impl_enum_convertible!(AssociationType, {
+    PrivateMessage => "private_message",
+    GroupMessage => "group_message",
+    UserAvatar => "user_avatar",
+    GroupAvatar => "group_avatar"
+});
 // 文件关联表
 #[derive(Debug, Clone, Deserialize, Serialize, FromRow)]
 pub struct FileAssociation {
