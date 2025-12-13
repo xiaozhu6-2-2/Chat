@@ -168,7 +168,6 @@ pub struct LeaveGroupRequest {
 pub struct KickMemberRequest {
     pub gid: String,          // 群组ID
     pub uid: String,          // 被踢出的群员ID
-    pub approver_uid: String,  // 执行踢人的管理员ID
 }
 
 // 解散群聊请求模型

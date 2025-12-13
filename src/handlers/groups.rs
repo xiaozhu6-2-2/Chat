@@ -290,14 +290,11 @@ pub async fn send_group_request(
         }
     }
 
-    // 4. 获取当前时间
-    let now = chrono::Utc::now();
-
-    // 5. 生成申请ID
+    // 6. 生成申请ID
     let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
     let req_id = snowflake.next_id()?.to_string();
 
-    // 6. 创建群聊申请记录
+    // 7. 创建群聊申请记录
     let group_request = crate::models::entities::GroupJoinRequest {
         req_id: req_id.clone(),
         gid: payload.gid.clone(),
@@ -305,20 +302,26 @@ pub async fn send_group_request(
         approver_uid: None,
         status: ReqStatus::Pending,
         apply_text: Some(payload.apply_text.clone()),
-        create_time: Some(now),
+        create_time: None,
         handle_time: None,
     };
 
-    // 7. 保存申请到数据库
+    // 8. 保存申请到数据库
     state.db_pool.save_group_request(group_request).await?;
 
-    // 8. 构建响应
+    // 9. 从数据库查询申请信息以获取创建时间
+    let saved_request = state.db_pool.find_group_request_by_id(&req_id).await?
+        .ok_or_else(|| AppError::DatabaseFailure(sqlx::Error::RowNotFound))?;
+
+    // 10. 构建响应
     Ok(Json(GroupRequestResponse {
         req_id,
         gid: payload.gid,
         apply_text: payload.apply_text,
-        create_time: now.timestamp(),
-        status: "pending".to_string(),
+        create_time: saved_request.create_time
+            .map(|dt| dt.timestamp())
+            .unwrap_or(0),
+        status: Some(saved_request.status).to_optional_string().unwrap_or_default(),
     }))
 }
 
@@ -490,21 +493,27 @@ pub async fn leave_group(
 
 pub async fn kick_member(
     State(state): State<AppState>,
-    Extension(_claims): Extension<Claims>,
+    Extension(claims): Extension<Claims>,
     Json(payload): Json<KickMemberRequest>,
 ) -> AppResult<Json<KickMemberResponse>> {
-    // 1. 验证群组是否存在
+    // 1. 从 claims 中获取用户账号
+    let user_account = &claims.sub;
+
+    // 2. 通过账号查找用户信息，获取 uid
+    let operator = state.db_pool.find_user_by_account(user_account).await?;
+
+    // 3. 验证群组是否存在
     let _group = state.db_pool.find_group_by_gid(&payload.gid).await?
         .ok_or_else(|| AppError::NotFound(format!("群组{}不存在", payload.gid)))?;
 
-    // 2. 查找管理员（执行踢人操作的用户）的成员信息
-    let admin_member = state.db_pool.find_member(&payload.gid, &payload.approver_uid).await?
+    // 4. 查找管理员（执行踢人操作的用户）的成员信息
+    let admin_member = state.db_pool.find_member(&payload.gid, &operator.uid).await?
         .ok_or_else(|| AppError::NotGroupMember {
-            uid: payload.approver_uid.clone(),
+            uid: operator.uid.clone(),
             gid: payload.gid.clone(),
         })?;
 
-    // 3. 验证管理员权限
+    // 5. 验证管理员权限
     match admin_member.role {
         crate::models::entities::Role::Owner => {
             // 群主可以踢出任何人
@@ -518,30 +527,32 @@ pub async fn kick_member(
         }
     }
 
-    // 4. 查找被踢用户的成员信息
+    // 6. 查找被踢用户的成员信息
     let target_member = state.db_pool.find_member(&payload.gid, &payload.uid).await?
         .ok_or_else(|| AppError::NotGroupMember {
             uid: payload.uid.clone(),
             gid: payload.gid.clone(),
         })?;
 
-    // 5. 权限检查
-    // 5.1 用户不能踢自己
-    if payload.uid == payload.approver_uid {
+    // 7. 权限检查
+    // 7.1 用户不能踢自己
+    if payload.uid == operator.uid {
         return Err(AppError::BadRequest("不能踢出自己，请使用退出群聊接口".to_string()));
     }
 
-    // 5.2 普通管理员不能踢出群主
+    // 7.2 普通管理员不能踢出群主
     if admin_member.role == crate::models::entities::Role::Admin
         && target_member.role == crate::models::entities::Role::Owner {
         return Err(AppError::InsufficientPermission("管理员不能踢出群主".to_string()));
     }
 
-    // 6. 执行踢人操作
+    // 8. 执行踢人操作
     state.db_pool.remove_member(&payload.gid, &payload.uid).await?;
 
-    // 7. 返回响应
-    Ok(Json(KickMemberResponse {}))
+    // 9. 返回响应
+    Ok(Json(KickMemberResponse {
+        success: true,
+    }))
 }
 
 pub async fn disband_group(
@@ -688,7 +699,9 @@ pub async fn set_group(
     state.db_pool.save_group(updated_group).await?;
 
     // 7. 返回成功响应
-    Ok(Json(SettingGourpResponse {}))
+    Ok(Json(SettingGourpResponse {
+        success: true,
+    }))
 }
 
 pub async fn get_announcements(
@@ -983,13 +996,13 @@ pub async fn get_ban_status(
         if record.mute_duration == -1 {
             Ok(Json(GetBanStatusResponse {
                 is_banned: true,
-                expired: "-1".to_string(),
+                expired: -1,
             }))
         } else if record.mute_duration == 0 {
             // 0 表示未禁言
             Ok(Json(GetBanStatusResponse {
                 is_banned: false,
-                expired: "0".to_string(),
+                expired: 0,
             }))
         } else {
             // 计算结束时间
@@ -1000,13 +1013,13 @@ pub async fn get_ban_status(
                 let remain_timestamp = end_time.timestamp();
                 Ok(Json(GetBanStatusResponse {
                     is_banned: true,
-                    expired: remain_timestamp.to_string(),
+                    expired: remain_timestamp,
                 }))
             } else {
                 // 禁言已过期
                 Ok(Json(GetBanStatusResponse {
                     is_banned: false,
-                    expired: "0".to_string(),
+                    expired: 0,
                 }))
             }
         }
@@ -1014,7 +1027,7 @@ pub async fn get_ban_status(
         // 没有禁言记录
         Ok(Json(GetBanStatusResponse {
             is_banned: false,
-            expired: "0".to_string(),
+            expired: 0,
         }))
     }
 }
