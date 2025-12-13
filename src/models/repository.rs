@@ -76,6 +76,13 @@ pub trait FriendshipRepository: Send + Sync {
         private_chat: PrivateChat
     ) -> AppResult<()>;
 
+    // 验证私聊消息权限
+    async fn validate_private_message_permission(
+        &self,
+        sender_uid: &str,
+        receiver_uid: &str,
+    ) -> AppResult<()>;
+
 }
 
 // 群聊管理聚合根
@@ -126,6 +133,13 @@ pub trait GroupChatRepository: Send + Sync {
     async fn find_pending_requests_by_group(&self, gid: &str) -> AppResult<Vec<GroupJoinRequest>>;
     // 更新群聊申请状态
     async fn update_request_status(&self, req_id: &str, status: &str, approver_uid: &str, handle_time: DateTime<Utc>) -> AppResult<()>;
+
+    // 验证群聊消息权限
+    async fn validate_group_message_permission(
+        &self,
+        sender_uid: &str,
+        group_id: &str,
+    ) -> AppResult<()>;
 }
 
 // 群聊消息聚合根

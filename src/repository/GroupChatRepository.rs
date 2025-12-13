@@ -422,4 +422,40 @@ impl GroupChatRepository for MySqlPool {
 
         Ok(())
     }
+
+    // 验证群聊消息权限
+    async fn validate_group_message_permission(
+        &self,
+        sender_uid: &str,
+        group_id: &str,
+    ) -> AppResult<()> {
+        // 1. 检查是否为群成员
+        let membership = self.find_member(group_id, sender_uid).await?;
+        if membership.is_none() {
+            return Err(crate::models::errors::AppError::NotGroupMember {
+                uid: sender_uid.to_string(),
+                gid: group_id.to_string(),
+            });
+        }
+
+        // 2. 检查是否被禁言
+        let mute_record = self.find_mute_records_by_user(group_id, sender_uid).await?;
+        if let Some(mute) = mute_record {
+            // 检查禁言状态
+            if mute.mute_duration == -1 {
+                // 永久禁言
+                return Err(crate::models::errors::AppError::Forbidden("您已被永久禁言".to_string()));
+            } else if mute.mute_duration > 0 {
+                // 限时禁言，检查是否过期
+                if let Some(start_time) = mute.start_time {
+                    let end_time = start_time + chrono::Duration::milliseconds(mute.mute_duration);
+                    if chrono::Utc::now() < end_time {
+                        return Err(crate::models::errors::AppError::Forbidden("您已被禁言".to_string()));
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }

@@ -357,4 +357,43 @@ impl FriendshipRepository for MySqlPool {
 
         Ok(())
     }
+
+    // 验证私聊消息权限
+    async fn validate_private_message_permission(
+        &self,
+        sender_uid: &str,
+        receiver_uid: &str,
+    ) -> AppResult<()> {
+        // 1. 检查好友关系
+        let friendship = self.find_friendship_by_users(sender_uid, receiver_uid).await?;
+
+        if friendship.is_none() {
+            return Err(crate::models::errors::AppError::Forbidden("你们不是好友关系".to_string()));
+        }
+
+        // 2. 检查黑名单（只有对方拉黑自己才阻止发送）
+        if let Some(friend) = friendship {
+            // 判断谁是发送者，谁是接收者
+            if friend.uid == sender_uid && friend.to_uid == receiver_uid {
+                // sender_uid对应uid字段，receiver_uid对应to_uid字段
+                // 检查接收者是否拉黑了发送者（to_is_blacklist）
+                if friend.to_is_blacklist == Some(1) {
+                    return Err(crate::models::errors::AppError::Forbidden("您已被对方拉黑".to_string()));
+                }
+                // 自己拉黑对方不影响发送
+            } else if friend.uid == receiver_uid && friend.to_uid == sender_uid {
+                // sender_uid对应to_uid字段，receiver_uid对应uid字段
+                // 检查接收者是否拉黑了发送者（is_blacklist）
+                if friend.is_blacklist == Some(1) {
+                    return Err(crate::models::errors::AppError::Forbidden("您已被对方拉黑".to_string()));
+                }
+                // 自己拉黑对方不影响发送
+            } else {
+                // 数据不一致，好友关系中的uid不匹配
+                return Err(crate::models::errors::AppError::NotFound("好友关系数据不一致".to_string()));
+            }
+        }
+
+        Ok(())
+    }
 }
