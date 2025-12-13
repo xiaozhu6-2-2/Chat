@@ -5,7 +5,7 @@
 // 库模块导入
 use sqlx::MySqlPool;
 
-use crate::models::errors::{AppError, AppResult};
+use crate::models::errors::{AppResult};
 
 // 分离模块导入
 
