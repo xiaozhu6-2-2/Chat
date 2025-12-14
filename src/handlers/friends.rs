@@ -420,9 +420,11 @@ pub async fn respond_friend_request(
                 ));
             }
 
-            // 生成好友关系 ID
+            // 生成统一的ID（同时用于fid和pid）
             let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
-            let fid = snowflake.next_id()?.to_string();
+            let id = snowflake.next_id()?.to_string();
+            let fid = id.clone();
+            let pid = id;
 
             // 确保较小的 uid 在前，较大的 uid 在后
             let (uid, to_uid) = if friend_request.sender_uid < friend_request.receiver_uid {
@@ -430,10 +432,6 @@ pub async fn respond_friend_request(
             } else {
                 (friend_request.receiver_uid.clone(), friend_request.sender_uid.clone())
             };
-
-            // 生成私聊会话 ID
-            let snowflake_chat = crate::utils::snowflake::Snowflake::new(1, None)?;
-            let pid = snowflake_chat.next_id()?.to_string();
 
             // 创建好友关系实体
             let friendship = Friends {
@@ -520,6 +518,7 @@ pub async fn get_friend_request_list(
         .map(|req| FriendRequestItem {
             req_id: req.req_id,
             sender_uid: req.sender_uid,
+            receiver_uid: req.receiver_uid,
             apply_text: req.apply_text,
             create_time: req.create_time.map(|dt| dt.timestamp()),
             status: req.status.to_string(),
@@ -531,6 +530,7 @@ pub async fn get_friend_request_list(
         .map(|req| FriendRequestItem {
             req_id: req.req_id,
             sender_uid: req.sender_uid,
+            receiver_uid: req.receiver_uid,
             apply_text: req.apply_text,
             create_time: req.create_time.map(|dt| dt.timestamp()),
             status: req.status.to_string(),
@@ -572,8 +572,8 @@ pub async fn remove_friend(
         ));
     }
 
-    // 5. 删除好友关系
-    state.db_pool.delete_friendship(&payload.fid).await?;
+    // 5. 删除好友关系及其相关的私聊会话和消息
+    state.db_pool.delete_friendship_with_chat(&payload.fid).await?;
 
     // 6. 返回空响应
     Ok(Json(()))

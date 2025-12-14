@@ -113,6 +113,35 @@ impl FriendshipRepository for MySqlPool {
         Ok(())
     }
 
+    // 删除好友关系及其相关的私聊会话和消息
+    async fn delete_friendship_with_chat(&self, fid: &str) -> AppResult<()> {
+        // 事务
+        let mut tx = self.begin().await?;
+
+        // 1. 删除私聊消息
+        sqlx::query!(
+            "DELETE FROM private_message WHERE pid = ?",
+            fid
+        ).execute(&mut *tx).await?;
+
+        // 2. 删除私聊会话
+        sqlx::query!(
+            "DELETE FROM private_chat WHERE pid = ?",
+            fid
+        ).execute(&mut *tx).await?;
+
+        // 3. 删除好友关系
+        sqlx::query!(
+            "DELETE FROM friends WHERE fid = ?",
+            fid
+        ).execute(&mut *tx).await?;
+
+        // 提交事务
+        tx.commit().await?;
+
+        Ok(())
+    }
+
     //-------------------------黑名单管理----------------------------
     // 保存记录到黑名单(可以加入黑名单也可以移出黑名单)
     async fn save_blacklist(&self, fid: &str, uid: &str, is_blacklist: bool) -> AppResult<()> {
