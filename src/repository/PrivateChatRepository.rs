@@ -143,15 +143,13 @@ impl PrivateChatRepository for MySqlPool {
                 pid,
                 content,
                 sender_uid,
-                send_time,
                 is_revoked,
                 is_read,
                 type)
-                VALUES (?,?,?,?,?,?,?,?)
+                VALUES (?,?,?,?,?,?,?)
             ON DUPLICATE KEY UPDATE
                 content = VALUES(content),
                 sender_uid = VALUES(sender_uid),
-                send_time = VALUES(send_time),
                 is_revoked = VALUES(is_revoked),
                 is_read = VALUES(is_read),
                 type = VALUES(type)",
@@ -159,7 +157,6 @@ impl PrivateChatRepository for MySqlPool {
                 msg.pid,
                 msg.content,
                 msg.sender_uid,
-                msg.send_time,
                 msg.is_revoked,
                 msg.is_read,
                 msg.mes_type.to_enum_string()
