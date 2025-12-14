@@ -1,7 +1,7 @@
 use axum::Extension;
 use axum::{extract::State, Json};
 
-use crate::models::entities::{GenderOptionExt, ReqStatus, ReqStatusOptionExt, Friends, PrivateChat};
+use crate::models::entities::{OptionalEnumExt, ReqStatus, Friends, PrivateChat};
 use crate::models::others::Claims;
 use crate::models::repository::{UserRepository, FriendshipRepository};
 use crate::models::requests::{FriendRequestRequest, RemoveFriendRequest, RespondFriendRequestRequest, UpdateFriendRemarkBlacklistGroupByRequest};

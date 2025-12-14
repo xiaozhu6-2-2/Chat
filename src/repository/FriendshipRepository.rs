@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use crate::models::errors::AppResult;
 use crate::models::repository::FriendshipRepository;
 use crate::models::entities::{FriendRequest, Friends, PrivateChat};
-use crate::models::entities::ReqStatus;
+use crate::models::entities::{ReqStatus, EnumConvertible};
 
 #[async_trait]
 impl FriendshipRepository for MySqlPool {
@@ -195,14 +195,6 @@ impl FriendshipRepository for MySqlPool {
         // 事务
         let mut tx = self.begin().await?;
 
-        // 将 ReqStatus 枚举转换为字符串
-        let status_str = match request.status {
-            crate::models::entities::ReqStatus::Pending => "pending",
-            crate::models::entities::ReqStatus::Accepted => "accepted",
-            crate::models::entities::ReqStatus::Rejected => "rejected",
-            crate::models::entities::ReqStatus::Expired => "expired",
-        };
-
         sqlx::query!(
             "INSERT INTO friend_request
             (req_id, sender_uid, receiver_uid, status, apply_text, create_time, handle_time)
@@ -210,7 +202,7 @@ impl FriendshipRepository for MySqlPool {
             request.req_id,
             request.sender_uid,
             request.receiver_uid,
-            status_str,  // 使用转换后的字符串
+            request.status.to_enum_string(),
             request.apply_text,
             request.create_time,
             request.handle_time

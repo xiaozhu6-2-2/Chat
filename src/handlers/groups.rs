@@ -4,7 +4,7 @@ use axum::{extract::State, Json};
 use crate::models::others::Claims;
 use crate::models::requests::{BanningMemberRequest, CreateGroupRequest, DisbandGroupRequest, GetAnnouncementsRequest, GetBanStatusRequest, GetMembersRequest, GroupProfileRequest, GroupRequestListRequest, GroupRequestRequest, GroupRespondRequest, KickMemberRequest, LeaveGroupRequest, MemberSettingRequest, RemoveMuteRequest, SettingAdminRequest, SettingGroupRequest, TransferOwnershipRequest};
 use crate::models::responses::{AnnouncementItem, BanningMemberResponse, CreateGroupResponse, DisbandGroupResponse, GetAnnouncementsResponse, GetBanStatusResponse, GetMembersResponse, GroupListItem, GroupListResponse, GroupProfileResponse, GroupRequestItem, GroupRequestListResponse, GroupRequestResponse, GroupRespondResponse, KickMemberResponse, LeaveGroupResponse, MemberItem, MemberSettingResponse, RemoveMuteResponse, SettingAdminResponse, SettingGourpResponse, TransferOwnershipResponse};
-use crate::models::entities::{ReqStatus, ReqStatusOptionExt, Role};
+use crate::models::entities::{ReqStatus, OptionalEnumExt, EnumConvertible};
 use crate::models::{errors::{AppResult, AppError}, responses::{SearchGroupResponse, SearchGroupItem}, responses::GroupCardResponse, requests::SearchGroupRequest, requests::GroupCardRequest, requests::GroupListRequest};
 use crate::models::repository::{GroupChatRepository, GroupMessageRepository, UserRepository};
 use crate::state::AppState;
@@ -348,13 +348,9 @@ pub async fn get_group_requestlist(
         })?;
 
     // 检查是否是群主或管理员
-    match member.role {
-        crate::models::entities::Role::Owner | crate::models::entities::Role::Admin => {
-            // 继续处理
-        }
-        _ => {
-            return Err(AppError::BadRequest("只有群主或管理员可以查看申请列表".to_string()));
-        }
+    let role_str = member.role.to_enum_string();
+    if role_str != "owner" && role_str != "admin" {
+        return Err(AppError::BadRequest("只有群主或管理员可以查看申请列表".to_string()));
     }
 
     // 3. 获取该群组的所有待处理申请（数据库层面已过滤）
@@ -470,17 +466,14 @@ pub async fn leave_group(
         })?;
 
     // 5. 检查用户角色
-    match member.role {
-        crate::models::entities::Role::Owner => {
-            // 群主不能直接退出群组
-            return Err(AppError::BadRequest(
-                "群主不能直接退出群组，请先转让群主身份或解散群组".to_string()
-            ));
-        }
-        crate::models::entities::Role::Admin | crate::models::entities::Role::Member => {
-            // 管理员和普通成员可以正常退出
-        }
+    let role_str = member.role.to_enum_string();
+    if role_str == "owner" {
+        // 群主不能直接退出群组
+        return Err(AppError::BadRequest(
+            "群主不能直接退出群组，请先转让群主身份或解散群组".to_string()
+        ));
     }
+    // 管理员和普通成员可以正常退出
 
     // 6. 删除成员记录
     state.db_pool.remove_member(&payload.gid, &user.uid).await?;
@@ -514,18 +507,12 @@ pub async fn kick_member(
         })?;
 
     // 5. 验证管理员权限
-    match admin_member.role {
-        crate::models::entities::Role::Owner => {
-            // 群主可以踢出任何人
-        }
-        crate::models::entities::Role::Admin => {
-            // 管理员需要额外检查
-        }
-        crate::models::entities::Role::Member => {
-            // 普通成员不能踢人
-            return Err(AppError::InsufficientPermission("普通成员没有踢人权限".to_string()));
-        }
+    let admin_role_str = admin_member.role.to_enum_string();
+    if admin_role_str == "member" {
+        // 普通成员不能踢人
+        return Err(AppError::InsufficientPermission("普通成员没有踢人权限".to_string()));
     }
+    // 群主可以踢出任何人，管理员需要额外检查
 
     // 6. 查找被踢用户的成员信息
     let target_member = state.db_pool.find_member(&payload.gid, &payload.uid).await?
@@ -541,8 +528,8 @@ pub async fn kick_member(
     }
 
     // 7.2 普通管理员不能踢出群主
-    if admin_member.role == crate::models::entities::Role::Admin
-        && target_member.role == crate::models::entities::Role::Owner {
+    let target_role_str = target_member.role.to_enum_string();
+    if admin_role_str == "admin" && target_role_str == "owner" {
         return Err(AppError::InsufficientPermission("管理员不能踢出群主".to_string()));
     }
 
@@ -655,7 +642,8 @@ pub async fn set_group(
     })?;
 
     // 4. 验证权限（只有群主和管理员可以修改群聊信息）
-    if member.role != Role::Owner && member.role != Role::Admin {
+    let role_str = member.role.to_enum_string();
+    if role_str != "owner" && role_str != "admin" {
         return Err(AppError::InsufficientPermission("只有群主和管理员可以修改群聊信息".to_string()));
     }
 
@@ -805,11 +793,7 @@ pub async fn get_members(
         match state.db_pool.find_user_by_uid(&group_member.uid).await {
             Ok(user_info) => {
                 // 转换角色为字符串
-                let role_str = match group_member.role {
-                    Role::Owner => "owner".to_string(),
-                    Role::Admin => "admin".to_string(),
-                    Role::Member => "member".to_string(),
-                };
+                let role_str = group_member.role.to_enum_string();
 
                 // 获取群昵称，如果没有则使用用户名
                 let nickname = group_member.nickname.unwrap_or_else(|| user_info.username.clone());
@@ -939,7 +923,8 @@ pub async fn set_admin(
     let target_member = target_member.ok_or_else(|| AppError::NotFound(format!("用户 {} 不是该群成员", payload.uid)))?;
 
     // 6. 验证目标用户必须是普通成员
-    if target_member.role != Role::Member {
+    let target_role_str = target_member.role.to_enum_string();
+    if target_role_str != "member" {
         return Err(AppError::BadRequest("只能将普通成员设置为管理员".to_string()));
     }
 
@@ -1051,13 +1036,9 @@ pub async fn ban_member(
         })?;
 
     // 只有群主和管理员可以禁言
-    match operator_member.role {
-        Role::Owner | Role::Admin => {
-            // 继续处理
-        }
-        Role::Member => {
-            return Err(AppError::InsufficientPermission("只有群主和管理员可以禁言成员".to_string()));
-        }
+    let operator_role_str = operator_member.role.to_enum_string();
+    if operator_role_str == "member" {
+        return Err(AppError::InsufficientPermission("只有群主和管理员可以禁言成员".to_string()));
     }
 
     // 4. 验证被禁言用户是否在群中
@@ -1065,12 +1046,13 @@ pub async fn ban_member(
         .ok_or_else(|| AppError::NotFound(format!("用户 {} 不是该群成员", payload.uid)))?;
 
     // 5. 检查权限（管理员不能禁言群主）
-    if operator_member.role == Role::Admin && target_member.role == Role::Owner {
+    let target_role_str = target_member.role.to_enum_string();
+    if operator_role_str == "admin" && target_role_str == "owner" {
         return Err(AppError::InsufficientPermission("管理员不能禁言群主".to_string()));
     }
 
     // 6. 管理员不能禁言其他管理员
-    if operator_member.role == Role::Admin && target_member.role == Role::Admin {
+    if operator_role_str == "admin" && target_role_str == "admin" {
         return Err(AppError::InsufficientPermission("管理员不能禁言其他管理员".to_string()));
     }
 
@@ -1118,13 +1100,9 @@ pub async fn remove_mute_admin(
         })?;
 
     // 只有群主和管理员可以解除禁言
-    match operator_member.role {
-        Role::Owner | Role::Admin => {
-            // 继续处理
-        }
-        Role::Member => {
-            return Err(AppError::InsufficientPermission("只有群主和管理员可以解除禁言".to_string()));
-        }
+    let operator_role_str = operator_member.role.to_enum_string();
+    if operator_role_str == "member" {
+        return Err(AppError::InsufficientPermission("只有群主和管理员可以解除禁言".to_string()));
     }
 
     // 4. 查找目标用户的禁言记录

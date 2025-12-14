@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 
 use crate::models::errors::AppResult;
 use crate::models::repository::PrivateChatRepository;
-use crate::models::entities::{PrivateChat, PrivateMessage, PrivateMsgType};
+use crate::models::entities::{PrivateChat, PrivateMessage, PrivateMsgType, EnumConvertible};
 
 #[async_trait]
 impl PrivateChatRepository for MySqlPool {
@@ -162,7 +162,7 @@ impl PrivateChatRepository for MySqlPool {
                 msg.send_time,
                 msg.is_revoked,
                 msg.is_read,
-                msg.mes_type
+                msg.mes_type.to_enum_string()
         ).execute(&mut *tx).await?;
 
         tx.commit().await?;
