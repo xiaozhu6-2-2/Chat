@@ -7,7 +7,6 @@ use std::sync::Arc;
 // */
 // 库模块导入
 use axum::extract::ws::{close_code, CloseFrame, Message};
-use chrono::Utc;
 use dashmap::DashMap;
 use log::{error, info, warn};
 use scopeguard::guard;
@@ -169,7 +168,11 @@ pub async fn handle_private_chat(
     // 14. 发送消息（在线）或保存离线消息
     if is_receiver_online {
         // 在线 - 直接发送
-        send_private_message_online(payload.clone(), receiver_account, state.clone()).await?;
+        // 创建包含正式 message_id 和准确时间戳的 payload
+        let mut online_payload = payload.clone();
+        online_payload.message_id = Some(message_id.clone());
+        online_payload.set_timestamp(Some(timestamp));
+        send_private_message_online(online_payload, receiver_account, state.clone()).await?;
     }
     // 离线 - 消息已保存到数据库，无需额外操作
 
@@ -264,7 +267,11 @@ pub async fn handle_group_chat(
         .account;
 
     // 11. 广播消息到群聊频道
-    send_group_message_broadcast(payload, state.clone()).await?;
+    // 创建包含正式 message_id 和准确时间戳的 payload
+    let mut broadcast_payload = payload.clone();
+    broadcast_payload.message_id = Some(message_id.clone());
+    broadcast_payload.set_timestamp(Some(timestamp));
+    send_group_message_broadcast(broadcast_payload, state.clone()).await?;
 
     // 12. 发送ACK给发送方
     send_message_ack(sender_account, MessageAck {
@@ -443,12 +450,11 @@ fn parse_message_type(content_type: &Option<String>) -> PrivateMsgType {
 
 // 发送私聊消息给在线用户
 async fn send_private_message_online(
-    mut payload: MesPayload,
+    payload: MesPayload,
     receiver_account: String,
     state: AppState,
 ) -> AppResult<()> {
-    // 更新payload中的时间戳
-    payload.set_timestamp(Some(Utc::now().timestamp()));
+    // 时间戳已经在调用方设置，不再使用 Utc::now()
 
     let mes_private = ClientMessage::Private(payload);
     let ws_mes_private = Message::Text(serde_json::to_string(&mes_private)
@@ -494,11 +500,10 @@ fn parse_group_message_type(content_type: &Option<String>) -> GroupMsgType {
 
 // 发送群聊消息广播
 async fn send_group_message_broadcast(
-    mut payload: MesPayload,
+    payload: MesPayload,
     state: AppState,
 ) -> AppResult<()> {
-    // 更新payload中的时间戳
-    payload.set_timestamp(Some(Utc::now().timestamp()));
+    // 时间戳已经在调用方设置，不再使用 Utc::now()
 
     let mes_group = ClientMessage::MesGroup(payload.clone());
     let group_id = payload.get_receiver_id()
