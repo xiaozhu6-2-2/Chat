@@ -20,17 +20,15 @@ impl GroupMessageRepository for MySqlPool {
                 gid,
                 content,
                 sender_uid,
-                send_time,
                 is_revoked,
                 type,
                 mentioned_uids,
                 quote_msg_id,
                 is_announcement)
-                VALUES (?,?,?,?,?,?,?,?,?,?)
+                VALUES (?,?,?,?,?,?,?,?,?)
             ON DUPLICATE KEY UPDATE
                 content = VALUES(content),
                 sender_uid = VALUES(sender_uid),
-                send_time = VALUES(send_time),
                 is_revoked = VALUES(is_revoked),
                 type = VALUES(type),
                 mentioned_uids = VALUES(mentioned_uids),
@@ -40,7 +38,6 @@ impl GroupMessageRepository for MySqlPool {
                 msg.gid,
                 msg.content,
                 msg.sender_uid,
-                msg.send_time,
                 msg.is_revoked,
                 msg.msg_type.to_enum_string(),
                 msg.mentioned_uids,
