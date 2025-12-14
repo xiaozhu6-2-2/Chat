@@ -17,16 +17,14 @@ impl PrivateChatRepository for MySqlPool {
         // 插入或更新私聊会话
         sqlx::query!(
             "INSERT INTO private_chat
-            (pid, uid1, uid2, create_time, is_pinned_by_uid1, is_pinned_by_uid2)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (pid, uid1, uid2, is_pinned_by_uid1, is_pinned_by_uid2)
+            VALUES (?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
-            create_time = VALUES(create_time),
             is_pinned_by_uid1 = VALUES(is_pinned_by_uid1),
             is_pinned_by_uid2 = VALUES(is_pinned_by_uid2)",
             chat.pid,
             chat.uid1,
             chat.uid2,
-            chat.create_time,
             chat.is_pinned_by_uid1,
             chat.is_pinned_by_uid2,
         ).execute(&mut *tx).await?;

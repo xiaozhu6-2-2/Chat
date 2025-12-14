@@ -94,8 +94,8 @@ impl UserRepository for MySqlPool {
         let mut tx = self.begin().await?;
 
         sqlx::query!(
-            "INSERT INTO user (uid, account, password, username, gender, region, email, create_time, avatar, bio)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO user (uid, account, password, username, gender, region, email, avatar, bio)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             user.uid,
             user.account,
             user.password,
@@ -107,7 +107,6 @@ impl UserRepository for MySqlPool {
             }),
             user.region,
             user.email,
-            user.create_time,
             user.avatar,
             user.bio
         ).execute(&mut *tx).await?;
@@ -124,8 +123,8 @@ impl UserRepository for MySqlPool {
         let mut tx = self.begin().await?;
 
         sqlx::query!(
-            "INSERT INTO user (uid, account, password, username, gender, region, email, create_time, avatar, bio)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "INSERT INTO user (uid, account, password, username, gender, region, email, avatar, bio)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 account = VALUES(account),
                 password = VALUES(password),
@@ -146,7 +145,6 @@ impl UserRepository for MySqlPool {
             }),
             user.region,
             user.email,
-            user.create_time,
             user.avatar,
             user.bio
         ).execute(&mut *tx).await?;
