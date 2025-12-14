@@ -49,6 +49,9 @@ pub trait FriendshipRepository: Send + Sync {
     // 删除好友关系
     async fn delete_friendship(&self, fid: &str) -> AppResult<()>;
 
+    // 删除好友关系及其相关的私聊会话和消息
+    async fn delete_friendship_with_chat(&self, fid: &str) -> AppResult<()>;
+
 //-------------------------黑名单管理----------------------------
     // 保存记录到黑名单(可以加入黑名单也可以移出黑名单)
     async fn save_blacklist(&self, fid: &str, uid: &str, is_blacklist: bool) -> AppResult<()>;

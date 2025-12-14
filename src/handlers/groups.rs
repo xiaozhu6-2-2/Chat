@@ -8,6 +8,7 @@ use crate::models::entities::{ReqStatus, OptionalEnumExt, EnumConvertible};
 use crate::models::{errors::{AppResult, AppError}, responses::{SearchGroupResponse, SearchGroupItem}, responses::GroupCardResponse, requests::SearchGroupRequest, requests::GroupCardRequest, requests::GroupListRequest};
 use crate::models::repository::{GroupChatRepository, GroupMessageRepository, UserRepository};
 use crate::state::AppState;
+use log::{info, error};
 
 pub async fn create_group(
     State(state): State<AppState>,
@@ -435,6 +436,24 @@ pub async fn handle_group_request(
         };
 
         state.db_pool.save_member(member).await?;
+
+        // 新增：为新加入的用户启动群聊监听（如果在线）
+        if let Ok(applicant_user) = state.db_pool.find_user_by_uid(&request.applicant_uid).await {
+            if let Some(conn_pool) = state.connection_pool.get(&applicant_user.account) {
+                // 用户在线，启动监听
+                if let Err(e) = state.group_task_manager.add_listener(
+                    request.applicant_uid.clone(),
+                    applicant_user.account.clone(),
+                    request.gid.clone(),
+                    conn_pool.clone(),
+                    state.broadcast_pool.clone()
+                ).await {
+                    error!("为用户 {} 启动群聊 {} 监听失败: {}", request.applicant_uid, request.gid, e);
+                } else {
+                    info!("为用户 {} 启动群聊 {} 监听成功", request.applicant_uid, request.gid);
+                }
+            }
+        }
     }
 
     // 9. 返回成功响应（空响应体，只返回状态码）
@@ -477,6 +496,13 @@ pub async fn leave_group(
 
     // 6. 删除成员记录
     state.db_pool.remove_member(&payload.gid, &user.uid).await?;
+
+    // 新增：取消用户的群聊监听任务
+    if let Err(e) = state.group_task_manager.remove_listener(&user.uid, &payload.gid).await {
+        error!("取消用户 {} 群聊 {} 监听失败: {}", user.uid, payload.gid, e);
+    } else {
+        info!("取消用户 {} 群聊 {} 监听成功", user.uid, payload.gid);
+    }
 
     // 7. 返回成功响应
     Ok(Json(LeaveGroupResponse {
@@ -536,6 +562,13 @@ pub async fn kick_member(
     // 8. 执行踢人操作
     state.db_pool.remove_member(&payload.gid, &payload.uid).await?;
 
+    // 新增：取消被踢用户的群聊监听任务
+    if let Err(e) = state.group_task_manager.remove_listener(&payload.uid, &payload.gid).await {
+        error!("取消被踢用户 {} 群聊 {} 监听失败: {}", payload.uid, payload.gid, e);
+    } else {
+        info!("取消被踢用户 {} 群聊 {} 监听成功", payload.uid, payload.gid);
+    }
+
     // 9. 返回响应
     Ok(Json(KickMemberResponse {
         success: true,
@@ -562,8 +595,32 @@ pub async fn disband_group(
         return Err(AppError::InsufficientPermission("只有群主可以解散群聊".to_string()));
     }
 
+    // 新增：清理该群组所有监听任务
+    // 获取群组的所有成员（在删除前获取）
+    let members = match state.db_pool.find_members_by_group(&payload.gid).await {
+        Ok(members) => members,
+        Err(e) => {
+            error!("获取群组 {} 成员列表失败: {}", payload.gid, e);
+            Vec::new()
+        }
+    };
+
     // 5. 删除群组
     state.db_pool.delete_group(&payload.gid).await?;
+
+    // 取消每个成员的监听任务
+    for member in members {
+        if let Err(e) = state.group_task_manager.remove_listener(&member.uid, &payload.gid).await {
+            error!("取消用户 {} 群聊 {} 监听失败: {}", member.uid, payload.gid, e);
+        } else {
+            info!("取消用户 {} 群聊 {} 监听成功", member.uid, payload.gid);
+        }
+    }
+
+    // 清理群聊广播频道
+    if let Some((_gid, _channel)) = state.broadcast_pool.remove(&payload.gid) {
+        info!("清理群组 {} 的广播频道成功", payload.gid);
+    }
 
     // 7. 返回成功响应
     Ok(Json(DisbandGroupResponse {
