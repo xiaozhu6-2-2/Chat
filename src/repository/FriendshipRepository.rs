@@ -19,10 +19,9 @@ impl FriendshipRepository for MySqlPool {
         // 插入或更新好友关系
         sqlx::query!(
             "INSERT INTO friends
-            (fid, uid, to_uid, create_time, is_blacklist, to_is_blacklist, remark, to_remark, group_by, to_group_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (fid, uid, to_uid, is_blacklist, to_is_blacklist, remark, to_remark, group_by, to_group_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
-            create_time = VALUES(create_time),
             is_blacklist = VALUES(is_blacklist),
             to_is_blacklist = VALUES(to_is_blacklist),
             remark = VALUES(remark),
@@ -32,7 +31,6 @@ impl FriendshipRepository for MySqlPool {
             friendship.fid,
             friendship.uid,
             friendship.to_uid,
-            friendship.create_time,
             friendship.is_blacklist,
             friendship.to_is_blacklist,
             friendship.remark,
@@ -197,14 +195,13 @@ impl FriendshipRepository for MySqlPool {
 
         sqlx::query!(
             "INSERT INTO friend_request
-            (req_id, sender_uid, receiver_uid, status, apply_text, create_time, handle_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (req_id, sender_uid, receiver_uid, status, apply_text, handle_time)
+            VALUES (?, ?, ?, ?, ?, ?)",
             request.req_id,
             request.sender_uid,
             request.receiver_uid,
             request.status.to_enum_string(),
             request.apply_text,
-            request.create_time,
             request.handle_time
         ).execute(&mut *tx).await?;
 
