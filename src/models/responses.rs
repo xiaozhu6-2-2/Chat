@@ -156,21 +156,14 @@ pub struct FriendRequestListResponse {
 // 删除好友响应模型
 #[derive(Serialize, Deserialize)]
 pub struct RemoveFriendResponse {
-
+    pub success: bool,
 }
 
-// 更新好友备注响应模型
+// 更新好友备注||黑名单||分组响应模型
 #[derive(Serialize, Deserialize)]
-pub struct UpdateFriendRemarkResponse {
-
+pub struct UpdateFriendRemarkBlacklistGroupByResponse{
+    pub success: bool,
 }
-
-// 更新好友黑名单响应模型
-#[derive(Serialize, Deserialize)]
-pub struct UpdateFriendBlacklistResponse {
-
-}
-
 
 // 创建群组响应模型
 #[derive(Serialize, Deserialize)]
