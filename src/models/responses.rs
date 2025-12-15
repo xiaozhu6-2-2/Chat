@@ -530,7 +530,13 @@ pub struct FetchGroupReadResponse {
 // 上传文件响应模型
 #[derive(Serialize, Deserialize)]
 pub struct UploadFileResponse {
-
+    pub file_id: String,         // 文件唯一ID
+    pub display_name: String,    // 显示名称（来自前端的fileName）
+    pub file_size: i64,          // 文件大小（字节）
+    pub mime_type: String,       // MIME类型
+    pub file_type: String,       // 文件类型分类（来自前端的fileType）
+    pub upload_time: String,     // 上传时间（ISO 8601格式）
+    pub owner_uid: String,       // 文件所有者UID
 }
 
 // 预览文件响应模型
