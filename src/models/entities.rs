@@ -320,111 +320,128 @@ pub struct FriendRequest {
     pub handle_time: Option<DateTime<Utc>>,
 }
 
-// 文件访问权限
-#[derive(Debug, Clone, Deserialize, Serialize, sqlx::Type)]
-#[sqlx(type_name = "TEXT", rename_all = "lowercase")]
-pub enum FilePrivalege {
-    Public,
-    Friend,
-    Group,
-    Private,
-}
-
-// 使用宏实现 FilePrivalege 的转换功能
-impl_enum_convertible!(FilePrivalege, {
-    Public => "public",
-    Friend => "friend",
-    Group => "group",
-    Private => "private"
-});
-
-// 文件状态
-#[derive(Debug, Clone, Deserialize, Serialize, sqlx::Type)]
+// 文件状态枚举
+#[derive(Debug, Clone, Deserialize, Serialize, sqlx::Type, PartialEq)]
 #[sqlx(type_name = "TEXT", rename_all = "lowercase")]
 pub enum FileStatus {
     Active,
     Deleted,
-    Expired,
+    Archived,
 }
 
 // 使用宏实现 FileStatus 的转换功能
 impl_enum_convertible!(FileStatus, {
     Active => "active",
     Deleted => "deleted",
-    Expired => "expired"
+    Archived => "archived"
 });
 
-// 文件引用类型枚举
-#[derive(Debug, Clone, Deserialize, Serialize, sqlx::Type)]
-#[sqlx(type_name = "VARCHAR", rename_all = "lowercase")]
-pub enum ReferenceType {
-    Original,  // 原始上传者
-    Shared,    // 共享使用者
+// 访问类型枚举
+#[derive(Debug, Clone, Deserialize, Serialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "TEXT", rename_all = "lowercase")]
+pub enum AccessTarget {
+    User,
+    Friend,
+    Group,
+    Public,
 }
 
-// 使用宏实现 ReferenceType 的转换功能
-impl_enum_convertible!(ReferenceType, {
-    Original => "original",
-    Shared => "shared"
+// 使用宏实现 AccessTarget 的转换功能
+impl_enum_convertible!(AccessTarget, {
+    User => "user",
+    Friend => "friend",
+    Group => "group",
+    Public => "public"
 });
 
-// 文件引用表
-#[derive(Debug, Clone, Deserialize, Serialize, FromRow)]
-pub struct FileReference {
-    pub reference_id: String,                // 引用ID (雪花ID)
-    pub file_hash: String,                   // 文件哈希 (SHA-256)
-    pub file_id: String,                     // 关联的文件记录ID
-    pub user_uid: String,                    // 用户ID
-    pub reference_type: ReferenceType,       // 引用类型
-    pub created_at: Option<DateTime<Utc>>,   // 创建时间
+// 权限级别枚举
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "TEXT", rename_all = "lowercase")]
+pub enum AccessLevel {
+    View,
+    Download,
+    Share,
+    Manage,
 }
 
-// 文件信息表
-#[derive(Debug, Clone, Deserialize, Serialize, FromRow)]
-pub struct FileInfo {
-    pub file_id: String,
-    pub uploader_uid: String,  // 上传者UID
-    pub original_name: String,// 原始文件名
-    pub file_name: String,// 存储文件名
-    pub file_path: String,// 存储路径
-    pub file_size: i64,// 文件大小
-    pub mime_type: String,// mime类型
-    pub file_hash: String,// 文件哈希（用于去重）
-    pub access_level: FilePrivalege,
-    pub thumbnail_path: Option<String>,// 缩略图路径
-    pub upload_time: Option<DateTime<Utc>>,
-    pub last_access_time: Option<DateTime<Utc>>,
-    pub download_count: i64,
-    pub status: FileStatus,
-}
+// 使用宏实现 AccessLevel 的转换功能
+impl_enum_convertible!(AccessLevel, {
+    View => "view",
+    Download => "download",
+    Share => "share",
+    Manage => "manage"
+});
 
-// 文件关联类型
-#[derive(Debug, Clone, Deserialize, Serialize, sqlx::Type)]
-#[sqlx(type_name = "TEXT")]
+// 关联类型枚举
+#[derive(Debug, Clone, Deserialize, Serialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "TEXT", rename_all = "lowercase")]
 pub enum AssociationType {
-    #[sqlx(rename = "private_message")]
     PrivateMessage,
-    #[sqlx(rename = "group_message")]
     GroupMessage,
-    #[sqlx(rename = "user_avatar")]
     UserAvatar,
-    #[sqlx(rename = "group_avatar")]
     GroupAvatar,
+    PostAttachment,
 }
 
-// 使用宏实现 AssociationType 的转换功能（确保字符串值与数据库 ENUM 值匹配）
+// 使用宏实现 AssociationType 的转换功能
 impl_enum_convertible!(AssociationType, {
     PrivateMessage => "private_message",
     GroupMessage => "group_message",
     UserAvatar => "user_avatar",
-    GroupAvatar => "group_avatar"
+    GroupAvatar => "group_avatar",
+    PostAttachment => "post_attachment"
 });
-// 文件关联表
-#[derive(Debug, Clone, Deserialize, Serialize, FromRow)]
-pub struct FileAssociation {
-    pub association_id: String,
-    pub file_id: String,
-    pub association_type: AssociationType,
-    pub associated_id: String,
-    pub created_at: Option<DateTime<Utc>>,
+
+// 物理文件存储表(file_storage表)
+#[derive(Debug, Clone, Deserialize, Serialize, FromRow, PartialEq)]
+pub struct FileStorage {
+    pub storage_id: String,        // 存储ID(雪花算法生成)
+    pub file_hash: String,         // 文件哈希值，用于去重(接收文件进行哈希然后比对)
+    pub file_path: String,         // 文件存储路径
+    pub thumbnail_path: Option<String>, // 缩略图路径
+    pub file_size: Option<i64>,            // 文件大小(字节)
+    pub mime_type: String,         // 多用途互联网邮件扩展类型(Multipurpose Internet Mail Extensions),前端先给出,然后后端进行验证。
+    pub created_at: Option<DateTime<Utc>>, // 创建时间(由数据库默认值确定)
+    pub reference_count: Option<i32>,      // 引用计数，用于清理无引用文件(默认值是1)
+    pub storage_location: Option<String>,  // 存储位置(本地/OSS/S3默认值是local)
 }
+
+// 逻辑文件元数据表(file_metadata表)
+#[derive(Debug, Clone, Deserialize, Serialize, FromRow, PartialEq)]
+pub struct FileMetadata {
+    pub file_id: String,               // 文件ID，雪花ID
+    pub storage_id: String,            // 对应物理存储ID
+    pub owner_uid: String,             // 文件所有者ID
+    pub original_name: String,         // 原始文件名
+    pub display_name: String,          // 显示文件名
+    pub file_type: String,             // 文件类型分类
+    pub upload_time: Option<DateTime<Utc>>, // 上传时间
+    pub last_access_time: Option<DateTime<Utc>>, // 最后访问时间
+    pub download_count: Option<i64>,           // 下载次数
+    pub file_status: FileStatus,       // 文件状态
+}
+
+// 文件访问权限控制表(file_permission表)
+#[derive(Debug, Clone, Deserialize, Serialize, FromRow, PartialEq)]
+pub struct FilePermission {
+    pub permission_id: String,                // 权限ID
+    pub file_id: String,                      // 文件ID
+    pub access_type: AccessTarget,            // 访问类型
+    pub target_id: Option<String>,            // 目标ID(用户ID/群组ID)，public类型时为NULL
+    pub permission_level: AccessLevel,        // 权限级别
+    pub granted_by: String,                   // 授权人ID
+    pub granted_at: Option<DateTime<Utc>>,    // 授权时间
+    pub expires_at: Option<DateTime<Utc>>,    // 过期时间，NULL表示永不过期
+}
+
+// 文件与业务实体的关联表(file_association表)
+#[derive(Debug, Clone, Deserialize, Serialize, FromRow, PartialEq)]
+pub struct FileAssociation {
+    pub association_id: String,               // 关联ID
+    pub file_id: String,                      // 文件ID
+    pub association_type: AssociationType,    // 关联类型
+    pub associated_id: String,                // 关联对象ID(消息ID/用户ID/群组ID等)
+    pub creator_uid: String,                  // 创建此关联的用户ID
+    pub created_at: Option<DateTime<Utc>>,    // 创建时间
+}
+
