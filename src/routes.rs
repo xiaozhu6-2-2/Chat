@@ -59,6 +59,7 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/groups/profile", post(handlers::groups::get_group_profile))// 获取群聊资料
         .route("/auth/groups/grouplist", get(handlers::groups::get_group_list))// 获取群聊列表
         .route("/auth/groups/send_group_request", post(handlers::groups::send_group_request))// 发送加入群聊申请
+        .route("/auth/groups/get_request_list", get(handlers::groups::get_request_list))//查看群聊申请列表
         .route("/auth/groups/group_request_list", post(handlers::groups::get_group_requestlist))// 获取群聊加入申请列表
         .route("/auth/groups/respond", post(handlers::groups::handle_group_request))// 处理加入群聊申请
         .route("/auth/groups/leave", post(handlers::groups::leave_group))// 退出群聊
@@ -70,16 +71,17 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/groups/get_members", post(handlers::groups::get_members))//获取群成员列表
         .route("/auth/groups/transfer_ownership", post(handlers::groups::transfer_ownership))//转让群主
         .route("/auth/groups/set_admin", post(handlers::groups::set_admin))//设置管理员
+        .route("/auth/groups/remove_admin", post(handlers::groups::remove_admin))//设置管理员
         .route("/auth/groups/get_ban_status", post(handlers::groups::get_ban_status))//获取用户禁言状态
         .route("/auth/groups/ban_member", post(handlers::groups::ban_member))//禁言群成员
         .route("/auth/groups/remove_mute_admin", post(handlers::groups::remove_mute_admin))//解除禁言
         .route("/auth/online/friends-online", get(handlers::online::get_friends_online))// 获取好友列表在线状态
         .route("/auth/online/group-online", post(handlers::online::get_group_online))// 获取群聊在线状态
 
-        .route("/auth/file/upload", post(handlers::file::upload_file))// 上传文件
-        .route("/auth/file/preview", post(handlers::file::preview_file))// 预览文件
-        .route("/auth/file/download", post(handlers::file::download_file))// 下载文件
-        .route("/auth/file/delete", post(handlers::file::delete_file))// 删除文件
+        // .route("/auth/file/upload", post(handlers::file::upload_file))// 上传文件
+        // .route("/auth/file/preview", post(handlers::file::preview_file))// 预览文件
+        // .route("/auth/file/download", post(handlers::file::download_file))// 下载文件
+        // .route("/auth/file/delete", post(handlers::file::delete_file))// 删除文件
 
         .route_layer(middleware::from_fn(auth_middleware));
 

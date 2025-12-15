@@ -268,6 +268,13 @@ pub struct GroupRequestListResponse {
     pub total: i64,
 }
 
+// 获取用户申请列表响应模型
+#[derive(Serialize, Deserialize)]
+pub struct GetRequestListResponse {
+    pub requests: Vec<GroupRequestItem>,
+    pub total: i64,
+}
+
 // 处理群聊申请响应模型
 #[derive(Serialize, Deserialize)]
 pub struct GroupRespondResponse {
@@ -348,6 +355,12 @@ pub struct TransferOwnershipResponse {
 // 设置管理员响应模型
 #[derive(Serialize, Deserialize)]
 pub struct SettingAdminResponse {
+    pub success: bool,
+}
+
+// 移除管理员响应模型
+#[derive(Serialize, Deserialize)]
+pub struct RemovingAdminResponse {
     pub success: bool,
 }
 
