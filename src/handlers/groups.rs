@@ -55,6 +55,22 @@ pub async fn create_group(
     // 保存群主成员信息
     state.db_pool.save_member(manager_member).await?;
 
+    // 新增：检查创建者是否在线，如果是则启动群聊监听
+    if let Some(tx) = state.connection_pool.get(&user.account) {
+        // 创建者在线，启动监听
+        if let Err(e) = state.group_task_manager.add_listener(
+            user.uid.clone(),
+            user.account.clone(),
+            gid.clone(),
+            tx.clone(),
+            state.broadcast_pool.clone()
+        ).await {
+            error!("为创建者启动群聊 {} 监听失败: {}", gid, e);
+        } else {
+            info!("为创建者启动群聊 {} 监听成功", gid);
+        }
+    }
+
     // 从数据库查询群组信息以获取创建时间
     let created_group = state.db_pool.find_group_by_gid(&gid).await?
         .ok_or_else(|| AppError::DatabaseFailure(sqlx::Error::RowNotFound))?;
