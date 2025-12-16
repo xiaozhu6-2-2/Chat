@@ -402,7 +402,7 @@ pub async fn get_group_requestlist(
     let user = state.db_pool.find_user_by_account(user_account).await?;
 
     // 3. 验证群组是否存在
-    let _group = state.db_pool.find_group_by_gid(&payload.gid).await?
+    let group = state.db_pool.find_group_by_gid(&payload.gid).await?
         .ok_or_else(|| AppError::NotFound(format!("群组{}不存在", payload.gid)))?;
 
     // 4. 验证请求者是否是群主或管理员
@@ -433,6 +433,8 @@ pub async fn get_group_requestlist(
         let request_item = GroupRequestItem {
             req_id: req.req_id,
             gid: req.gid,
+            group_name: group.group_name.clone(),
+            group_avatar: group.group_avatar.clone().unwrap_or_default(),
             sender_uid: req.applicant_uid,
             sender_name,
             sender_avatar,
