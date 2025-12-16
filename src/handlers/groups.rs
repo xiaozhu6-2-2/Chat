@@ -290,7 +290,7 @@ pub async fn send_group_request(
     let user = state.db_pool.find_user_by_account(user_account).await?;
 
     // 3. 验证群组是否存在
-    let _group = state.db_pool.find_group_by_gid(&payload.gid).await?
+    let group = state.db_pool.find_group_by_gid(&payload.gid).await?
         .ok_or_else(|| AppError::NotFound(format!("群组{}不存在", payload.gid)))?;
 
     // 4. 验证用户是否已经是群组成员
@@ -334,6 +334,9 @@ pub async fn send_group_request(
     Ok(Json(GroupRequestResponse {
         req_id,
         gid: payload.gid,
+        group_name: group.group_name.clone(),
+        group_avatar: group.group_avatar.clone().unwrap_or_default(),
+        sender_uid: user.uid.clone(),
         apply_text: payload.apply_text,
         create_time: saved_request.create_time
             .map(|dt| dt.timestamp())
