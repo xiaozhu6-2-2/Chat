@@ -3,7 +3,7 @@ use axum::{extract::State, Json};
 
 use crate::models::others::Claims;
 use crate::models::requests::{BanningMemberRequest, CreateGroupRequest, DisbandGroupRequest, GetAnnouncementsRequest, GetBanStatusRequest, GetMembersRequest, GroupProfileRequest, GroupRequestListRequest, GroupRequestRequest, GroupRespondRequest, KickMemberRequest, LeaveGroupRequest, MemberSettingRequest, RemoveMuteRequest, RemovingingAdminRequest, SettingAdminRequest, SettingGroupRequest, TransferOwnershipRequest};
-use crate::models::responses::{AnnouncementItem, BanningMemberResponse, CreateGroupResponse, DisbandGroupResponse, GetAnnouncementsResponse, GetBanStatusResponse, GetMembersResponse, GetRequestListResponse, GroupListItem, GroupListResponse, GroupProfileResponse, GroupRequestItem, GroupRequestListResponse, GroupRequestResponse, GroupRespondResponse, KickMemberResponse, LeaveGroupResponse, MemberItem, MemberSettingResponse, RemoveMuteResponse, RemovingAdminResponse, SettingAdminResponse, SettingGourpResponse, TransferOwnershipResponse};
+use crate::models::responses::{AnnouncementItem, BanningMemberResponse, CreateGroupResponse, DisbandGroupResponse, GetAnnouncementsResponse, GetBanStatusResponse, GetMembersResponse, GetRequestItem, GetRequestListResponse, GroupListItem, GroupListResponse, GroupProfileResponse, GroupRequestItem, GroupRequestListResponse, GroupRequestResponse, GroupRespondResponse, KickMemberResponse, LeaveGroupResponse, MemberItem, MemberSettingResponse, RemoveMuteResponse, RemovingAdminResponse, SettingAdminResponse, SettingGourpResponse, TransferOwnershipResponse};
 use crate::models::entities::{ReqStatus, OptionalEnumExt, EnumConvertible};
 use crate::models::{errors::{AppResult, AppError}, responses::{SearchGroupResponse, SearchGroupItem}, responses::GroupCardResponse, requests::SearchGroupRequest, requests::GroupCardRequest, requests::GroupListRequest};
 use crate::models::repository::{GroupChatRepository, GroupMessageRepository, UserRepository};
@@ -356,19 +356,29 @@ pub async fn get_request_list(
     let user_requests = state.db_pool.find_requests_by_user(&user.uid).await?;
 
     // 4. 转换为响应格式
-    let request_items: Vec<GroupRequestItem> = user_requests
-        .into_iter()
-        .map(|req| GroupRequestItem {
+    let mut request_items: Vec<GetRequestItem> = Vec::new();
+
+    for req in user_requests {
+        // 获取群组信息
+        let group_info = state.db_pool.find_group_by_gid(&req.gid).await.ok().and_then(|x| x);
+        let group_name = group_info.as_ref().map(|g| &g.group_name).cloned().unwrap_or_default();
+        let group_avatar = group_info.as_ref().and_then(|g| g.group_avatar.clone()).unwrap_or_default();
+
+        let request_item = GetRequestItem {
             req_id: req.req_id,
             gid: req.gid,
+            group_name,
+            group_avatar,
             sender_uid: req.applicant_uid,
             apply_text: req.apply_text,
             create_time: req.create_time
                 .map(|dt| dt.timestamp())
                 .unwrap_or(0),
             status: Some(req.status).to_optional_string().unwrap_or_default(),
-        })
-        .collect();
+        };
+
+        request_items.push(request_item);
+    }
 
     // 5. 计算总数
     let total = request_items.len() as i64;
@@ -412,19 +422,29 @@ pub async fn get_group_requestlist(
     let pending_requests = state.db_pool.find_pending_requests_by_group(&payload.gid).await?;
 
     // 4. 转换为响应格式
-    let request_items: Vec<GroupRequestItem> = pending_requests
-        .into_iter()
-        .map(|req| GroupRequestItem {
+    let mut request_items: Vec<GroupRequestItem> = Vec::new();
+
+    for req in pending_requests {
+        // 获取发送者信息
+        let sender_info = state.db_pool.find_user_by_uid(&req.applicant_uid).await.ok().and_then(|x| Some(x));
+        let sender_name = sender_info.as_ref().map(|u| &u.username).cloned().unwrap_or_default();
+        let sender_avatar = sender_info.as_ref().and_then(|u| u.avatar.clone()).unwrap_or_default();
+
+        let request_item = GroupRequestItem {
             req_id: req.req_id,
             gid: req.gid,
             sender_uid: req.applicant_uid,
+            sender_name,
+            sender_avatar,
             apply_text: req.apply_text,
             create_time: req.create_time
                 .map(|dt| dt.timestamp())
                 .unwrap_or(0),
             status: Some(req.status).to_optional_string().unwrap_or_default(),
-        })
-        .collect();
+        };
+
+        request_items.push(request_item);
+    }
 
     // 5. 计算总数
     let total = request_items.len() as i64;
