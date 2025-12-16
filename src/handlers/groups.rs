@@ -393,7 +393,7 @@ pub async fn get_request_list(
     }))
 }
 
-pub async fn get_group_requestlist(
+pub async fn group_requests(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
     Json(payload): Json<GroupRequestListRequest>,

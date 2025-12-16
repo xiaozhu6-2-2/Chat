@@ -61,8 +61,9 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/groups/profile", post(handlers::groups::get_group_profile))// 获取群聊资料
         .route("/auth/groups/grouplist", get(handlers::groups::get_group_list))// 获取群聊列表
         .route("/auth/groups/send_group_request", post(handlers::groups::send_group_request))// 发送加入群聊申请
-        .route("/auth/groups/get_request_list", get(handlers::groups::get_request_list))//查看群聊申请列表
-        .route("/auth/groups/group_request_list", post(handlers::groups::get_group_requestlist))// 获取群聊加入申请列表
+        .route("/auth/groups/get_request_list", get(handlers::groups::get_request_list))//查看群聊申请列表（用户）
+        .route("/auth/groups/group_requests", post(handlers::groups::group_requests))// 获取群聊的申请列表
+        // .route("/auth/groups/group_request_list", post(handlers::groups::get_group_requestlist))// 获取群聊的申请列表
         .route("/auth/groups/respond", post(handlers::groups::handle_group_request))// 处理加入群聊申请
         .route("/auth/groups/leave", post(handlers::groups::leave_group))// 退出群聊
         .route("/auth/groups/kick_member", post(handlers::groups::kick_member))// 踢出群成员

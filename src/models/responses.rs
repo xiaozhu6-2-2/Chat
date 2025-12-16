@@ -238,6 +238,9 @@ pub struct GroupListResponse {
 pub struct GroupRequestResponse {
     pub req_id: String,
     pub gid: String,
+    pub group_name: String,
+    pub group_avatar: String,
+    pub sender_uid: String,
     pub apply_text: String,
     pub create_time: i64,
     pub status: String,
@@ -268,6 +271,8 @@ pub struct GetRequestListResponse {
 pub struct GroupRequestItem {
     pub req_id: String,
     pub gid: String,
+    pub group_name: String,
+    pub group_avatar: String,
     pub sender_uid: String,
     pub sender_name: String,
     pub sender_avatar: String,
