@@ -1,6 +1,7 @@
 use sqlx::MySqlPool;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use tokio::fs;
 
 use crate::models::{
     entities::{
@@ -441,7 +442,19 @@ impl FileRepository for MySqlPool {
                 .await?
                 .rows_affected();
 
-                // 4.4 现在可以安全删除原存储记录
+                // 4.4.1 获取文件路径并删除物理文件
+                let base_dir = std::env::var("UPLOADS_DIR").unwrap_or_else(|_| "uploads".to_string());
+                let full_path = format!("{}/{}", base_dir, file_storage.file_path);
+
+                // 删除物理文件
+                if let Err(e) = fs::remove_file(&full_path).await {
+                    eprintln!("警告：无法删除物理文件 {}: {}", full_path, e);
+                    // 不中断事务，但记录警告
+                } else {
+                    eprintln!("成功删除物理文件: {}", full_path);
+                }
+
+                // 4.4.2 现在可以安全删除原存储记录
                 sqlx::query!(
                     "DELETE FROM file_storage WHERE storage_id = ?",
                     meta.storage_id
