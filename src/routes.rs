@@ -33,6 +33,8 @@ pub fn create_routes() -> Router<AppState> {
     let protected_routes = Router::new()
         .route("/auth/user/user-info", get(handlers::user::get_user_info))// 获取用户信息
         .route("/auth/user/update-user-info", post(handlers::user::update_user_info))// 更新用户信息
+        // .route("/auth/user/update-user-avatar", post(handlers::user::update_user_avatar))// 更新用户头像
+        // .route("/auth/user/remove-user", post(handlers::user::remove_user))// 用户注销
         .route("/auth/user/profile", post(handlers::user::fetch_user_profile))// 获取非好友用户资料
 
         .route("/auth/chat/list", get(handlers::chat::get_chat_list))// 获取会话列表
@@ -59,27 +61,31 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/groups/profile", post(handlers::groups::get_group_profile))// 获取群聊资料
         .route("/auth/groups/grouplist", get(handlers::groups::get_group_list))// 获取群聊列表
         .route("/auth/groups/send_group_request", post(handlers::groups::send_group_request))// 发送加入群聊申请
-        .route("/auth/groups/group_request_list", post(handlers::groups::get_group_requestlist))// 获取群聊加入申请列表
+        .route("/auth/groups/get_request_list", get(handlers::groups::get_request_list))//查看群聊申请列表（用户）
+        .route("/auth/groups/group_requests", post(handlers::groups::group_requests))// 获取群聊的申请列表
+        // .route("/auth/groups/group_request_list", post(handlers::groups::get_group_requestlist))// 获取群聊的申请列表
         .route("/auth/groups/respond", post(handlers::groups::handle_group_request))// 处理加入群聊申请
         .route("/auth/groups/leave", post(handlers::groups::leave_group))// 退出群聊
         .route("/auth/groups/kick_member", post(handlers::groups::kick_member))// 踢出群成员
         .route("/auth/groups/disband", post(handlers::groups::disband_group))// 解散群聊
         .route("/auth/groups/member_set", post(handlers::groups::member_set))// 群聊成员修改本地设置
-        .route("/auth/groups/setting", post(handlers::groups::set_group))// 修改群聊资料  
+        .route("/auth/groups/setting", post(handlers::groups::set_group))// 修改群聊资料
+        // .route("/auth/groups/setting_avatar", post(handlers::groups::set_group_avatar))// 修改群聊头像
         .route("/auth/groups/get_announcements", post(handlers::groups::get_announcements))//获取群公告列表
         .route("/auth/groups/get_members", post(handlers::groups::get_members))//获取群成员列表
         .route("/auth/groups/transfer_ownership", post(handlers::groups::transfer_ownership))//转让群主
         .route("/auth/groups/set_admin", post(handlers::groups::set_admin))//设置管理员
+        .route("/auth/groups/remove_admin", post(handlers::groups::remove_admin))//设置管理员
         .route("/auth/groups/get_ban_status", post(handlers::groups::get_ban_status))//获取用户禁言状态
         .route("/auth/groups/ban_member", post(handlers::groups::ban_member))//禁言群成员
         .route("/auth/groups/remove_mute_admin", post(handlers::groups::remove_mute_admin))//解除禁言
         .route("/auth/online/friends-online", get(handlers::online::get_friends_online))// 获取好友列表在线状态
         .route("/auth/online/group-online", post(handlers::online::get_group_online))// 获取群聊在线状态
 
-        .route("/auth/file/upload", post(handlers::file::upload_file))// 上传文件
-        .route("/auth/file/preview", post(handlers::file::preview_file))// 预览文件
-        .route("/auth/file/download", post(handlers::file::download_file))// 下载文件
-        .route("/auth/file/delete", post(handlers::file::delete_file))// 删除文件
+        // .route("/auth/file/upload", post(handlers::file::upload_file))// 上传文件
+        // .route("/auth/file/preview", post(handlers::file::preview_file))// 预览文件
+        // .route("/auth/file/download", post(handlers::file::download_file))// 下载文件
+        // .route("/auth/file/delete", post(handlers::file::delete_file))// 删除文件
 
         .route_layer(middleware::from_fn(auth_middleware));
 

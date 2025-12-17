@@ -5,7 +5,7 @@ use crate::models::entities::{OptionalEnumExt, ReqStatus, Friends, PrivateChat};
 use crate::models::others::Claims;
 use crate::models::repository::{UserRepository, FriendshipRepository};
 use crate::models::requests::{FriendRequestRequest, RemoveFriendRequest, RespondFriendRequestRequest, UpdateFriendRemarkBlacklistGroupByRequest};
-use crate::models::responses::{FriendListResponse, FriendRequestItem, FriendRequestListResponse, FriendRequestResponse, RespondFriendRequestResponse};
+use crate::models::responses::{FriendListResponse, FriendRequestItem, FriendRequestListResponse, FriendRequestResponse, RemoveFriendResponse, RespondFriendRequestResponse, UpdateFriendRemarkBlacklistGroupByResponse};
 use crate::models::{errors::AppResult, responses::SearchUserResponse, responses::FriendProfileResponse, requests::SearchUserRequest, requests::FriendProfileRequest};
 use crate::state::AppState;
 
@@ -552,7 +552,7 @@ pub async fn remove_friend(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
     Json(payload): Json<RemoveFriendRequest>,
-) -> AppResult<Json<()>> {
+) -> AppResult<Json<RemoveFriendResponse>> {
     // 1. 从 claims 中提取当前用户的 account
     let current_account = &claims.sub;
 
@@ -575,15 +575,17 @@ pub async fn remove_friend(
     // 5. 删除好友关系及其相关的私聊会话和消息
     state.db_pool.delete_friendship_with_chat(&payload.fid).await?;
 
-    // 6. 返回空响应
-    Ok(Json(()))
+    // 6. 返回成功响应
+    Ok(Json(RemoveFriendResponse { 
+        success: true 
+    }))
 }
 
 pub async fn update_friend_remark_blacklist_group(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
     Json(payload): Json<UpdateFriendRemarkBlacklistGroupByRequest>,
-) -> AppResult<Json<()>> {
+) -> AppResult<Json<UpdateFriendRemarkBlacklistGroupByResponse>> {
     // 1. 从 claims 中提取当前用户的 account
     let current_account = &claims.sub;
 
@@ -624,6 +626,8 @@ pub async fn update_friend_remark_blacklist_group(
     // 7. 保存更新后的好友关系
     state.db_pool.save_friendship(updated_friendship).await?;
 
-    // 8. 返回空响应
-    Ok(Json(()))
+    // 8. 返回成功响应
+    Ok(Json(UpdateFriendRemarkBlacklistGroupByResponse { 
+        success: true 
+    }))
 }

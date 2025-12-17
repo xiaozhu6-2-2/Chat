@@ -156,21 +156,14 @@ pub struct FriendRequestListResponse {
 // 删除好友响应模型
 #[derive(Serialize, Deserialize)]
 pub struct RemoveFriendResponse {
-
+    pub success: bool,
 }
 
-// 更新好友备注响应模型
+// 更新好友备注||黑名单||分组响应模型
 #[derive(Serialize, Deserialize)]
-pub struct UpdateFriendRemarkResponse {
-
+pub struct UpdateFriendRemarkBlacklistGroupByResponse{
+    pub success: bool,
 }
-
-// 更新好友黑名单响应模型
-#[derive(Serialize, Deserialize)]
-pub struct UpdateFriendBlacklistResponse {
-
-}
-
 
 // 创建群组响应模型
 #[derive(Serialize, Deserialize)]
@@ -245,9 +238,32 @@ pub struct GroupListResponse {
 pub struct GroupRequestResponse {
     pub req_id: String,
     pub gid: String,
+    pub group_name: String,
+    pub group_avatar: String,
+    pub sender_uid: String,
     pub apply_text: String,
     pub create_time: i64,
     pub status: String,
+}
+
+// 用户群聊申请列表项
+#[derive(Serialize, Deserialize)]
+pub struct GetRequestItem {
+    pub req_id: String,
+    pub gid: String,
+    pub group_name: String,
+    pub group_avatar: String,
+    pub sender_uid: String,
+    pub apply_text: Option<String>,
+    pub create_time: i64,
+    pub status: String,
+}
+
+// 获取用户申请列表响应模型
+#[derive(Serialize, Deserialize)]
+pub struct GetRequestListResponse {
+    pub requests: Vec<GetRequestItem>,
+    pub total: i64,
 }
 
 // 群聊申请列表项
@@ -255,7 +271,11 @@ pub struct GroupRequestResponse {
 pub struct GroupRequestItem {
     pub req_id: String,
     pub gid: String,
+    pub group_name: String,
+    pub group_avatar: String,
     pub sender_uid: String,
+    pub sender_name: String,
+    pub sender_avatar: String,
     pub apply_text: Option<String>,
     pub create_time: i64,
     pub status: String,
@@ -348,6 +368,12 @@ pub struct TransferOwnershipResponse {
 // 设置管理员响应模型
 #[derive(Serialize, Deserialize)]
 pub struct SettingAdminResponse {
+    pub success: bool,
+}
+
+// 移除管理员响应模型
+#[derive(Serialize, Deserialize)]
+pub struct RemovingAdminResponse {
     pub success: bool,
 }
 

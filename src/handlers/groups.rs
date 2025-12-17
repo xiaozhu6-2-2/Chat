@@ -2,8 +2,8 @@ use axum::Extension;
 use axum::{extract::State, Json};
 
 use crate::models::others::Claims;
-use crate::models::requests::{BanningMemberRequest, CreateGroupRequest, DisbandGroupRequest, GetAnnouncementsRequest, GetBanStatusRequest, GetMembersRequest, GroupProfileRequest, GroupRequestListRequest, GroupRequestRequest, GroupRespondRequest, KickMemberRequest, LeaveGroupRequest, MemberSettingRequest, RemoveMuteRequest, SettingAdminRequest, SettingGroupRequest, TransferOwnershipRequest};
-use crate::models::responses::{AnnouncementItem, BanningMemberResponse, CreateGroupResponse, DisbandGroupResponse, GetAnnouncementsResponse, GetBanStatusResponse, GetMembersResponse, GroupListItem, GroupListResponse, GroupProfileResponse, GroupRequestItem, GroupRequestListResponse, GroupRequestResponse, GroupRespondResponse, KickMemberResponse, LeaveGroupResponse, MemberItem, MemberSettingResponse, RemoveMuteResponse, SettingAdminResponse, SettingGourpResponse, TransferOwnershipResponse};
+use crate::models::requests::{BanningMemberRequest, CreateGroupRequest, DisbandGroupRequest, GetAnnouncementsRequest, GetBanStatusRequest, GetMembersRequest, GroupProfileRequest, GroupRequestListRequest, GroupRequestRequest, GroupRespondRequest, KickMemberRequest, LeaveGroupRequest, MemberSettingRequest, RemoveMuteRequest, RemovingingAdminRequest, SettingAdminRequest, SettingGroupRequest, TransferOwnershipRequest};
+use crate::models::responses::{AnnouncementItem, BanningMemberResponse, CreateGroupResponse, DisbandGroupResponse, GetAnnouncementsResponse, GetBanStatusResponse, GetMembersResponse, GetRequestItem, GetRequestListResponse, GroupListItem, GroupListResponse, GroupProfileResponse, GroupRequestItem, GroupRequestListResponse, GroupRequestResponse, GroupRespondResponse, KickMemberResponse, LeaveGroupResponse, MemberItem, MemberSettingResponse, RemoveMuteResponse, RemovingAdminResponse, SettingAdminResponse, SettingGourpResponse, TransferOwnershipResponse};
 use crate::models::entities::{ReqStatus, OptionalEnumExt, EnumConvertible};
 use crate::models::{errors::{AppResult, AppError}, responses::{SearchGroupResponse, SearchGroupItem}, responses::GroupCardResponse, requests::SearchGroupRequest, requests::GroupCardRequest, requests::GroupListRequest};
 use crate::models::repository::{GroupChatRepository, GroupMessageRepository, UserRepository};
@@ -290,7 +290,7 @@ pub async fn send_group_request(
     let user = state.db_pool.find_user_by_account(user_account).await?;
 
     // 3. 验证群组是否存在
-    let _group = state.db_pool.find_group_by_gid(&payload.gid).await?
+    let group = state.db_pool.find_group_by_gid(&payload.gid).await?
         .ok_or_else(|| AppError::NotFound(format!("群组{}不存在", payload.gid)))?;
 
     // 4. 验证用户是否已经是群组成员
@@ -334,6 +334,9 @@ pub async fn send_group_request(
     Ok(Json(GroupRequestResponse {
         req_id,
         gid: payload.gid,
+        group_name: group.group_name.clone(),
+        group_avatar: group.group_avatar.clone().unwrap_or_default(),
+        sender_uid: user.uid.clone(),
         apply_text: payload.apply_text,
         create_time: saved_request.create_time
             .map(|dt| dt.timestamp())
@@ -342,7 +345,55 @@ pub async fn send_group_request(
     }))
 }
 
-pub async fn get_group_requestlist(
+pub async fn get_request_list(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>
+) -> AppResult<Json<GetRequestListResponse>> {
+    // 1. 从 claims 中获取用户账号
+    let user_account = &claims.sub;
+
+    // 2. 通过账号查找用户信息，获取 uid
+    let user = state.db_pool.find_user_by_account(user_account).await?;
+
+    // 3. 查找用户的所有群聊申请记录（包括待处理、已接受、已拒绝等）
+    let user_requests = state.db_pool.find_requests_by_user(&user.uid).await?;
+
+    // 4. 转换为响应格式
+    let mut request_items: Vec<GetRequestItem> = Vec::new();
+
+    for req in user_requests {
+        // 获取群组信息
+        let group_info = state.db_pool.find_group_by_gid(&req.gid).await.ok().and_then(|x| x);
+        let group_name = group_info.as_ref().map(|g| &g.group_name).cloned().unwrap_or_default();
+        let group_avatar = group_info.as_ref().and_then(|g| g.group_avatar.clone()).unwrap_or_default();
+
+        let request_item = GetRequestItem {
+            req_id: req.req_id,
+            gid: req.gid,
+            group_name,
+            group_avatar,
+            sender_uid: req.applicant_uid,
+            apply_text: req.apply_text,
+            create_time: req.create_time
+                .map(|dt| dt.timestamp())
+                .unwrap_or(0),
+            status: Some(req.status).to_optional_string().unwrap_or_default(),
+        };
+
+        request_items.push(request_item);
+    }
+
+    // 5. 计算总数
+    let total = request_items.len() as i64;
+
+    // 6. 返回响应
+    Ok(Json(GetRequestListResponse {
+        requests: request_items,
+        total,
+    }))
+}
+
+pub async fn group_requests(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
     Json(payload): Json<GroupRequestListRequest>,
@@ -354,7 +405,7 @@ pub async fn get_group_requestlist(
     let user = state.db_pool.find_user_by_account(user_account).await?;
 
     // 3. 验证群组是否存在
-    let _group = state.db_pool.find_group_by_gid(&payload.gid).await?
+    let group = state.db_pool.find_group_by_gid(&payload.gid).await?
         .ok_or_else(|| AppError::NotFound(format!("群组{}不存在", payload.gid)))?;
 
     // 4. 验证请求者是否是群主或管理员
@@ -374,19 +425,31 @@ pub async fn get_group_requestlist(
     let pending_requests = state.db_pool.find_pending_requests_by_group(&payload.gid).await?;
 
     // 4. 转换为响应格式
-    let request_items: Vec<GroupRequestItem> = pending_requests
-        .into_iter()
-        .map(|req| GroupRequestItem {
+    let mut request_items: Vec<GroupRequestItem> = Vec::new();
+
+    for req in pending_requests {
+        // 获取发送者信息
+        let sender_info = state.db_pool.find_user_by_uid(&req.applicant_uid).await.ok().and_then(|x| Some(x));
+        let sender_name = sender_info.as_ref().map(|u| &u.username).cloned().unwrap_or_default();
+        let sender_avatar = sender_info.as_ref().and_then(|u| u.avatar.clone()).unwrap_or_default();
+
+        let request_item = GroupRequestItem {
             req_id: req.req_id,
             gid: req.gid,
+            group_name: group.group_name.clone(),
+            group_avatar: group.group_avatar.clone().unwrap_or_default(),
             sender_uid: req.applicant_uid,
+            sender_name,
+            sender_avatar,
             apply_text: req.apply_text,
             create_time: req.create_time
                 .map(|dt| dt.timestamp())
                 .unwrap_or(0),
             status: Some(req.status).to_optional_string().unwrap_or_default(),
-        })
-        .collect();
+        };
+
+        request_items.push(request_item);
+    }
 
     // 5. 计算总数
     let total = request_items.len() as i64;
@@ -1024,6 +1087,63 @@ pub async fn set_admin(
 
     // 9. 返回成功响应
     Ok(Json(SettingAdminResponse {
+        success: true,
+    }))
+}
+
+pub async fn remove_admin(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<RemovingingAdminRequest>,
+) -> AppResult<Json<RemovingAdminResponse>> {
+    // 1. 从 claims 中获取用户账号
+    let user_account = &claims.sub;
+
+    // 2. 通过账号查找用户信息，获取 uid
+    let user = state.db_pool.find_user_by_account(user_account).await?;
+
+    // 3. 查找群聊信息，验证群是否存在
+    let group = state.db_pool.find_group_by_gid(&payload.gid).await?;
+    let group = group.ok_or_else(|| AppError::NotFound(format!("群聊 {} 不存在", payload.gid)))?;
+
+    // 4. 验证当前用户是否是群主（只有群主可以移除管理员）
+    if group.manager_uid != user.uid {
+        return Err(AppError::InsufficientPermission("只有群主可以移除管理员".to_string()));
+    }
+
+    // 5. 查找目标用户的成员信息
+    let target_member = state.db_pool.find_member(&payload.gid, &payload.uid).await?;
+    let target_member = target_member.ok_or_else(|| AppError::NotFound(format!("用户 {} 不是该群成员", payload.uid)))?;
+
+    // 6. 验证目标用户必须是管理员
+    let target_role_str = target_member.role.to_enum_string();
+    if target_role_str != "admin" {
+        return Err(AppError::BadRequest("只能移除管理员权限".to_string()));
+    }
+
+    // 7. 验证不能移除群主的管理员权限（群主本身就是 Owner）
+    if payload.uid == group.manager_uid {
+        return Err(AppError::BadRequest("不能移除群主的管理员权限".to_string()));
+    }
+
+    // 8. 使用事务更新用户角色为普通成员
+    let mut tx = state.db_pool.begin().await?;
+
+    // 将目标用户设置为普通成员
+    sqlx::query!(
+        "UPDATE group_member SET role = ? WHERE gid = ? AND uid = ?",
+        "Member",
+        payload.gid,
+        payload.uid
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    // 提交事务
+    tx.commit().await?;
+
+    // 9. 返回成功响应
+    Ok(Json(RemovingAdminResponse {
         success: true,
     }))
 }

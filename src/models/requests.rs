@@ -229,6 +229,13 @@ pub struct SettingAdminRequest {
     pub uid: String,         // 要设置为管理员的用户uid
 }
 
+// 移除管理员请求模型
+#[derive(Deserialize, Serialize)]
+pub struct RemovingingAdminRequest {
+    pub gid: String,         // 群组ID
+    pub uid: String,         // 要移除管理员权限的用户uid
+}
+
 // 获取禁言状态请求模型
 #[derive(Deserialize, Serialize)]
 pub struct GetBanStatusRequest {
