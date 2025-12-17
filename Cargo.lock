@@ -255,6 +255,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfb"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d38f2da7a0a2c4ccf0065be06397cc26a81f4e528be095826eee9d4adbb8c60f"
+dependencies = [
+ "byteorder",
+ "fnv",
+ "uuid",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -455,10 +466,14 @@ dependencies = [
  "env_logger",
  "futures",
  "futures-util",
+ "hex",
  "http 0.2.12",
  "hyper 0.14.32",
+ "infer",
  "jsonwebtoken",
  "log",
+ "mime_guess",
+ "percent-encoding",
  "rand_core 0.6.4",
  "redis 0.23.3",
  "reqwest",
@@ -466,6 +481,7 @@ dependencies = [
  "scopeguard",
  "serde",
  "serde_json",
+ "sha2",
  "sqlx",
  "thiserror 1.0.69",
  "tokio",
@@ -1107,6 +1123,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "infer"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb33622da908807a06f9513c19b3c1ad50fab3e4137d82a78107d502075aa199"
+dependencies = [
+ "cfb",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1266,6 +1291,16 @@ name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
+
+[[package]]
+name = "mime_guess"
+version = "2.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7c44f8e672c00fe5308fa235f821cb4198414e1c77935c1ab6948d3fd78550e"
+dependencies = [
+ "mime",
+ "unicase",
+]
 
 [[package]]
 name = "minimal-lexical"
@@ -2822,6 +2857,12 @@ name = "typenum"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
+
+[[package]]
+name = "unicase"
+version = "2.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75b844d17643ee918803943289730bec8aac480150456169e647ed0b576ba539"
 
 [[package]]
 name = "unicode-bidi"

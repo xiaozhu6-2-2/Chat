@@ -88,4 +88,19 @@ tokio-util = "0.7.17"
 
 uuid = { version = "1.0", features = ["v4", "serde"] }
 
+# MIME类型检测
+mime_guess = "2.0"
+
+# 基于文件内容的MIME类型检测
+infer = "0.15"
+
+# URL编码
+percent-encoding = "2.1"
+
+# SHA-256哈希计算
+sha2 = "0.10"
+
+# 十六进制编码
+hex = "0.4"
+
 

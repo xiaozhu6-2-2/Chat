@@ -82,10 +82,10 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/online/friends-online", get(handlers::online::get_friends_online))// 获取好友列表在线状态
         .route("/auth/online/group-online", post(handlers::online::get_group_online))// 获取群聊在线状态
 
-        // .route("/auth/file/upload", post(handlers::file::upload_file))// 上传文件
-        // .route("/auth/file/preview", post(handlers::file::preview_file))// 预览文件
-        // .route("/auth/file/download", post(handlers::file::download_file))// 下载文件
-        // .route("/auth/file/delete", post(handlers::file::delete_file))// 删除文件
+        .route("/auth/file/upload", post(handlers::file::upload_file))// 上传文件
+        .route("/auth/file/preview", post(handlers::file::preview_file))// 预览文件
+        .route("/auth/file/download", post(handlers::file::download_file))// 下载文件
+        .route("/auth/file/delete", post(handlers::file::delete_file))// 删除文件
 
         .route_layer(middleware::from_fn(auth_middleware));
 

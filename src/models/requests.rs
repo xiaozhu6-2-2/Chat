@@ -8,11 +8,6 @@ use serde::{Deserialize, Serialize};
 // 文件上传上下文信息（来自前端的context字段）
 #[derive(Debug, Deserialize)]
 pub struct FileUploadContext {
-    pub association_type: String,  // "private_message" | "group_message" | "user_avatar" | "group_avatar" | "post_attachment"
-    pub association_id: String,    // 消息id/用户id/群组id
-    pub access_type: String,       // "user" | "friend" | "group" | "public"
-    pub permission_level: String,  // "view" | "download" | "share" | "manage"
-    pub target_id: Option<String>, // 可选的目标用户ID
 }
 
 // 注册请求结构体
@@ -316,19 +311,19 @@ pub struct UploadFileRequest {
 // 预览文件请求模型
 #[derive(Deserialize, Serialize)]
 pub struct PreviewFileRequest {
-
+    pub file_id: String,
 }
 
 // 下载文件请求模型
 #[derive(Deserialize, Serialize)]
 pub struct DownloadFileRequest {
-
+    pub file_id: String,
 }
 
 // 删除文件请求模型
 #[derive(Deserialize, Serialize)]
 pub struct DeleteFileRequest {
-
+    pub file_id: String,
 }
 
 // 好友在线状态请求模型
