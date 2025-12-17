@@ -514,28 +514,52 @@ pub async fn get_friend_request_list(
     let received_requests = state.db_pool.find_friend_request_by_receiver(&current_user.uid).await?;
 
     // 5. 转换发送的请求为响应格式
-    let requests: Vec<FriendRequestItem> = sent_requests.into_iter()
-        .map(|req| FriendRequestItem {
+    let mut requests = Vec::new();
+    for req in sent_requests {
+        // 查询接收者信息
+        let receiver = state.db_pool.find_user_by_uid(&req.receiver_uid).await
+            .map_err(|e| crate::models::errors::AppError::InternalError(
+                format!("Failed to fetch receiver {}: {}", req.receiver_uid, e)
+            ))?;
+
+        let request_item = FriendRequestItem {
             req_id: req.req_id,
             sender_uid: req.sender_uid,
+            sender_name: current_user.username.clone(),
+            sender_avatar: current_user.avatar.clone().unwrap_or_default(),
             receiver_uid: req.receiver_uid,
+            receiver_name: receiver.username,
+            receiver_avatar: receiver.avatar.unwrap_or_default(),
             apply_text: req.apply_text,
             create_time: req.create_time.map(|dt| dt.timestamp()),
             status: req.status.to_string(),
-        })
-        .collect();
+        };
+        requests.push(request_item);
+    }
 
     // 6. 转换接收的请求为响应格式
-    let receives: Vec<FriendRequestItem> = received_requests.into_iter()
-        .map(|req| FriendRequestItem {
+    let mut receives = Vec::new();
+    for req in received_requests {
+        // 查询发送者信息
+        let sender = state.db_pool.find_user_by_uid(&req.sender_uid).await
+            .map_err(|e| crate::models::errors::AppError::InternalError(
+                format!("Failed to fetch sender {}: {}", req.sender_uid, e)
+            ))?;
+
+        let request_item = FriendRequestItem {
             req_id: req.req_id,
             sender_uid: req.sender_uid,
+            sender_name: sender.username,
+            sender_avatar: sender.avatar.unwrap_or_default(),
             receiver_uid: req.receiver_uid,
+            receiver_name: current_user.username.clone(),
+            receiver_avatar: current_user.avatar.clone().unwrap_or_default(),
             apply_text: req.apply_text,
             create_time: req.create_time.map(|dt| dt.timestamp()),
             status: req.status.to_string(),
-        })
-        .collect();
+        };
+        receives.push(request_item);
+    }
 
     // 7. 计算总数
     let total = (requests.len() + receives.len()) as i64;

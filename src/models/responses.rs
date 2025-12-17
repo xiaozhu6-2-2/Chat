@@ -139,7 +139,11 @@ pub struct RespondFriendRequestResponse {
 pub struct FriendRequestItem {
     pub req_id: String,
     pub sender_uid: String,
+    pub sender_name: String,
+    pub sender_avatar: String,
     pub receiver_uid: String,
+    pub receiver_name: String,
+    pub receiver_avatar: String,
     pub apply_text: Option<String>,
     pub create_time: Option<i64>,
     pub status: String,
