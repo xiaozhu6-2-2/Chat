@@ -4,8 +4,21 @@ use axum::{extract::State, Json};
 use crate::models::entities::{Gender, OptionalEnumExt};
 use crate::models::others::Claims;
 use crate::models::repository::UserRepository;
+use crate::models::responses::UserTokenResponse;
 use crate::models::{errors::AppResult, responses::UserInfoResponse, responses::UserInfoUpdateResponse, responses::FetchProfileResponse, requests::UserInfoUpdateRequest, requests::FetchProfileRequest};
 use crate::state::AppState;
+
+pub async fn validate(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+) -> AppResult<Json<UserTokenResponse>> {
+    // 验证用户是否仍然存在
+    let _user = state.db_pool.find_user_by_account(&claims.sub).await?;
+
+    Ok(Json(UserTokenResponse {
+        valid: true,
+    }))
+}
 
 pub async fn get_user_info(
     State(state): State<AppState>,

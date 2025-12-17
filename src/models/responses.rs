@@ -24,6 +24,12 @@ pub struct SessionKeyResponse {
     pub public_key: String
 }
 
+// 验证token响应模型
+#[derive(Serialize, Deserialize)]
+pub struct UserTokenResponse {
+    pub valid: bool    
+}
+
 // 获取用户信息响应模型
 #[derive(Serialize, Deserialize)]
 pub struct UserInfoResponse {

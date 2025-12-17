@@ -31,10 +31,10 @@ pub fn create_routes() -> Router<AppState> {
     
     // 需要token认证的路由
     let protected_routes = Router::new()
+        .route("/auth/user/validate", get(handlers::user::validate))// 验证用户token是否有效
         .route("/auth/user/user-info", get(handlers::user::get_user_info))// 获取用户信息
         .route("/auth/user/update-user-info", post(handlers::user::update_user_info))// 更新用户信息
         // .route("/auth/user/update-user-avatar", post(handlers::user::update_user_avatar))// 更新用户头像
-        // .route("/auth/user/remove-user", post(handlers::user::remove_user))// 用户注销
         .route("/auth/user/profile", post(handlers::user::fetch_user_profile))// 获取非好友用户资料
 
         .route("/auth/chat/list", get(handlers::chat::get_chat_list))// 获取会话列表
