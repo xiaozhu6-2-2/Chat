@@ -52,6 +52,12 @@ pub struct FetchProfileRequest {
     pub uid: String,
 }
 
+// 更新用户头像请求模型
+#[derive(Deserialize, Serialize)]
+pub struct UserAvatarRequest {
+    pub file_id: String,
+}
+
 // 搜索用户请求模型
 #[derive(Deserialize, Serialize)]
 pub struct SearchUserRequest {
@@ -196,6 +202,13 @@ pub struct SettingGroupRequest {
     pub group_name: String,     // 群名称
     pub group_avater: String,   // 群头像URL
     pub group_intro: String,    // 群简介
+}
+
+// 群聊头像请求模型
+#[derive(Deserialize, Serialize)]
+pub struct GroupAvatarRequest {
+    pub gid: String,            // 群组ID
+    pub group_avater: String,   // 群头像
 }
 
 // 获取群公告请求模型
