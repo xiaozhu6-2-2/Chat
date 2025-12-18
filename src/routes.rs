@@ -1,9 +1,10 @@
 // src/routes.rs
 // 库模块导入
 use axum::{
-    routing::{get, post}, 
-    Router, 
+    routing::{get, post},
+    Router,
     middleware,
+    extract::DefaultBodyLimit,
 };
 use tower_http::cors::{CorsLayer, Any};
 
@@ -98,4 +99,5 @@ pub fn create_routes() -> Router<AppState> {
         .merge(protected_routes)
         .merge(ws_route)
         .layer(cors)
+        .layer(DefaultBodyLimit::max(1024 * 1024 * 1024)) // 100MB
 }

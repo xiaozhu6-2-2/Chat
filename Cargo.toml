@@ -24,7 +24,7 @@ sqlx = { version = "0.7", features = ["mysql", "runtime-tokio", "tls-native-tls"
 dotenv = "0.15"
 
 #跨域中间件
-tower-http = { version = "0.5.0", features = ["cors"] }
+tower-http = { version = "0.5.0", features = ["cors", "limit"] }
 http = "0.2"
 
 #密码哈希

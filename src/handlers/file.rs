@@ -18,16 +18,20 @@ pub async fn upload_file(
     let mut file_name: Option<String> = None;
     let mut file_type: Option<String> = None;
 
-    while let Some(field) = multipart.next_field().await.map_err(|e| {
+    while let Some(mut field) = multipart.next_field().await.map_err(|e| {
         AppError::BadRequest(format!("Failed to read multipart field: {}", e))
     })? {
         let field_name = field.name().unwrap_or("").to_string();
 
         match field_name.as_str() {
             "file" => {
-                file_data = Some(field.bytes().await.map_err(|e| {
-                    AppError::BadRequest(format!("Failed to read file data: {}", e))
-                })?.to_vec());
+                let mut data = Vec::new();
+                while let Some(chunk) = field.chunk().await.map_err(|e| {
+                    AppError::BadRequest(format!("Failed to read file chunk: {}", e))
+                })? {
+                    data.extend_from_slice(&chunk);
+                }
+                file_data = Some(data);
             },
             "fileName" => {
                 file_name = Some(field.text().await.map_err(|e| {
