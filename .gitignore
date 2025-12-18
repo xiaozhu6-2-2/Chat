@@ -59,3 +59,6 @@ Thumbs.db
 
 #AI配置文件
 .claude
+
+#上传文件目录
+/uploads/
