@@ -133,6 +133,8 @@ pub trait GroupChatRepository: Send + Sync {
     async fn find_group_request_by_id(&self, req_id: &str) -> AppResult<Option<GroupJoinRequest>>;
     // 查找群聊未处理申请
     async fn find_pending_requests_by_group(&self, gid: &str) -> AppResult<Vec<GroupJoinRequest>>;
+    // 查找群聊所有申请记录
+    async fn find_all_requests_by_group(&self, gid: &str) -> AppResult<Vec<GroupJoinRequest>>;
     // 查找用户的群聊申请记录
     async fn find_requests_by_user(&self, uid: &str) -> AppResult<Vec<GroupJoinRequest>>;
     // 更新群聊申请状态

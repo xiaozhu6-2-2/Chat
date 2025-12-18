@@ -413,7 +413,9 @@ pub async fn mark_msg_read(
         }
     }
 
-    Ok(Json(ReadResponse {}))
+    Ok(Json(ReadResponse {
+        success:true
+    }))
 }
 
 pub async fn fetch_group_read(

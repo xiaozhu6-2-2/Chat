@@ -421,13 +421,13 @@ pub async fn group_requests(
         return Err(AppError::BadRequest("只有群主或管理员可以查看申请列表".to_string()));
     }
 
-    // 3. 获取该群组的所有待处理申请（数据库层面已过滤）
-    let pending_requests = state.db_pool.find_pending_requests_by_group(&payload.gid).await?;
+    // 3. 获取该群组的所有申请记录（包括已处理的）
+    let all_requests = state.db_pool.find_all_requests_by_group(&payload.gid).await?;
 
     // 4. 转换为响应格式
     let mut request_items: Vec<GroupRequestItem> = Vec::new();
 
-    for req in pending_requests {
+    for req in all_requests {
         // 获取发送者信息
         let sender_info = state.db_pool.find_user_by_uid(&req.applicant_uid).await.ok().and_then(|x| Some(x));
         let sender_name = sender_info.as_ref().map(|u| &u.username).cloned().unwrap_or_default();

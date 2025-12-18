@@ -547,7 +547,7 @@ pub struct GroupHistoryResponse {
 // 标记已读响应模型
 #[derive(Serialize, Deserialize)]
 pub struct ReadResponse {
-
+    pub success: bool,
 }
 
 // 群聊已读数量项模型
