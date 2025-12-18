@@ -791,10 +791,10 @@ pub async fn set_group(
     }
 
     if let Some(current_avatar) = group.group_avatar {
-        if current_avatar != payload.group_avater {
+        if current_avatar != payload.group_avatar {
             has_changes = true;
         }
-    } else if !payload.group_avater.is_empty() {
+    } else if !payload.group_avatar.is_empty() {
         has_changes = true;
     }
 
@@ -815,7 +815,7 @@ pub async fn set_group(
         gid: payload.gid.clone(),
         group_name: payload.group_name.clone(),
         manager_uid: group.manager_uid,
-        group_avatar: Some(payload.group_avater.clone()),
+        group_avatar: Some(payload.group_avatar.clone()),
         group_intro: Some(payload.group_intro.clone()),
         create_time: group.create_time, // 保持原有创建时间
     };
@@ -852,7 +852,7 @@ pub async fn set_group_avatar(
 
     // 4. 验证文件ID有效性
     let has_permission = state.db_pool.verify_file_permission(
-        &payload.group_avater,
+        &payload.group_avatar,
         &user.uid,
         AccessLevel::Download,  // 至少需要下载权限
     ).await?;
@@ -862,11 +862,11 @@ pub async fn set_group_avatar(
     }
 
     // 4.1 验证文件类型是否为图像
-    let file_metadata = state.db_pool.find_file_metadata_by_id(&payload.group_avater).await?
+    let file_metadata = state.db_pool.find_file_metadata_by_id(&payload.group_avatar).await?
         .ok_or_else(|| AppError::NotFound("文件不存在".to_string()))?;
 
     // 检查文件类型是否为图像
-    let is_image = file_metadata.file_type.starts_with("image/");
+    let is_image = file_metadata.file_type.starts_with("image");
 
     if !is_image {
         return Err(AppError::BadRequest("只能使用图像文件作为群头像".to_string()));
@@ -890,7 +890,7 @@ pub async fn set_group_avatar(
 
     // 6. 创建新的文件关联
     state.db_pool.create_file_association(
-        &payload.group_avater,
+        &payload.group_avatar,
         AssociationType::GroupAvatar,
         &payload.gid,
         &user.uid
@@ -899,7 +899,7 @@ pub async fn set_group_avatar(
     // 7. 设置群组文件权限
     // 为新头像文件授权群组成员查看权限
     state.db_pool.grant_file_permission(
-        &payload.group_avater,
+        &payload.group_avatar,
         AccessTarget::Group,
         Some(payload.gid.clone()),
         AccessLevel::Download,  // 群组成员可查看头像
@@ -912,7 +912,7 @@ pub async fn set_group_avatar(
         gid: group.gid.clone(),
         group_name: group.group_name.clone(),
         manager_uid: group.manager_uid.clone(),
-        group_avatar: Some(payload.group_avater.clone()),  // 更新头像
+        group_avatar: Some(payload.group_avatar.clone()),  // 更新头像
         group_intro: group.group_intro.clone(),
         create_time: group.create_time,  // 保持原有创建时间
     };

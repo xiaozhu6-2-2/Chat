@@ -200,7 +200,7 @@ pub struct MemberSettingRequest {
 pub struct SettingGroupRequest {
     pub gid: String,            // 群组ID
     pub group_name: String,     // 群名称
-    pub group_avater: String,   // 群头像URL
+    pub group_avatar: String,   // 群头像URL
     pub group_intro: String,    // 群简介
 }
 
@@ -208,7 +208,7 @@ pub struct SettingGroupRequest {
 #[derive(Deserialize, Serialize)]
 pub struct GroupAvatarRequest {
     pub gid: String,            // 群组ID
-    pub group_avater: String,   // 群头像
+    pub group_avatar: String,   // 群头像
 }
 
 // 获取群公告请求模型
