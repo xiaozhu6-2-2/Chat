@@ -17,9 +17,9 @@ use tokio_util::sync::CancellationToken;
 // 分离模块导入
 use crate::models::errors::{AppError, AppResult};
 use crate::models::msg_websocket::{ClientMessage, MesPayload, ServerMessage, MessageAck};
-use crate::models::entities::{PrivateMessage, PrivateMsgType, GroupMsgType, EnumConvertible};
+use crate::models::entities::{PrivateMessage, PrivateMsgType, GroupMsgType, EnumConvertible, AccessLevel, AccessTarget, AssociationType};
 use crate::models::others::GroupBroadcastChannel;
-use crate::models::repository::{UserRepository, FriendshipRepository, GroupChatRepository, PrivateChatRepository, GroupMessageRepository};
+use crate::models::repository::{UserRepository, FriendshipRepository, GroupChatRepository, PrivateChatRepository, GroupMessageRepository, FileRepository};
 use crate::state::AppState;
 
 // 回复pong
@@ -108,6 +108,30 @@ pub async fn handle_private_chat(
     // 4. 验证权限
     state.db_pool.validate_private_message_permission(&sender_uid, &receiver_id).await?;
 
+    // 4a. 处理媒体消息类型（file, image, voice, video, emoji）
+    if let Some(content_type) = &payload.content_type {
+        // 检查是否为包含file_id的媒体类型
+        if matches!(content_type.as_str(), "file" | "image" | "voice" | "video" | "emoji") {
+            // 从消息内容中提取file_id
+            let file_id = payload.details.as_ref()
+                .ok_or_else(|| AppError::BadRequest(
+                    format!("{}消息缺少文件ID", content_type)
+                ))?
+                .clone();
+
+            // 验证发送者是否有文件的Share权限
+            let has_share_permission = state.db_pool
+                .verify_file_permission(&file_id, &sender_uid, AccessLevel::Share)
+                .await?;
+
+            if !has_share_permission {
+                return Err(AppError::Forbidden(
+                    "您没有权限分享此文件".to_string()
+                ));
+            }
+        }
+    }
+
     // 5. 通过sender和receiver验证chat_id的正确性
     let private_chat = state.db_pool
         .find_chat_by_users(&sender_uid, &receiver_id)
@@ -147,6 +171,36 @@ pub async fn handle_private_chat(
 
     // 9. 保存消息到数据库
     PrivateChatRepository::save_message(&state.db_pool, message).await?;
+
+    // 9a. 为媒体消息创建文件关联并授予权限
+    if let Some(content_type) = &payload.content_type {
+        // 检查是否为包含file_id的媒体类型
+        if matches!(content_type.as_str(), "file" | "image" | "voice" | "video" | "emoji") {
+            if let Some(file_id) = &payload.details {
+                // 为接收者授予Share权限（包含View和Download）
+                state.db_pool
+                    .grant_file_permission(
+                        &file_id,
+                        AccessTarget::User,
+                        Some(receiver_id.clone()),
+                        AccessLevel::Share,
+                        &sender_uid,
+                        None // 无过期时间
+                    )
+                    .await?;
+
+                // 创建文件与消息的关联
+                state.db_pool
+                    .create_file_association(
+                        &file_id,
+                        AssociationType::PrivateMessage,
+                        &message_id,
+                        &sender_uid
+                    )
+                    .await?;
+            }
+        }
+    }
 
     // 10. 从数据库获取刚刚保存的消息（获取数据库生成的时间戳）
     let saved_message = PrivateChatRepository::find_message_by_id(&state.db_pool, &message_id).await?
@@ -215,6 +269,30 @@ pub async fn handle_group_chat(
     // 4. 验证群成员权限
     state.db_pool.validate_group_message_permission(&sender_uid, &chat_id).await?;
 
+    // 4a. 处理群聊媒体消息类型（file, image, voice, video, emoji）
+    if let Some(content_type) = &payload.content_type {
+        // 检查是否为包含file_id的媒体类型
+        if matches!(content_type.as_str(), "file" | "image" | "voice" | "video" | "emoji") {
+            // 从消息内容中提取file_id
+            let file_id = payload.details.as_ref()
+                .ok_or_else(|| AppError::BadRequest(
+                    format!("群聊{}消息缺少文件ID", content_type)
+                ))?
+                .clone();
+
+            // 验证发送者是否有文件的Share权限
+            let has_share_permission = state.db_pool
+                .verify_file_permission(&file_id, &sender_uid, AccessLevel::Share)
+                .await?;
+
+            if !has_share_permission {
+                return Err(AppError::Forbidden(
+                    "您没有权限在群聊中分享此文件".to_string()
+                ));
+            }
+        }
+    }
+
     // 5. 生成消息ID
     let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
     let message_id = snowflake.next_id()?.to_string();
@@ -251,6 +329,36 @@ pub async fn handle_group_chat(
 
     // 7. 保存消息到数据库
     GroupMessageRepository::save_message(&state.db_pool, message).await?;
+
+    // 7a. 为群聊媒体消息创建文件关联并授予群组权限
+    if let Some(content_type) = &payload.content_type {
+        // 检查是否为包含file_id的媒体类型
+        if matches!(content_type.as_str(), "file" | "image" | "voice" | "video" | "emoji") {
+            if let Some(file_id) = &payload.details {
+                // 为整个群组授予Share权限（群组成员通过群组成员身份自动获得访问权限）
+                state.db_pool
+                    .grant_file_permission(
+                        &file_id,
+                        AccessTarget::Group,
+                        Some(chat_id.clone()), // chat_id 就是 gid
+                        AccessLevel::Share,
+                        &sender_uid,
+                        None // 无过期时间
+                    )
+                    .await?;
+
+                // 创建文件与群聊消息的关联
+                state.db_pool
+                    .create_file_association(
+                        &file_id,
+                        AssociationType::GroupMessage,
+                        &message_id,
+                        &sender_uid
+                    )
+                    .await?;
+            }
+        }
+    }
 
     // 8. 从数据库获取刚刚保存的消息（获取数据库生成的时间戳）
     let saved_message = GroupMessageRepository::find_message_by_id(&state.db_pool, &message_id).await?
