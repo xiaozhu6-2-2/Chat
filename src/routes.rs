@@ -35,7 +35,7 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/user/validate", get(handlers::user::validate))// 验证用户token是否有效
         .route("/auth/user/user-info", get(handlers::user::get_user_info))// 获取用户信息
         .route("/auth/user/update-user-info", post(handlers::user::update_user_info))// 更新用户信息
-        // .route("/auth/user/update-user-avatar", post(handlers::user::update_user_avatar))// 更新用户头像
+        .route("/auth/user/update-user-avatar", post(handlers::user::update_user_avatar))// 更新用户头像
         .route("/auth/user/profile", post(handlers::user::fetch_user_profile))// 获取非好友用户资料
 
         .route("/auth/chat/list", get(handlers::chat::get_chat_list))// 获取会话列表
@@ -71,7 +71,7 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/groups/disband", post(handlers::groups::disband_group))// 解散群聊
         .route("/auth/groups/member_set", post(handlers::groups::member_set))// 群聊成员修改本地设置
         .route("/auth/groups/setting", post(handlers::groups::set_group))// 修改群聊资料
-        // .route("/auth/groups/setting_avatar", post(handlers::groups::set_group_avatar))// 修改群聊头像
+        .route("/auth/groups/setting_avatar", post(handlers::groups::set_group_avatar))// 修改群聊头像
         .route("/auth/groups/get_announcements", post(handlers::groups::get_announcements))//获取群公告列表
         .route("/auth/groups/get_members", post(handlers::groups::get_members))//获取群成员列表
         .route("/auth/groups/transfer_ownership", post(handlers::groups::transfer_ownership))//转让群主

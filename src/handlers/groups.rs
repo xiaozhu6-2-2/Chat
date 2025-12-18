@@ -2,11 +2,11 @@ use axum::Extension;
 use axum::{extract::State, Json};
 
 use crate::models::others::Claims;
-use crate::models::requests::{BanningMemberRequest, CreateGroupRequest, DisbandGroupRequest, GetAnnouncementsRequest, GetBanStatusRequest, GetMembersRequest, GroupProfileRequest, GroupRequestListRequest, GroupRequestRequest, GroupRespondRequest, KickMemberRequest, LeaveGroupRequest, MemberSettingRequest, RemoveMuteRequest, RemovingingAdminRequest, SettingAdminRequest, SettingGroupRequest, TransferOwnershipRequest};
-use crate::models::responses::{AnnouncementItem, BanningMemberResponse, CreateGroupResponse, DisbandGroupResponse, GetAnnouncementsResponse, GetBanStatusResponse, GetMembersResponse, GetRequestItem, GetRequestListResponse, GroupListItem, GroupListResponse, GroupProfileResponse, GroupRequestItem, GroupRequestListResponse, GroupRequestResponse, GroupRespondResponse, KickMemberResponse, LeaveGroupResponse, MemberItem, MemberSettingResponse, RemoveMuteResponse, RemovingAdminResponse, SettingAdminResponse, SettingGourpResponse, TransferOwnershipResponse};
-use crate::models::entities::{ReqStatus, OptionalEnumExt, EnumConvertible};
-use crate::models::{errors::{AppResult, AppError}, responses::{SearchGroupResponse, SearchGroupItem}, responses::GroupCardResponse, requests::SearchGroupRequest, requests::GroupCardRequest, requests::GroupListRequest};
-use crate::models::repository::{GroupChatRepository, GroupMessageRepository, UserRepository};
+use crate::models::requests::{BanningMemberRequest, CreateGroupRequest, DisbandGroupRequest, GetAnnouncementsRequest, GetBanStatusRequest, GetMembersRequest, GroupAvatarRequest, GroupProfileRequest, GroupRequestListRequest, GroupRequestRequest, GroupRespondRequest, KickMemberRequest, LeaveGroupRequest, MemberSettingRequest, RemoveMuteRequest, RemovingingAdminRequest, SettingAdminRequest, SettingGroupRequest, TransferOwnershipRequest};
+use crate::models::responses::{AnnouncementItem, BanningMemberResponse, CreateGroupResponse, DisbandGroupResponse, GetAnnouncementsResponse, GetBanStatusResponse, GetMembersResponse, GetRequestItem, GetRequestListResponse, GroupAvatarResponse, GroupListItem, GroupListResponse, GroupProfileResponse, GroupRequestItem, GroupRequestListResponse, GroupRequestResponse, GroupRespondResponse, KickMemberResponse, LeaveGroupResponse, MemberItem, MemberSettingResponse, RemoveMuteResponse, RemovingAdminResponse, SettingAdminResponse, SettingGourpResponse, TransferOwnershipResponse};
+use crate::models::entities::{ReqStatus, OptionalEnumExt, EnumConvertible, AssociationType, AccessTarget, AccessLevel};
+use crate::models::{errors::{AppResult, AppError}, responses::{SearchGroupResponse, SearchGroupItem}, responses::GroupCardResponse, requests::SearchGroupRequest, requests::GroupCardRequest};
+use crate::models::repository::{GroupChatRepository, GroupMessageRepository, UserRepository, FileRepository};
 use crate::state::AppState;
 use log::{info, error};
 
@@ -824,6 +824,104 @@ pub async fn set_group(
 
     // 7. 返回成功响应
     Ok(Json(SettingGourpResponse {
+        success: true,
+    }))
+}
+
+pub async fn set_group_avatar(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<GroupAvatarRequest>,
+) -> AppResult<Json<GroupAvatarResponse>> {
+    // 1. 从 claims 中获取用户账号
+    let user_account = &claims.sub;
+    let user = state.db_pool.find_user_by_account(user_account).await?;
+
+    // 2. 验证用户是否是群组成员
+    let member = state.db_pool.find_member(&payload.gid, &user.uid).await?;
+    let member = member.ok_or_else(|| AppError::NotGroupMember {
+        uid: user.uid.clone(),
+        gid: payload.gid.clone(),
+    })?;
+
+    // 3. 验证用户权限（群主或管理员）
+    let role_str = member.role.to_enum_string();
+    if role_str != "owner" && role_str != "admin" {
+        return Err(AppError::InsufficientPermission("只有群主和管理员可以设置群头像".to_string()));
+    }
+
+    // 4. 验证文件ID有效性
+    let has_permission = state.db_pool.verify_file_permission(
+        &payload.group_avater,
+        &user.uid,
+        AccessLevel::Download,  // 至少需要下载权限
+    ).await?;
+
+    if !has_permission {
+        return Err(AppError::InsufficientPermission("您没有权限使用该文件作为群头像".to_string()));
+    }
+
+    // 4.1 验证文件类型是否为图像
+    let file_metadata = state.db_pool.find_file_metadata_by_id(&payload.group_avater).await?
+        .ok_or_else(|| AppError::NotFound("文件不存在".to_string()))?;
+
+    // 检查文件类型是否为图像
+    let is_image = file_metadata.file_type.starts_with("image/");
+
+    if !is_image {
+        return Err(AppError::BadRequest("只能使用图像文件作为群头像".to_string()));
+    }
+
+    // 5. 查询当前群组信息
+    let group = state.db_pool.find_group_by_gid(&payload.gid).await?;
+    let group = group.ok_or_else(|| AppError::NotFound(format!("群聊 {} 不存在", payload.gid)))?;
+
+    // 5.1 处理旧头像（如果存在）
+    if let Some(old_avatar_file_id) = &group.group_avatar {
+        // 删除旧的群组头像关联
+        state.db_pool.batch_delete_associations_by_target(
+            AssociationType::GroupAvatar,
+            &payload.gid
+        ).await?;
+
+        // 软删除旧头像文件
+        state.db_pool.soft_delete_file(old_avatar_file_id).await?;
+    }
+
+    // 6. 创建新的文件关联
+    state.db_pool.create_file_association(
+        &payload.group_avater,
+        AssociationType::GroupAvatar,
+        &payload.gid,
+        &user.uid
+    ).await?;
+
+    // 7. 设置群组文件权限
+    // 为新头像文件授权群组成员查看权限
+    state.db_pool.grant_file_permission(
+        &payload.group_avater,
+        AccessTarget::Group,
+        Some(payload.gid.clone()),
+        AccessLevel::Download,  // 群组成员可查看头像
+        &user.uid,
+        None  // 永不过期
+    ).await?;
+
+    // 8. 更新群组信息
+    let updated_group = crate::models::entities::GroupChat {
+        gid: group.gid.clone(),
+        group_name: group.group_name.clone(),
+        manager_uid: group.manager_uid.clone(),
+        group_avatar: Some(payload.group_avater.clone()),  // 更新头像
+        group_intro: group.group_intro.clone(),
+        create_time: group.create_time,  // 保持原有创建时间
+    };
+
+    // 保存更新
+    state.db_pool.save_group(updated_group).await?;
+
+    // 9. 返回响应
+    Ok(Json(GroupAvatarResponse {
         success: true,
     }))
 }

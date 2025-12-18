@@ -484,7 +484,7 @@ impl FileRepository for MySqlPool {
 
     // ==================== 文件权限管理 (file_permission) ====================
 
-    /// 授予文件权限
+    /// 授予文件权限（幂等实现）
     async fn grant_file_permission(
         &self,
         file_id: &str,
@@ -528,6 +528,44 @@ impl FileRepository for MySqlPool {
             },
         }
 
+        // 3. 先检查权限是否已存在（幂等性检查）
+        if check_permission_exists(self, file_id, access_type.clone(), target_id.clone()).await? {
+            // 权限已存在，直接返回成功
+            return Ok(());
+        }
+
+        // 4. 开始事务，处理可能的竞态条件
+        let mut tx = self.begin().await?;
+
+        // 5. 在事务内再次检查权限（双重检查模式）
+        let permission_exists = sqlx::query!(
+            r#"
+            SELECT permission_id
+            FROM file_permission
+            WHERE file_id = ?
+            AND access_type = ?
+            AND (target_id = ? OR (target_id IS NULL AND ? IS NULL))
+            "#,
+            file_id,
+            match access_type {
+                AccessTarget::User => "user",
+                AccessTarget::Friend => "friend",
+                AccessTarget::Group => "group",
+                AccessTarget::Public => "public",
+            },
+            target_id,
+            target_id
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        if permission_exists.is_some() {
+            // 事务内发现权限已存在，提交事务并返回
+            tx.commit().await?;
+            return Ok(());
+        }
+
+        // 6. 权限不存在，插入新记录
         let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
         let permission_id = snowflake.next_id()?.to_string();
 
@@ -556,8 +594,11 @@ impl FileRepository for MySqlPool {
             granted_by,
             expires_at
         )
-        .execute(self)
+        .execute(&mut *tx)
         .await?;
+
+        // 7. 提交事务
+        tx.commit().await?;
 
         Ok(())
     }
@@ -971,3 +1012,46 @@ impl FileRepository for MySqlPool {
         Ok(result.rows_affected())
     }
 }
+
+// ==================== 辅助函数 ====================
+
+/// 检查指定权限是否已存在
+///
+/// # 参数
+/// * `pool` - MySQL连接池
+/// * `file_id` - 文件ID
+/// * `access_type` - 访问类型（User, Friend, Group, Public）
+/// * `target_id` - 目标ID（对于Friend和Public类型应为None）
+///
+/// # 返回值
+/// 返回 `AppResult<bool>`，如果权限存在返回true，否则返回false
+pub async fn check_permission_exists(
+    pool: &MySqlPool,
+    file_id: &str,
+    access_type: AccessTarget,
+    target_id: Option<String>,
+) -> AppResult<bool> {
+    let permission = sqlx::query!(
+        r#"
+        SELECT permission_id
+        FROM file_permission
+        WHERE file_id = ?
+        AND access_type = ?
+        AND (target_id = ? OR (target_id IS NULL AND ? IS NULL))
+        "#,
+        file_id,
+        match access_type {
+            AccessTarget::User => "user",
+            AccessTarget::Friend => "friend",
+            AccessTarget::Group => "group",
+            AccessTarget::Public => "public",
+        },
+        target_id,
+        target_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(permission.is_some())
+}
+

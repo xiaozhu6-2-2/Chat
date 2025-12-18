@@ -50,6 +50,12 @@ pub struct UserInfoUpdateResponse {
     pub success: bool,
 }
 
+// 更新用户头像
+#[derive(Serialize, Deserialize)]
+pub struct UserAvatarResponse {
+    pub success: bool,
+}
+
 // 获取用户资料响应模型
 #[derive(Serialize, Deserialize)]
 pub struct FetchProfileResponse {
@@ -343,6 +349,12 @@ pub struct AnnouncementItem {
     pub send_time: i64,              // 发送时间戳
     pub mentioned_uids: Vec<String>,    // 提及的用户ID列表
     pub quote_msg_id: String,           // 引用消息ID
+}
+
+// 群头像响应模型
+#[derive(Serialize, Deserialize)]
+pub struct GroupAvatarResponse {
+    pub success: bool,
 }
 
 // 获取群公告响应模型
