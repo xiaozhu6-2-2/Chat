@@ -1,9 +1,10 @@
 use sqlx::MySqlPool;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 
 use crate::models::errors::AppResult;
 use crate::models::repository::PrivateChatRepository;
-use crate::models::entities::{PrivateChat, PrivateMessage, PrivateMsgType};
+use crate::models::entities::{PrivateChat, PrivateMessage, PrivateMsgType, EnumConvertible};
 
 #[async_trait]
 impl PrivateChatRepository for MySqlPool {
@@ -16,16 +17,14 @@ impl PrivateChatRepository for MySqlPool {
         // 插入或更新私聊会话
         sqlx::query!(
             "INSERT INTO private_chat
-            (pid, uid1, uid2, create_time, is_pinned_by_uid1, is_pinned_by_uid2)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (pid, uid1, uid2, is_pinned_by_uid1, is_pinned_by_uid2)
+            VALUES (?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
-            create_time = VALUES(create_time),
             is_pinned_by_uid1 = VALUES(is_pinned_by_uid1),
             is_pinned_by_uid2 = VALUES(is_pinned_by_uid2)",
             chat.pid,
             chat.uid1,
             chat.uid2,
-            chat.create_time,
             chat.is_pinned_by_uid1,
             chat.is_pinned_by_uid2,
         ).execute(&mut *tx).await?;
@@ -142,15 +141,13 @@ impl PrivateChatRepository for MySqlPool {
                 pid,
                 content,
                 sender_uid,
-                send_time,
                 is_revoked,
                 is_read,
                 type)
-                VALUES (?,?,?,?,?,?,?,?)
+                VALUES (?,?,?,?,?,?,?)
             ON DUPLICATE KEY UPDATE
                 content = VALUES(content),
                 sender_uid = VALUES(sender_uid),
-                send_time = VALUES(send_time),
                 is_revoked = VALUES(is_revoked),
                 is_read = VALUES(is_read),
                 type = VALUES(type)",
@@ -158,10 +155,9 @@ impl PrivateChatRepository for MySqlPool {
                 msg.pid,
                 msg.content,
                 msg.sender_uid,
-                msg.send_time,
                 msg.is_revoked,
                 msg.is_read,
-                msg.mes_type
+                msg.mes_type.to_enum_string()
         ).execute(&mut *tx).await?;
 
         tx.commit().await?;
@@ -343,7 +339,7 @@ impl PrivateChatRepository for MySqlPool {
     }
 
     // 批量标记私聊消息为已读
-    async fn mark_messages_as_read_by_chat_and_time(&self, pid: &str, uid: &str, timestamp: chrono::NaiveDateTime) -> AppResult<u64> {
+    async fn mark_messages_as_read_by_chat_and_time(&self, pid: &str, uid: &str, timestamp: DateTime<Utc>) -> AppResult<u64> {
         let mut tx = self.begin().await?;
 
         let result = sqlx::query!(

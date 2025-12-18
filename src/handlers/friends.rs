@@ -1,12 +1,11 @@
 use axum::Extension;
 use axum::{extract::State, Json};
-use chrono::{NaiveDateTime, Utc};
 
-use crate::models::entities::{GenderOptionExt, ReqStatus, ReqStatusOptionExt, Friends};
+use crate::models::entities::{OptionalEnumExt, ReqStatus, Friends, PrivateChat};
 use crate::models::others::Claims;
 use crate::models::repository::{UserRepository, FriendshipRepository};
 use crate::models::requests::{FriendRequestRequest, RemoveFriendRequest, RespondFriendRequestRequest, UpdateFriendRemarkBlacklistGroupByRequest};
-use crate::models::responses::{FriendListResponse, FriendRequestItem, FriendRequestListResponse, FriendRequestResponse, RespondFriendRequestResponse};
+use crate::models::responses::{FriendListResponse, FriendRequestItem, FriendRequestListResponse, FriendRequestResponse, RemoveFriendResponse, RespondFriendRequestResponse, UpdateFriendRemarkBlacklistGroupByResponse};
 use crate::models::{errors::AppResult, responses::SearchUserResponse, responses::FriendProfileResponse, requests::SearchUserRequest, requests::FriendProfileRequest};
 use crate::state::AppState;
 
@@ -166,7 +165,7 @@ pub async fn get_friend_profile(
         remark,
         group_by,
         is_blacklisted,
-        created_at: friendship.create_time,
+        created_at: friendship.create_time.map(|dt| dt.timestamp()),
         bio: friend_user.bio,
         avatar: friend_user.avatar,
         gender: friend_user.gender.to_optional_string(),
@@ -238,7 +237,7 @@ pub async fn get_friend_list(
                     remark: remark.clone(),
                     group_by: group_by.clone(),
                     is_blacklisted: false, // 普通好友
-                    created_at: *created_at,
+                    created_at: created_at.map(|dt| dt.timestamp()),
                     bio: friend_user.bio.clone(),
                     avatar: friend_user.avatar.clone(),
                 };
@@ -261,7 +260,7 @@ pub async fn get_friend_list(
                     remark: remark.clone(),
                     group_by: group_by.clone(),
                     is_blacklisted: true, // 黑名单好友
-                    created_at: *created_at,
+                    created_at: created_at.map(|dt| dt.timestamp()),
                     bio: friend_user.bio.clone(),
                     avatar: friend_user.avatar.clone(),
                 };
@@ -336,7 +335,7 @@ pub async fn send_friend_request(
         receiver_uid: payload.receiver_id.clone(), // receiver_id 直接就是 uid
         status: ReqStatus::Pending,
         apply_text: Some(payload.message),
-        create_time: Some(payload.create_time),
+        create_time: None,  // 让数据库使用 DEFAULT CURRENT_TIMESTAMP
         handle_time: None, // 处理时间设为 NULL
     };
 
@@ -349,7 +348,7 @@ pub async fn send_friend_request(
         sender_uid: friend_request.sender_uid,
         receiver_uid: friend_request.receiver_uid,
         apply_text: friend_request.apply_text,
-        create_time: friend_request.create_time.unwrap_or_default().to_string(),
+        create_time: friend_request.create_time.map(|dt| dt.timestamp()).unwrap_or(0),
         status: Some(ReqStatus::Pending).to_optional_string(),
     };
 
@@ -403,11 +402,8 @@ pub async fn respond_friend_request(
         }
     }
 
-    // 6. 解析 handle_time
-    let handle_time = NaiveDateTime::parse_from_str(&payload.handle_time, "%Y-%m-%d %H:%M:%S")
-        .map_err(|_| crate::models::errors::AppError::BadRequest(
-            "Invalid handle_time format. Use YYYY-MM-DD HH:MM:SS".to_string()
-        ))?;
+    // 6. 生成 handle_time（使用服务器时间）
+    let handle_time = chrono::Utc::now();
 
     // 7. 根据 action 处理请求
     match payload.action.as_str() {
@@ -424,9 +420,11 @@ pub async fn respond_friend_request(
                 ));
             }
 
-            // 生成好友关系 ID
+            // 生成统一的ID（同时用于fid和pid）
             let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
-            let fid = snowflake.next_id()?.to_string();
+            let id = snowflake.next_id()?.to_string();
+            let fid = id.clone();
+            let pid = id;
 
             // 确保较小的 uid 在前，较大的 uid 在后
             let (uid, to_uid) = if friend_request.sender_uid < friend_request.receiver_uid {
@@ -435,12 +433,12 @@ pub async fn respond_friend_request(
                 (friend_request.receiver_uid.clone(), friend_request.sender_uid.clone())
             };
 
-            // 创建好友关系
+            // 创建好友关系实体
             let friendship = Friends {
                 fid: fid.clone(),
-                uid,
-                to_uid,
-                create_time: Some(Utc::now().naive_utc()),
+                uid: uid.clone(),
+                to_uid: to_uid.clone(),
+                create_time: None, // 让数据库自动设置
                 is_blacklist: Some(0),
                 to_is_blacklist: Some(0),
                 remark: None,
@@ -449,20 +447,31 @@ pub async fn respond_friend_request(
                 to_group_by: None,
             };
 
-            // 保存好友关系
-            state.db_pool.save_friendship(friendship).await?;
+            // 创建私聊会话实体
+            let private_chat = PrivateChat {
+                pid: pid.clone(),
+                uid1: uid.clone(),
+                uid2: to_uid.clone(),
+                create_time: None, // 让数据库自动设置
+                is_pinned_by_uid1: Some(0),
+                is_pinned_by_uid2: Some(0),
+                do_not_disturb_uid1: Some(0),
+                do_not_disturb_uid2: Some(0),
+            };
 
-            // 更新好友请求状态为已接受
-            state.db_pool.update_request_status(
-                &payload.req_id,
-                "accepted",
-                handle_time
+            // 调用 Repository 方法处理所有操作
+            state.db_pool.accept_friend_request_with_chat(
+                &friend_request.req_id,
+                handle_time,
+                friendship,
+                private_chat
             ).await?;
 
             // 返回成功响应，包含另一位用户的 ID 和好友关系 ID
             Ok(Json(RespondFriendRequestResponse {
                 uid: friend_request.sender_uid,
                 fid,
+                pid
             }))
         }
         "reject" => {
@@ -473,10 +482,11 @@ pub async fn respond_friend_request(
                 handle_time
             ).await?;
 
-            // 返回拒绝响应，两个字段都返回 "Rejected"
+            // 返回拒绝响应，三个字段都返回 "Rejected"
             Ok(Json(RespondFriendRequestResponse {
                 uid: "Rejected".to_string(),
                 fid: "Rejected".to_string(),
+                pid: "Rejected".to_string(),
             }))
         }
         _ => {
@@ -504,26 +514,52 @@ pub async fn get_friend_request_list(
     let received_requests = state.db_pool.find_friend_request_by_receiver(&current_user.uid).await?;
 
     // 5. 转换发送的请求为响应格式
-    let requests: Vec<FriendRequestItem> = sent_requests.into_iter()
-        .map(|req| FriendRequestItem {
+    let mut requests = Vec::new();
+    for req in sent_requests {
+        // 查询接收者信息
+        let receiver = state.db_pool.find_user_by_uid(&req.receiver_uid).await
+            .map_err(|e| crate::models::errors::AppError::InternalError(
+                format!("Failed to fetch receiver {}: {}", req.receiver_uid, e)
+            ))?;
+
+        let request_item = FriendRequestItem {
             req_id: req.req_id,
             sender_uid: req.sender_uid,
+            sender_name: current_user.username.clone(),
+            sender_avatar: current_user.avatar.clone().unwrap_or_default(),
+            receiver_uid: req.receiver_uid,
+            receiver_name: receiver.username,
+            receiver_avatar: receiver.avatar.unwrap_or_default(),
             apply_text: req.apply_text,
-            create_time: req.create_time.map(|dt| dt.to_string()),
+            create_time: req.create_time.map(|dt| dt.timestamp()),
             status: req.status.to_string(),
-        })
-        .collect();
+        };
+        requests.push(request_item);
+    }
 
     // 6. 转换接收的请求为响应格式
-    let receives: Vec<FriendRequestItem> = received_requests.into_iter()
-        .map(|req| FriendRequestItem {
+    let mut receives = Vec::new();
+    for req in received_requests {
+        // 查询发送者信息
+        let sender = state.db_pool.find_user_by_uid(&req.sender_uid).await
+            .map_err(|e| crate::models::errors::AppError::InternalError(
+                format!("Failed to fetch sender {}: {}", req.sender_uid, e)
+            ))?;
+
+        let request_item = FriendRequestItem {
             req_id: req.req_id,
             sender_uid: req.sender_uid,
+            sender_name: sender.username,
+            sender_avatar: sender.avatar.unwrap_or_default(),
+            receiver_uid: req.receiver_uid,
+            receiver_name: current_user.username.clone(),
+            receiver_avatar: current_user.avatar.clone().unwrap_or_default(),
             apply_text: req.apply_text,
-            create_time: req.create_time.map(|dt| dt.to_string()),
+            create_time: req.create_time.map(|dt| dt.timestamp()),
             status: req.status.to_string(),
-        })
-        .collect();
+        };
+        receives.push(request_item);
+    }
 
     // 7. 计算总数
     let total = (requests.len() + receives.len()) as i64;
@@ -540,7 +576,7 @@ pub async fn remove_friend(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
     Json(payload): Json<RemoveFriendRequest>,
-) -> AppResult<Json<()>> {
+) -> AppResult<Json<RemoveFriendResponse>> {
     // 1. 从 claims 中提取当前用户的 account
     let current_account = &claims.sub;
 
@@ -560,18 +596,20 @@ pub async fn remove_friend(
         ));
     }
 
-    // 5. 删除好友关系
-    state.db_pool.delete_friendship(&payload.fid).await?;
+    // 5. 删除好友关系及其相关的私聊会话和消息
+    state.db_pool.delete_friendship_with_chat(&payload.fid).await?;
 
-    // 6. 返回空响应
-    Ok(Json(()))
+    // 6. 返回成功响应
+    Ok(Json(RemoveFriendResponse { 
+        success: true 
+    }))
 }
 
 pub async fn update_friend_remark_blacklist_group(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
     Json(payload): Json<UpdateFriendRemarkBlacklistGroupByRequest>,
-) -> AppResult<Json<()>> {
+) -> AppResult<Json<UpdateFriendRemarkBlacklistGroupByResponse>> {
     // 1. 从 claims 中提取当前用户的 account
     let current_account = &claims.sub;
 
@@ -612,6 +650,8 @@ pub async fn update_friend_remark_blacklist_group(
     // 7. 保存更新后的好友关系
     state.db_pool.save_friendship(updated_friendship).await?;
 
-    // 8. 返回空响应
-    Ok(Json(()))
+    // 8. 返回成功响应
+    Ok(Json(UpdateFriendRemarkBlacklistGroupByResponse { 
+        success: true 
+    }))
 }

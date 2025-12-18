@@ -25,7 +25,7 @@ use crate::models::repository::UserRepository;
 // 分离模块导入
 use crate::models::requests::{RegisterRequest, LoginRequest};
 use crate::models::responses::{RegisterResponse, LoginResponse, SessionKeyResponse, };
-use crate::models::entities::{Gender, GenderOptionExt, User};
+use crate::models::entities::{Gender, OptionalEnumExt, User};
 use crate::models::others::{Claims};
 use crate::models::errors::{AppError, AppResult};
 use crate::state::AppState;
@@ -85,7 +85,7 @@ pub async fn register(
         gender: Option::<Gender>::from_optional_string(Some(payload.gender)),
         region: Some(payload.region),
         email: None,
-        create_time: Some(chrono::Utc::now().naive_utc()),
+        create_time: Some(chrono::Utc::now()),
         avatar: None,
         bio: None,
 

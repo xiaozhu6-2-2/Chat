@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+// 不再需要 chrono 导入，使用 i64 时间戳
 // src/models.rs
 // 库模块导入
 use serde::{Deserialize, Serialize};
@@ -24,6 +24,12 @@ pub struct SessionKeyResponse {
     pub public_key: String
 }
 
+// 验证token响应模型
+#[derive(Serialize, Deserialize)]
+pub struct UserTokenResponse {
+    pub valid: bool    
+}
+
 // 获取用户信息响应模型
 #[derive(Serialize, Deserialize)]
 pub struct UserInfoResponse {
@@ -33,7 +39,7 @@ pub struct UserInfoResponse {
     pub gender: Option<String>,        
     pub region: Option<String>,        
     pub email: Option<String>,         
-    pub create_time: Option<NaiveDateTime>,  
+    pub create_time: Option<i64>,  
     pub avatar: Option<String>,        
     pub bio: Option<String>,         
 }
@@ -41,6 +47,12 @@ pub struct UserInfoResponse {
 // 用户信息更新响应模型
 #[derive(Serialize, Deserialize)]
 pub struct UserInfoUpdateResponse {
+    pub success: bool,
+}
+
+// 更新用户头像
+#[derive(Serialize, Deserialize)]
+pub struct UserAvatarResponse {
     pub success: bool,
 }
 
@@ -86,7 +98,7 @@ pub struct FriendProfileResponse {
     pub remark: String,// 对好友的备注
     pub group_by: String,// 对好友的分组
     pub is_blacklisted: bool,// 对好友的黑名单状态
-    pub created_at: Option<NaiveDateTime>,// 好友账号的创建时间
+    pub created_at: Option<i64>,// 好友账号的创建时间
     pub bio: Option<String>,// 好友的简介
     pub avatar: Option<String>,// 好友的头像
     pub gender: Option<String>,// 好友的性别
@@ -103,7 +115,7 @@ pub struct FriendItem {
     pub remark: String,
     pub group_by: String,
     pub is_blacklisted: bool,
-    pub created_at: Option<NaiveDateTime>,
+    pub created_at: Option<i64>,
     pub bio: Option<String>,
     pub avatar: Option<String>,
 }
@@ -122,7 +134,7 @@ pub struct FriendRequestResponse {
     pub sender_uid: String,
     pub receiver_uid: String,
     pub apply_text: Option<String>,
-    pub create_time: String,
+    pub create_time: i64,
     pub status: Option<String>,
 }
 
@@ -131,6 +143,7 @@ pub struct FriendRequestResponse {
 pub struct RespondFriendRequestResponse {
     pub uid: String,// 用户id
     pub fid: String,// 好友关系id
+    pub pid: String,// 私聊会话id
 }
 
 // 好友请求项
@@ -138,8 +151,13 @@ pub struct RespondFriendRequestResponse {
 pub struct FriendRequestItem {
     pub req_id: String,
     pub sender_uid: String,
+    pub sender_name: String,
+    pub sender_avatar: String,
+    pub receiver_uid: String,
+    pub receiver_name: String,
+    pub receiver_avatar: String,
     pub apply_text: Option<String>,
-    pub create_time: Option<String>,
+    pub create_time: Option<i64>,
     pub status: String,
 }
 
@@ -154,27 +172,20 @@ pub struct FriendRequestListResponse {
 // 删除好友响应模型
 #[derive(Serialize, Deserialize)]
 pub struct RemoveFriendResponse {
-
+    pub success: bool,
 }
 
-// 更新好友备注响应模型
+// 更新好友备注||黑名单||分组响应模型
 #[derive(Serialize, Deserialize)]
-pub struct UpdateFriendRemarkResponse {
-
+pub struct UpdateFriendRemarkBlacklistGroupByResponse{
+    pub success: bool,
 }
-
-// 更新好友黑名单响应模型
-#[derive(Serialize, Deserialize)]
-pub struct UpdateFriendBlacklistResponse {
-
-}
-
 
 // 创建群组响应模型
 #[derive(Serialize, Deserialize)]
 pub struct CreateGroupResponse {
     pub gid: String,
-    pub created_at: String,
+    pub created_at: i64,
 }
 
 // 搜索群组项
@@ -203,7 +214,7 @@ pub struct GroupCardResponse {
     pub manager_uid: String,
     pub avatar: Option<String>,
     pub group_intro: Option<String>,
-    pub created_at: Option<NaiveDateTime>,
+    pub created_at: Option<i64>,
 }
 
 // 群组资料响应模型（仅群成员可用）
@@ -214,12 +225,12 @@ pub struct GroupProfileResponse {
     pub manager_uid: String,
     pub avatar: String,
     pub group_intro: String,
-    pub created_at: String,
+    pub created_at: Option<i64>,
     pub do_not_disturb: bool,
     pub is_pinned: bool,
     pub remark: Option<String>,
     pub nickname: Option<String>,
-    pub join_time: String,
+    pub join_time: i64,
 }
 
 // 群组列表项
@@ -243,9 +254,32 @@ pub struct GroupListResponse {
 pub struct GroupRequestResponse {
     pub req_id: String,
     pub gid: String,
+    pub group_name: String,
+    pub group_avatar: String,
+    pub sender_uid: String,
     pub apply_text: String,
-    pub create_time: String,
+    pub create_time: i64,
     pub status: String,
+}
+
+// 用户群聊申请列表项
+#[derive(Serialize, Deserialize)]
+pub struct GetRequestItem {
+    pub req_id: String,
+    pub gid: String,
+    pub group_name: String,
+    pub group_avatar: String,
+    pub sender_uid: String,
+    pub apply_text: Option<String>,
+    pub create_time: i64,
+    pub status: String,
+}
+
+// 获取用户申请列表响应模型
+#[derive(Serialize, Deserialize)]
+pub struct GetRequestListResponse {
+    pub requests: Vec<GetRequestItem>,
+    pub total: i64,
 }
 
 // 群聊申请列表项
@@ -253,9 +287,13 @@ pub struct GroupRequestResponse {
 pub struct GroupRequestItem {
     pub req_id: String,
     pub gid: String,
+    pub group_name: String,
+    pub group_avatar: String,
     pub sender_uid: String,
+    pub sender_name: String,
+    pub sender_avatar: String,
     pub apply_text: Option<String>,
-    pub create_time: String,
+    pub create_time: i64,
     pub status: String,
 }
 
@@ -281,7 +319,7 @@ pub struct LeaveGroupResponse {
 // 踢出群成员响应模型
 #[derive(Serialize, Deserialize)]
 pub struct KickMemberResponse {
-    // 空结构体，只返回成功状态
+    pub success: bool,
 }
 
 // 解散群聊响应模型
@@ -299,7 +337,7 @@ pub struct MemberSettingResponse {
 // 修改群聊设置响应模型
 #[derive(Serialize, Deserialize)]
 pub struct SettingGourpResponse {
-    // 空结构体，只返回成功状态
+    pub success: bool,
 }
 
 // 群公告项模型
@@ -308,9 +346,15 @@ pub struct AnnouncementItem {
     pub msg_id: String,                 // 消息ID
     pub content: String,                // 公告内容
     pub sender_uid: String,             // 发送者UID
-    pub send_time: String,              // 发送时间戳
+    pub send_time: i64,              // 发送时间戳
     pub mentioned_uids: Vec<String>,    // 提及的用户ID列表
     pub quote_msg_id: String,           // 引用消息ID
+}
+
+// 群头像响应模型
+#[derive(Serialize, Deserialize)]
+pub struct GroupAvatarResponse {
+    pub success: bool,
 }
 
 // 获取群公告响应模型
@@ -349,11 +393,17 @@ pub struct SettingAdminResponse {
     pub success: bool,
 }
 
+// 移除管理员响应模型
+#[derive(Serialize, Deserialize)]
+pub struct RemovingAdminResponse {
+    pub success: bool,
+}
+
 // 获取禁言状态响应模型
 #[derive(Serialize, Deserialize)]
 pub struct GetBanStatusResponse {
     pub is_banned: bool,       // 是否被禁言
-    pub expired: String,        // 剩余时间戳（如果未禁言则为空）
+    pub expired: i64,        // 剩余时间戳（如果未禁言则为空）
 }
 
 // 禁言成员响应模型
@@ -384,7 +434,7 @@ pub struct ChatItem {
     #[serde(rename = "type")]
     pub chat_type: ChatType, // "private" or "group"
     pub latest_message: String,
-    pub updated_at: String, // 时间戳字符串
+    pub updated_at: i64, // 时间戳
     pub unread_messages: i32,
     pub avatar: String,
     pub remark: String, // 备注/名字
@@ -405,7 +455,7 @@ pub struct PrivateChatResponse {
     #[serde(rename = "type")]
     pub chat_type: String, // "private"
     pub latest_message: String,
-    pub updated_at: String, // ISO 8601 格式的时间字符串
+    pub updated_at: i64, // 时间戳
     pub avatar: String,
     pub remark: String, // 备注名，如果没有备注则显示用户名
 }
@@ -418,7 +468,7 @@ pub struct GroupChatResponse {
     #[serde(rename = "type")]
     pub chat_type: String,             // 聊天类型，固定为"group"
     pub latest_message: String,        // 最新消息内容
-    pub updated_at: String,            // 最新消息时间戳
+    pub updated_at: i64,            // 最新消息时间戳
     pub avatar: String,                // 群组头像URL
     pub remark: String,                // 群组名称或用户自定义备注
 }
@@ -431,7 +481,7 @@ pub struct PrivateMessagePayload {
     // 消息元数据
     pub message_id: String,
     pub chat_id: String,
-    pub timestamp: String,     // 使用字符串时间戳
+    pub timestamp: i64,     // 使用时间戳
     // 发送者信息
     pub sender_id: String,
     pub sender_name: String,
@@ -470,7 +520,7 @@ pub struct GroupMessagePayload {
     // 消息元数据
     pub message_id: String,
     pub chat_id: String,
-    pub timestamp: String,     // 使用字符串时间戳
+    pub timestamp: i64,     // 使用时间戳
     // 发送者信息
     pub sender_id: String,
     pub sender_name: String,
@@ -528,13 +578,21 @@ pub struct FetchGroupReadResponse {
 // 上传文件响应模型
 #[derive(Serialize, Deserialize)]
 pub struct UploadFileResponse {
-
+    pub file_id: String,         // 文件唯一ID
+    pub display_name: String,    // 显示名称（来自前端的fileName）
+    pub file_size: i64,          // 文件大小（字节）
+    pub mime_type: String,       // MIME类型
+    pub file_type: String,       // 文件类型分类（来自前端的fileType）
+    pub upload_time: i64,     // 上传时间
+    pub owner_uid: String,       // 文件所有者UID
 }
 
 // 预览文件响应模型
 #[derive(Serialize, Deserialize)]
 pub struct PreviewFileResponse {
-
+    pub display_name: String,
+    pub file_size: i64,
+    pub file_type: String,
 }
 
 // 下载文件响应模型
@@ -546,7 +604,7 @@ pub struct DownloadFileResponse {
 // 删除文件响应模型
 #[derive(Serialize, Deserialize)]
 pub struct DeleteFileResponse {
-
+    pub success: bool,
 }
 
 // 好友在线状态响应模型
@@ -564,7 +622,7 @@ pub struct OnlineFriendItem {
     pub avatar: String,
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_seen_at: Option<String>,
+    pub last_seen_at: Option<i64>,
 }
 
 // 在线群成员项模型
@@ -575,7 +633,7 @@ pub struct OnlineGroupMemberItem {
     pub avatar: String,
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_seen_at: Option<String>,
+    pub last_seen_at: Option<i64>,
 }
 
 // 群组在线状态响应模型

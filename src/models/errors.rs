@@ -64,6 +64,14 @@ pub enum AppError {
     BadRequest(String),
     #[error("权限验证失败: {0}")]
     Forbidden(String),
+    #[error("不支持的文件类型: {0}")]
+    UnsupportedFileType(String),
+    #[error("文件过大: {0}")]
+    FileTooLarge(String),
+    #[error("文件存储错误: {0}")]
+    FileStorageError(String),
+    #[error("内部错误: {0}")]
+    InternalError(String),
 }
 
 // 实现AppError转化为HTTP响应
@@ -95,6 +103,10 @@ impl IntoResponse for AppError {
             Self::InsufficientPermission(msg) => (StatusCode::FORBIDDEN, format!("权限不足: {}", msg), None),
             Self::BadRequest(msg) => (StatusCode::BAD_REQUEST, format!("请求参数错误: {}", msg), None),
             Self::Forbidden(msg) => (StatusCode::FORBIDDEN, format!("权限验证失败: {}", msg), None),
+            Self::UnsupportedFileType(msg) => (StatusCode::BAD_REQUEST, format!("不支持的文件类型: {}", msg), None),
+            Self::FileTooLarge(msg) => (StatusCode::BAD_REQUEST, format!("文件过大: {}", msg), None),
+            Self::FileStorageError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, format!("文件存储错误: {}", msg), None),
+            Self::InternalError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, format!("内部错误: {}", msg), None),
 
         };
 

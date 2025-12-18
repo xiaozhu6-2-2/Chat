@@ -1,12 +1,11 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use sqlx::MySqlPool;
 use async_trait::async_trait;
 
-use crate::models::errors::AppResult;
+use crate::models::errors::{AppResult, AppError};
 use crate::models::repository::GroupChatRepository;
 use crate::models::entities::{GroupChat, GroupJoinRequest, GroupMember, MuteRecord};
-use crate::models::entities::Role;
-use crate::models::entities::ReqStatus;
+use crate::models::entities::{Role, ReqStatus, EnumConvertible};
 #[async_trait]
 impl GroupChatRepository for MySqlPool {
     //-------------------------群聊基础管理----------------------------
@@ -18,22 +17,20 @@ impl GroupChatRepository for MySqlPool {
         
         //插入或更新
         sqlx::query!(
-            "INSERT INTO group_chat 
-            (gid, group_name, manager_uid, group_avatar, group_intro, create_time) 
-            VALUES (?,?,?,?,?,?)
+            "INSERT INTO group_chat
+            (gid, group_name, manager_uid, group_avatar, group_intro)
+            VALUES (?,?,?,?,?)
             ON DUPLICATE KEY UPDATE
             group_name = VALUES(group_name),
             manager_uid = VALUES(manager_uid),
             group_avatar = VALUES(group_avatar),
-            group_intro = VALUES(group_intro),
-            create_time = VALUES(create_time)
+            group_intro = VALUES(group_intro)
             ",
                 group.gid,
                 group.group_name,
                 group.manager_uid,
                 group.group_avatar,
                 group.group_intro,
-                group.create_time,
         ).execute(&mut *tx).await?;
 
         //提交事务
@@ -101,26 +98,27 @@ impl GroupChatRepository for MySqlPool {
         //事务
         let mut tx=self.begin().await?;
 
+        // 使用新的 to_enum_string() 方法转换 Role 枚举
+        let role_str = member.role.to_enum_string();
+
         //插入或更新
         sqlx::query!(
             "INSERT INTO group_member
-            (uid, gid, role, nickname, level, join_time, do_not_disturb, group_by, remark, is_pinned)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (uid, gid, role, nickname, level, do_not_disturb, group_by, remark, is_pinned)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
             role = VALUES(role),
             nickname = VALUES(nickname),
             level = VALUES(level),
-            join_time = VALUES(join_time),
             do_not_disturb = VALUES(do_not_disturb),
             group_by = VALUES(group_by),
             remark = VALUES(remark),
             is_pinned = VALUES(is_pinned)",
             member.uid,
             member.gid,
-            member.role,
+            role_str,  // 使用转换后的字符串
             member.nickname,
             member.level,
-            member.join_time,
             member.do_not_disturb,
             member.group_by,
             member.remark,
@@ -207,17 +205,23 @@ impl GroupChatRepository for MySqlPool {
         //事务
         let mut tx=self.begin().await?;
 
+        // 验证 role 值是否正确
+        let validated_role = match role {
+            "Owner" | "Admin" | "Member" => role,
+            _ => return Err(AppError::BadRequest(format!("无效的角色类型: {}", role))),
+        };
+
         sqlx::query!(
             "UPDATE group_member
                 SET role = ?
             WHERE gid = ? AND uid = ?",
-            role,
+            validated_role,
             gid,
             uid
         ).execute(&mut *tx).await?;
 
         tx.commit().await?;
-        
+
         Ok(())
     }
     // 退出群聊
@@ -328,16 +332,23 @@ impl GroupChatRepository for MySqlPool {
 
         let mut tx=self.begin().await?;
 
+        // 将 ReqStatus 枚举转换为字符串
+        let status_str = match request.status {
+            crate::models::entities::ReqStatus::Pending => "pending",
+            crate::models::entities::ReqStatus::Accepted => "accepted",
+            crate::models::entities::ReqStatus::Rejected => "rejected",
+            crate::models::entities::ReqStatus::Expired => "expired",
+        };
+
         sqlx::query!(
-            "INSERT INTO group_join_request(req_id, gid, applicant_uid, approver_uid, status, apply_text, create_time, handle_time) 
-            VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO group_join_request(req_id, gid, applicant_uid, approver_uid, status, apply_text, handle_time)
+            VALUES (?,?,?,?,?,?,?)",
             request.req_id,
             request.gid,
             request.applicant_uid,
             request.approver_uid,
-            request.status,
+            status_str,  // 使用转换后的字符串
             request.apply_text,
-            request.create_time,
             request.handle_time
         ).execute(&mut *tx).await?;
 
@@ -370,7 +381,7 @@ impl GroupChatRepository for MySqlPool {
 
         let find_request=sqlx::query_as!(
             GroupJoinRequest,
-            "SELECT 
+            "SELECT
                 req_id,
                 gid,
                 applicant_uid,
@@ -378,15 +389,34 @@ impl GroupChatRepository for MySqlPool {
                 status  as `status: ReqStatus`,
                 apply_text,
                 create_time,
-                handle_time 
+                handle_time
             FROM group_join_request WHERE gid = ? AND status = 'pending'",
             gid
         ).fetch_all(self).await?;
 
         Ok(find_request)
     }
+    // 查找用户的群聊申请记录
+    async fn find_requests_by_user(&self, uid: &str) -> AppResult<Vec<GroupJoinRequest>>{
+        let find_request=sqlx::query_as!(
+            GroupJoinRequest,
+            "SELECT
+                req_id,
+                gid,
+                applicant_uid,
+                approver_uid,
+                status  as `status: ReqStatus`,
+                apply_text,
+                create_time,
+                handle_time
+            FROM group_join_request WHERE applicant_uid = ? ORDER BY create_time DESC",
+            uid
+        ).fetch_all(self).await?;
+
+        Ok(find_request)
+    }
     // 更新群聊申请状态
-    async fn update_request_status(&self, req_id: &str, status: &str, approver_uid: &str, handle_time: NaiveDateTime) -> AppResult<()>{
+    async fn update_request_status(&self, req_id: &str, status: &str, approver_uid: &str, handle_time: DateTime<Utc>) -> AppResult<()>{
 
         let mut tx=self.begin().await?;
 
@@ -403,6 +433,42 @@ impl GroupChatRepository for MySqlPool {
         ).execute(&mut *tx).await?;
 
         tx.commit().await?;
+
+        Ok(())
+    }
+
+    // 验证群聊消息权限
+    async fn validate_group_message_permission(
+        &self,
+        sender_uid: &str,
+        group_id: &str,
+    ) -> AppResult<()> {
+        // 1. 检查是否为群成员
+        let membership = self.find_member(group_id, sender_uid).await?;
+        if membership.is_none() {
+            return Err(crate::models::errors::AppError::NotGroupMember {
+                uid: sender_uid.to_string(),
+                gid: group_id.to_string(),
+            });
+        }
+
+        // 2. 检查是否被禁言
+        let mute_record = self.find_mute_records_by_user(group_id, sender_uid).await?;
+        if let Some(mute) = mute_record {
+            // 检查禁言状态
+            if mute.mute_duration == -1 {
+                // 永久禁言
+                return Err(crate::models::errors::AppError::Forbidden("您已被永久禁言".to_string()));
+            } else if mute.mute_duration > 0 {
+                // 限时禁言，检查是否过期
+                if let Some(start_time) = mute.start_time {
+                    let end_time = start_time + chrono::Duration::milliseconds(mute.mute_duration);
+                    if chrono::Utc::now() < end_time {
+                        return Err(crate::models::errors::AppError::Forbidden("您已被禁言".to_string()));
+                    }
+                }
+            }
+        }
 
         Ok(())
     }

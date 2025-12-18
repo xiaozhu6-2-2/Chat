@@ -24,7 +24,7 @@ sqlx = { version = "0.7", features = ["mysql", "runtime-tokio", "tls-native-tls"
 dotenv = "0.15"
 
 #跨域中间件
-tower-http = { version = "0.5.0", features = ["cors"] }
+tower-http = { version = "0.5.0", features = ["cors", "limit"] }
 http = "0.2"
 
 #密码哈希
@@ -80,12 +80,27 @@ tokio-tungstenite = "0.20"
 futures-util = "0.3"
 
 #Axum框架
-axum = { version = "0.8.4", features = ["ws", "macros"] }
+axum = { version = "0.8.4", features = ["ws", "macros", "multipart"] }
 
 scopeguard = "1.2.0"
 
 tokio-util = "0.7.17"
 
 uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# MIME类型检测
+mime_guess = "2.0"
+
+# 基于文件内容的MIME类型检测
+infer = "0.15"
+
+# URL编码
+percent-encoding = "2.1"
+
+# SHA-256哈希计算
+sha2 = "0.10"
+
+# 十六进制编码
+hex = "0.4"
 
 

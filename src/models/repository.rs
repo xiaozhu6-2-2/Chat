@@ -2,10 +2,9 @@
 use async_trait::async_trait;
 use bb8_redis::RedisConnectionManager;
 use bb8_redis::bb8::Pool;
-use chrono::NaiveDateTime;
-use serde::{Deserialize, Serialize};
+use chrono::{DateTime, Utc};
 
-use crate::models::{entities::{FriendRequest, Friends, GroupChat, GroupJoinRequest, GroupMember, GroupMessage, MuteRecord, PrivateChat, PrivateMessage, User, UserOnline, FileInfo, FileReference, FileAssociation, FilePrivalege, ReferenceType, AssociationType, FileStatus}, errors::AppResult};
+use crate::models::{entities::{FriendRequest, Friends, GroupChat, GroupJoinRequest, GroupMember, GroupMessage, MuteRecord, PrivateChat, PrivateMessage, User, UserOnline, FileStorage, FileMetadata, FilePermission, FileAssociation, AssociationType, FileStatus, AccessLevel, AccessTarget}, errors::AppResult};
 
 // 对用户表数据操作定义的接口
 #[async_trait]
@@ -20,7 +19,7 @@ pub trait UserRepository: Send + Sync {
     // 根据地区查找用户
     async fn find_user_by_region(&self, region: &str) -> AppResult<Vec<User>>;
     // 根据创建时间查找用户
-    async fn find_user_by_create_time_range(&self, start:NaiveDateTime, end:NaiveDateTime) -> AppResult<Vec<User>>;
+    async fn find_user_by_create_time_range(&self, start:DateTime<Utc>, end:DateTime<Utc>) -> AppResult<Vec<User>>;
     // 插入用户
     async fn insert_user(&self, user: User) -> AppResult<()>;
     // 保存用户更改
@@ -49,6 +48,9 @@ pub trait FriendshipRepository: Send + Sync {
     // 删除好友关系
     async fn delete_friendship(&self, fid: &str) -> AppResult<()>;
 
+    // 删除好友关系及其相关的私聊会话和消息
+    async fn delete_friendship_with_chat(&self, fid: &str) -> AppResult<()>;
+
 //-------------------------黑名单管理----------------------------
     // 保存记录到黑名单(可以加入黑名单也可以移出黑名单)
     async fn save_blacklist(&self, fid: &str, uid: &str, is_blacklist: bool) -> AppResult<()>;
@@ -65,7 +67,23 @@ pub trait FriendshipRepository: Send + Sync {
     async fn find_friend_request_by_sender(&self, sender_uid: &str) -> AppResult<Vec<FriendRequest>>;
 
     // 更新好友申请状态
-    async fn update_request_status(&self, req_id: &str, status: &str, handle_time: NaiveDateTime) -> AppResult<()>;
+    async fn update_request_status(&self, req_id: &str, status: &str, handle_time: DateTime<Utc>) -> AppResult<()>;
+
+    // 在事务中处理好友请求接受的所有操作（更新状态、创建好友关系、创建私聊会话）
+    async fn accept_friend_request_with_chat(
+        &self,
+        req_id: &str,
+        handle_time: DateTime<Utc>,
+        friendship: Friends,
+        private_chat: PrivateChat
+    ) -> AppResult<()>;
+
+    // 验证私聊消息权限
+    async fn validate_private_message_permission(
+        &self,
+        sender_uid: &str,
+        receiver_uid: &str,
+    ) -> AppResult<()>;
 
 }
 
@@ -115,8 +133,17 @@ pub trait GroupChatRepository: Send + Sync {
     async fn find_group_request_by_id(&self, req_id: &str) -> AppResult<Option<GroupJoinRequest>>;
     // 查找群聊未处理申请
     async fn find_pending_requests_by_group(&self, gid: &str) -> AppResult<Vec<GroupJoinRequest>>;
+    // 查找用户的群聊申请记录
+    async fn find_requests_by_user(&self, uid: &str) -> AppResult<Vec<GroupJoinRequest>>;
     // 更新群聊申请状态
-    async fn update_request_status(&self, req_id: &str, status: &str, approver_uid: &str, handle_time: NaiveDateTime) -> AppResult<()>;
+    async fn update_request_status(&self, req_id: &str, status: &str, approver_uid: &str, handle_time: DateTime<Utc>) -> AppResult<()>;
+
+    // 验证群聊消息权限
+    async fn validate_group_message_permission(
+        &self,
+        sender_uid: &str,
+        group_id: &str,
+    ) -> AppResult<()>;
 }
 
 // 群聊消息聚合根
@@ -130,7 +157,7 @@ pub trait GroupMessageRepository: Send + Sync {
     // 按gid查找群聊消息
     async fn find_messages_by_group(&self, gid: &str) -> AppResult<Vec<GroupMessage>>;
     // 按gid和时间范围查找群聊消息
-    async fn find_messages_by_group_and_time_range(&self, gid: &str, start: NaiveDateTime, end: NaiveDateTime) -> AppResult<Vec<GroupMessage>>;
+    async fn find_messages_by_group_and_time_range(&self, gid: &str, start: DateTime<Utc>, end: DateTime<Utc>) -> AppResult<Vec<GroupMessage>>;
     // 按gid分页查找群聊消息
     async fn find_messages_by_group_with_pagination(&self, gid: &str, limit: i64, offset: i64) -> AppResult<Vec<GroupMessage>>;
     // 获取群聊消息总数
@@ -155,7 +182,7 @@ pub trait GroupMessageRepository: Send + Sync {
     // 查找群聊的最新消息
     async fn find_latest_message_by_group(&self, gid: &str) -> AppResult<Option<GroupMessage>>;
     // 批量标记群聊消息为已读
-    async fn mark_messages_as_read_by_group_and_time(&self, gid: &str, uid: &str, timestamp: chrono::NaiveDateTime) -> AppResult<u64>;
+    async fn mark_messages_as_read_by_group_and_time(&self, gid: &str, uid: &str, timestamp: DateTime<Utc>) -> AppResult<u64>;
 }
 
 // 私聊会话聚合根
@@ -192,7 +219,7 @@ pub trait PrivateChatRepository: Send + Sync {
     // 获取私聊会话的消息总数
     async fn get_message_count_by_chat(&self, pid: &str) -> AppResult<i64>;
     // 批量标记私聊消息为已读
-    async fn mark_messages_as_read_by_chat_and_time(&self, pid: &str, uid: &str, timestamp: chrono::NaiveDateTime) -> AppResult<u64>;
+    async fn mark_messages_as_read_by_chat_and_time(&self, pid: &str, uid: &str, timestamp: DateTime<Utc>) -> AppResult<u64>;
 }
 
 // 在线状态聚合根
@@ -234,91 +261,110 @@ pub trait OnlineRepository: Send + Sync {
 // 文件管理聚合根
 #[async_trait]
 pub trait FileRepository: Send + Sync {
-    //-------------------------文件基础管理----------------------------
-    // 保存文件信息
-    async fn save_file(&self, file: crate::models::entities::FileInfo) -> AppResult<()>;
-    // 根据file_id查找文件
-    async fn find_file_by_id(&self, file_id: &str) -> AppResult<Option<crate::models::entities::FileInfo>>;
-    // 根据文件哈希查找文件（用于去重检查）
-    async fn find_file_by_hash(&self, file_hash: &str) -> AppResult<Option<crate::models::entities::FileInfo>>;
-    // 根据上传者查找文件
-    async fn find_files_by_uploader(&self, upload_uid: &str) -> AppResult<Vec<crate::models::entities::FileInfo>>;
-    // 根据MIME类型查找文件
-    async fn find_files_by_mime_type(&self, mime_type: &str) -> AppResult<Vec<crate::models::entities::FileInfo>>;
-    // 根据访问权限查找文件
-    async fn find_files_by_access_level(&self, access_level: &str) -> AppResult<Vec<crate::models::entities::FileInfo>>;
-    // 更新文件访问时间
-    async fn update_file_access_time(&self, file_id: &str) -> AppResult<()>;
-    // 增加文件下载次数
+    // ==================== 文件存储管理 (file_storage) ====================
+
+    /// 创建或获取文件存储记录（基于哈希去重）
+    async fn create_or_get_file_storage(
+        &self,
+        file_hash: &str,
+        file_path: &str,// 是预设的，并没有进行存入
+        thumbnail_path: Option<String>,
+        file_size: i64,
+        mime_type: &str,
+    ) -> AppResult<FileStorage>;
+
+    /// 根据storage_id获取文件存储信息
+    async fn find_file_storage_by_id(&self, storage_id: &str) -> AppResult<Option<FileStorage>>;
+
+    /// 根据文件哈希获取文件存储信息
+    async fn find_file_storage_by_hash(&self, file_hash: &str) -> AppResult<Option<FileStorage>>;
+
+    /// 增加文件引用计数
+    async fn increment_reference_count(&self, storage_id: &str) -> AppResult<()>;
+
+    /// 获取无引用的文件（用于清理）
+    async fn find_unused_files(&self) -> AppResult<Vec<FileStorage>>;
+
+    /// 删除文件存储记录
+    async fn delete_file_storage(&self, storage_id: &str) -> AppResult<()>;
+
+    // ==================== 文件元数据管理 (file_metadata) ====================
+
+    /// 创建文件元数据
+    async fn create_file_metadata(
+        &self,
+        file_id: &str,
+        storage_id: &str,
+        owner_uid: &str,
+        original_name: &str,
+        display_name: &str,
+        file_type: &str,
+    ) -> AppResult<()>;
+
+    /// 根据file_id获取文件元数据
+    async fn find_file_metadata_by_id(&self, file_id: &str) -> AppResult<Option<FileMetadata>>;
+
+    /// 根据所有者获取文件列表
+    async fn find_files_by_owner(&self, owner_uid: &str, limit: Option<u32>, offset: Option<u32>) -> AppResult<Vec<FileMetadata>>;
+
+    /// 更新文件访问时间
+    async fn update_last_access_time(&self, file_id: &str) -> AppResult<()>;
+
+    /// 增加下载次数
     async fn increment_download_count(&self, file_id: &str) -> AppResult<()>;
-    // 更新文件状态
-    async fn update_file_status(&self, file_id: &str, status: &str) -> AppResult<()>;
-    // 删除文件（逻辑删除）
-    async fn delete_file(&self, file_id: &str) -> AppResult<()>;
-    // 物理删除过期文件
-    async fn cleanup_expired_files(&self) -> AppResult<u64>;
 
-    //-------------------------文件引用管理----------------------------
-    // 创建文件引用
-    async fn create_file_reference(&self, reference: crate::models::entities::FileReference) -> AppResult<()>;
-    // 查找用户的文件引用
-    async fn find_file_references_by_user(&self, user_uid: &str) -> AppResult<Vec<crate::models::entities::FileReference>>;
-    // 查找文件的所有引用
-    async fn find_file_references_by_file(&self, file_id: &str) -> AppResult<Vec<crate::models::entities::FileReference>>;
-    // 删除文件引用
-    async fn delete_file_reference(&self, reference_id: &str) -> AppResult<()>;
-    // 检查用户是否可以访问文件
-    async fn check_file_access_permission(&self, file_hash: &str, user_uid: &str) -> AppResult<bool>;
+    /// 软删除文件（更新状态）
+    async fn soft_delete_file(&self, file_id: &str) -> AppResult<()>;
 
-    //-------------------------文件关联管理----------------------------
-    // 创建文件关联
-    async fn create_file_association(&self, association: crate::models::entities::FileAssociation) -> AppResult<()>;
-    // 根据关联类型和ID查找关联的文件
-    async fn find_file_associations_by_type_and_id(&self, association_type: &str, associated_id: &str) -> AppResult<Vec<crate::models::entities::FileAssociation>>;
-    // 根据文件ID查找所有关联
-    async fn find_file_associations_by_file(&self, file_id: &str) -> AppResult<Vec<crate::models::entities::FileAssociation>>;
-    // 删除文件关联
+    // ==================== 文件权限管理 (file_permission) ====================
+
+    /// 授予文件权限
+    async fn grant_file_permission(
+        &self,
+        file_id: &str,
+        access_type: AccessTarget,
+        target_id: Option<String>,
+        permission_level: AccessLevel,
+        granted_by: &str,
+        expires_at: Option<DateTime<Utc>>,
+    ) -> AppResult<()>;
+
+    /// 验证文件访问权限（核心方法）
+    async fn verify_file_permission(
+        &self,
+        file_id: &str,
+        user_uid: &str,
+        required_level: AccessLevel,
+    ) -> AppResult<bool>;
+
+    // ==================== 文件关联管理 (file_association) ====================
+
+    /// 创建文件关联
+    async fn create_file_association(
+        &self,
+        file_id: &str,
+        association_type: AssociationType,
+        associated_id: &str,
+        creator_uid: &str,
+    ) -> AppResult<()>;
+
+    /// 根据关联查询文件
+    async fn find_files_by_association(
+        &self,
+        association_type: AssociationType,
+        associated_id: &str,
+    ) -> AppResult<Vec<FileAssociation>>;
+
+    /// 获取文件的所有关联
+    async fn find_file_associations(&self, file_id: &str) -> AppResult<Vec<FileAssociation>>;
+
+    /// 删除文件关联
     async fn delete_file_association(&self, association_id: &str) -> AppResult<()>;
-    // 批量删除关联（如删除消息时）
-    async fn delete_file_associations_by_type_and_id(&self, association_type: &str, associated_id: &str) -> AppResult<u64>;
 
-    //-------------------------文件共享管理----------------------------
-    // 创建文件共享（为其他用户创建引用）
-    async fn share_file_to_user(&self, file_hash: &str, from_uid: &str, to_uid: &str) -> AppResult<()>;
-    // 查找用户可访问的文件（包括自己的和共享的）
-    async fn find_accessible_files_by_user(&self, user_uid: &str) -> AppResult<Vec<(crate::models::entities::FileInfo, crate::models::entities::ReferenceType)>>;
-    // 撤销文件共享
-    async fn revoke_file_access(&self, file_hash: &str, owner_uid: &str, target_uid: &str) -> AppResult<()>;
-
-    //-------------------------文件统计和分析----------------------------
-    // 获取用户的文件使用统计
-    async fn get_user_file_statistics(&self, user_uid: &str) -> AppResult<FileStatistics>;
-    // 获取系统文件使用统计
-    async fn get_system_file_statistics(&self) -> AppResult<SystemFileStatistics>;
-    // 查找大文件
-    async fn find_large_files(&self, size_threshold: i64) -> AppResult<Vec<crate::models::entities::FileInfo>>;
-    // 查找久未访问的文件
-    async fn find_inactive_files(&self, days_threshold: i64) -> AppResult<Vec<crate::models::entities::FileInfo>>;
-}
-
-// 文件统计信息
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct FileStatistics {
-    pub total_files: u64,
-    pub total_size: i64,
-    pub by_type: Vec<(String, u64)>,  // (mime_type, count)
-    pub by_access_level: Vec<(String, u64)>,  // (access_level, count)
-    pub upload_count_today: u64,
-    pub download_count_total: u64,
-}
-
-// 系统文件统计信息
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct SystemFileStatistics {
-    pub total_files: u64,
-    pub total_size: i64,
-    pub active_files: u64,
-    pub expired_files: u64,
-    pub unique_files: u64,  // 去重后的文件数量
-    pub storage_efficiency: f64,  // (去重后大小 / 原始总大小) * 100
+    /// 批量删除关联（如删除消息时）
+    async fn batch_delete_associations_by_target(
+        &self,
+        association_type: AssociationType,
+        associated_id: &str,
+    ) -> AppResult<u64>;
 }

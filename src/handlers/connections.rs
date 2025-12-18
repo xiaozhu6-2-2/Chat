@@ -17,7 +17,7 @@ use serde_json::json;
 // 模块分离导入
 use crate::{
     models::{
-        entities::UserOnline, errors::AppResult, msg_websocket::{ClientMessage, ServerMessage}, others::Claims, repository::{FriendshipRepository, GroupChatRepository, OnlineRepository, UserRepository}
+        entities::UserOnline, errors::{AppResult, AppError}, msg_websocket::{ClientMessage, ServerMessage}, others::Claims, repository::{FriendshipRepository, GroupChatRepository, OnlineRepository, UserRepository}
     }, repository::OnlineRepository::OnlineManager, state::AppState, utils::{trans_logic::{handle_group_chat, handle_private_chat, send_close, send_online_state, send_pong}}
 };
 
@@ -266,6 +266,16 @@ async fn recv_task_spawn(
     state: AppState,
     account: String
 ) {
+    // 在连接建立时获取用户信息
+    let user_info = match state.db_pool.find_user_by_account(&account).await {
+        Ok(user) => user,
+        Err(e) => {
+            error!("获取用户信息失败: {}", e);
+            return;
+        }
+    };
+    let sender_uid = user_info.uid;
+
     // 从websocket中获取消息
     while let Some(Ok(msg)) = receiver.next().await {
         // 根据帧类型处理消息
@@ -294,9 +304,15 @@ async fn recv_task_spawn(
                         // 更新时间
                         let mut last_activity = last_activity_for_recv.write().await;
                         *last_activity = Instant::now();
+                        // 提前提取message_id，避免移动后无法访问
+                        let temp_message_id = payload.message_id.clone().unwrap_or_default();
                         // 处理私聊消息
-                        if let Err(e) = handle_private_chat(payload, state.clone()).await {
+                        if let Err(e) = handle_private_chat(payload, state.clone(), sender_uid.clone()).await {
                             error!("处理私聊消息错误 {}", e);
+                            // 发送错误ACK
+                            if let Err(err) = send_message_error(account.clone(), temp_message_id, e.to_string(), state.clone()).await {
+                                error!("发送错误ACK失败: {}", err);
+                            }
                         }
                     },
                     // 群聊消息
@@ -304,9 +320,15 @@ async fn recv_task_spawn(
                         // 更新时间
                         let mut last_activity = last_activity_for_recv.write().await;
                         *last_activity = Instant::now();
+                        // 提前提取message_id，避免移动后无法访问
+                        let temp_message_id = payload.message_id.clone().unwrap_or_default();
                         // 处理群聊消息
-                        if let Err(e) = handle_group_chat(payload, state.clone()).await {
+                        if let Err(e) = handle_group_chat(payload, state.clone(), sender_uid.clone()).await {
                             error!("处理群聊消息错误 {}", e);
+                            // 发送错误ACK
+                            if let Err(err) = send_message_error(account.clone(), temp_message_id, e.to_string(), state.clone()).await {
+                                error!("发送错误ACK失败: {}", err);
+                            }
                         }
                     },
                     _ => {
@@ -387,4 +409,27 @@ async fn clean_resources(account: &String, uid: &String, state: AppState) {
     }
 
     info!("{}连接的资源清理完毕", account);
+}
+
+// 发送错误ACK的辅助函数
+async fn send_message_error(
+    sender_account: String,
+    temp_message_id: String,
+    error_msg: String,
+    state: AppState,
+) -> AppResult<()> {
+    let error_msg = ServerMessage::MessageError {
+        temp_message_id,
+        error: error_msg,
+    };
+    let ws_msg = Message::Text(serde_json::to_string(&error_msg)
+        .map_err(|e| AppError::SerializeFailure(e.to_string()))?
+        .into());
+
+    if let Some(tx) = state.connection_pool.get(&sender_account) {
+        tx.send(ws_msg)
+            .map_err(|e| AppError::MpcsSenderFailure(e.to_string()))?;
+    }
+
+    Ok(())
 }

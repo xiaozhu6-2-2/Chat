@@ -1,9 +1,14 @@
-use chrono::NaiveDateTime;
+// 不再需要 chrono 导入，使用 i64 时间戳
 // src/models.rs
 // 库模块导入
 use serde::{Deserialize, Serialize};
 
 // 分离模块导入
+
+// 文件上传上下文信息（来自前端的context字段）
+#[derive(Debug, Deserialize)]
+pub struct FileUploadContext {
+}
 
 // 注册请求结构体
 #[derive(Deserialize, Serialize, Clone)]
@@ -47,6 +52,12 @@ pub struct FetchProfileRequest {
     pub uid: String,
 }
 
+// 更新用户头像请求模型
+#[derive(Deserialize, Serialize)]
+pub struct UserAvatarRequest {
+    pub file_id: String,
+}
+
 // 搜索用户请求模型
 #[derive(Deserialize, Serialize)]
 pub struct SearchUserRequest {
@@ -67,7 +78,6 @@ pub struct FriendProfileRequest {
 pub struct FriendRequestRequest {
     pub receiver_id: String,// 接收者id
     pub message: String,// 申请消息
-    pub create_time: NaiveDateTime,// 好友请求创建时间
 }
 
 // 回复好友请求请求模型
@@ -75,7 +85,6 @@ pub struct FriendRequestRequest {
 pub struct RespondFriendRequestRequest {
     pub req_id: String,      // 好友请求ID
     pub action: String,      // 操作类型: "accept" 或 "reject"
-    pub handle_time: String, // 处理时间戳
 }
 
 // 好友请求列表请求模型
@@ -168,7 +177,6 @@ pub struct LeaveGroupRequest {
 pub struct KickMemberRequest {
     pub gid: String,          // 群组ID
     pub uid: String,          // 被踢出的群员ID
-    pub approver_uid: String,  // 执行踢人的管理员ID
 }
 
 // 解散群聊请求模型
@@ -194,6 +202,13 @@ pub struct SettingGroupRequest {
     pub group_name: String,     // 群名称
     pub group_avater: String,   // 群头像URL
     pub group_intro: String,    // 群简介
+}
+
+// 群聊头像请求模型
+#[derive(Deserialize, Serialize)]
+pub struct GroupAvatarRequest {
+    pub gid: String,            // 群组ID
+    pub group_avater: String,   // 群头像
 }
 
 // 获取群公告请求模型
@@ -222,6 +237,13 @@ pub struct SettingAdminRequest {
     pub uid: String,         // 要设置为管理员的用户uid
 }
 
+// 移除管理员请求模型
+#[derive(Deserialize, Serialize)]
+pub struct RemovingingAdminRequest {
+    pub gid: String,         // 群组ID
+    pub uid: String,         // 要移除管理员权限的用户uid
+}
+
 // 获取禁言状态请求模型
 #[derive(Deserialize, Serialize)]
 pub struct GetBanStatusRequest {
@@ -233,7 +255,7 @@ pub struct GetBanStatusRequest {
 pub struct BanningMemberRequest {
     pub gid: String,         // 群组ID
     pub uid: String,         // 被禁言的群成员ID
-    pub time: String,        // 禁言时长（秒），-1表示永久禁言
+    pub time: i64,        // 禁言时长（秒），-1表示永久禁言
 }
 
 // 解除禁言请求模型
@@ -283,7 +305,7 @@ pub struct ReadRequest {
     pub chat_id: String,
     #[serde(rename = "type")]
     pub chat_type: String,
-    pub timestamp: String,
+    pub timestamp: i64,
 }
 
 // 获取群聊已读状态请求模型
@@ -302,19 +324,19 @@ pub struct UploadFileRequest {
 // 预览文件请求模型
 #[derive(Deserialize, Serialize)]
 pub struct PreviewFileRequest {
-
+    pub file_id: String,
 }
 
 // 下载文件请求模型
 #[derive(Deserialize, Serialize)]
 pub struct DownloadFileRequest {
-
+    pub file_id: String,
 }
 
 // 删除文件请求模型
 #[derive(Deserialize, Serialize)]
 pub struct DeleteFileRequest {
-
+    pub file_id: String,
 }
 
 // 好友在线状态请求模型

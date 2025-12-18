@@ -1,11 +1,11 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use sqlx::MySqlPool;
 use async_trait::async_trait;
 
 use crate::models::errors::AppResult;
 use crate::models::repository::FriendshipRepository;
-use crate::models::entities::{Friends, FriendRequest};
-use crate::models::entities::ReqStatus;
+use crate::models::entities::{FriendRequest, Friends, PrivateChat};
+use crate::models::entities::{ReqStatus, EnumConvertible};
 
 #[async_trait]
 impl FriendshipRepository for MySqlPool {
@@ -19,10 +19,9 @@ impl FriendshipRepository for MySqlPool {
         // 插入或更新好友关系
         sqlx::query!(
             "INSERT INTO friends
-            (fid, uid, to_uid, create_time, is_blacklist, to_is_blacklist, remark, to_remark, group_by, to_group_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (fid, uid, to_uid, is_blacklist, to_is_blacklist, remark, to_remark, group_by, to_group_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
-            create_time = VALUES(create_time),
             is_blacklist = VALUES(is_blacklist),
             to_is_blacklist = VALUES(to_is_blacklist),
             remark = VALUES(remark),
@@ -32,7 +31,6 @@ impl FriendshipRepository for MySqlPool {
             friendship.fid,
             friendship.uid,
             friendship.to_uid,
-            friendship.create_time,
             friendship.is_blacklist,
             friendship.to_is_blacklist,
             friendship.remark,
@@ -110,6 +108,35 @@ impl FriendshipRepository for MySqlPool {
             fid
         ).execute(&mut *tx).await?;
 
+        tx.commit().await?;
+
+        Ok(())
+    }
+
+    // 删除好友关系及其相关的私聊会话和消息
+    async fn delete_friendship_with_chat(&self, fid: &str) -> AppResult<()> {
+        // 事务
+        let mut tx = self.begin().await?;
+
+        // 1. 删除私聊消息
+        sqlx::query!(
+            "DELETE FROM private_message WHERE pid = ?",
+            fid
+        ).execute(&mut *tx).await?;
+
+        // 2. 删除私聊会话
+        sqlx::query!(
+            "DELETE FROM private_chat WHERE pid = ?",
+            fid
+        ).execute(&mut *tx).await?;
+
+        // 3. 删除好友关系
+        sqlx::query!(
+            "DELETE FROM friends WHERE fid = ?",
+            fid
+        ).execute(&mut *tx).await?;
+
+        // 提交事务
         tx.commit().await?;
 
         Ok(())
@@ -197,14 +224,13 @@ impl FriendshipRepository for MySqlPool {
 
         sqlx::query!(
             "INSERT INTO friend_request
-            (req_id, sender_uid, receiver_uid, status, apply_text, create_time, handle_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (req_id, sender_uid, receiver_uid, status, apply_text, handle_time)
+            VALUES (?, ?, ?, ?, ?, ?)",
             request.req_id,
             request.sender_uid,
             request.receiver_uid,
-            request.status,
+            request.status.to_enum_string(),
             request.apply_text,
-            request.create_time,
             request.handle_time
         ).execute(&mut *tx).await?;
 
@@ -275,7 +301,7 @@ impl FriendshipRepository for MySqlPool {
     }
 
     // 更新好友申请状态
-    async fn update_request_status(&self, req_id: &str, status: &str, handle_time: NaiveDateTime) -> AppResult<()> {
+    async fn update_request_status(&self, req_id: &str, status: &str, handle_time: DateTime<Utc>) -> AppResult<()> {
         // 事务
         let mut tx = self.begin().await?;
 
@@ -289,6 +315,102 @@ impl FriendshipRepository for MySqlPool {
         ).execute(&mut *tx).await?;
 
         tx.commit().await?;
+
+        Ok(())
+    }
+
+    // 在事务中处理好友请求接受的所有操作（更新状态、创建好友关系、创建私聊会话）
+    async fn accept_friend_request_with_chat(
+        &self,
+        req_id: &str,
+        handle_time: DateTime<Utc>,
+        friendship: Friends,
+        private_chat: PrivateChat
+    ) -> AppResult<()> {
+        // 使用事务处理所有操作
+        let mut tx = self.begin().await?;
+
+        // 1. 更新好友请求状态
+        sqlx::query!(
+            "UPDATE friend_request
+            SET status = ?, handle_time = ?
+            WHERE req_id = ?",
+            "accepted",
+            handle_time,
+            req_id
+        ).execute(&mut *tx).await?;
+
+        // 2. 保存好友关系（不设置create_time，让数据库自动设置）
+        sqlx::query!(
+            "INSERT INTO friends
+            (fid, uid, to_uid, is_blacklist, to_is_blacklist, remark, to_remark, group_by, to_group_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            friendship.fid,
+            friendship.uid,
+            friendship.to_uid,
+            friendship.is_blacklist,
+            friendship.to_is_blacklist,
+            friendship.remark,
+            friendship.to_remark,
+            friendship.group_by,
+            friendship.to_group_by
+        ).execute(&mut *tx).await?;
+
+        // 3. 保存私聊会话（不设置create_time，让数据库自动设置）
+        sqlx::query!(
+            "INSERT INTO private_chat
+            (pid, uid1, uid2, is_pinned_by_uid1, is_pinned_by_uid2, do_not_disturb_uid1, do_not_disturb_uid2)
+            VALUES (?, ?, ?, ?, ?, ?, ?)",
+            private_chat.pid,
+            private_chat.uid1,
+            private_chat.uid2,
+            private_chat.is_pinned_by_uid1,
+            private_chat.is_pinned_by_uid2,
+            private_chat.do_not_disturb_uid1,
+            private_chat.do_not_disturb_uid2
+        ).execute(&mut *tx).await?;
+
+        // 提交事务
+        tx.commit().await?;
+
+        Ok(())
+    }
+
+    // 验证私聊消息权限
+    async fn validate_private_message_permission(
+        &self,
+        sender_uid: &str,
+        receiver_uid: &str,
+    ) -> AppResult<()> {
+        // 1. 检查好友关系
+        let friendship = self.find_friendship_by_users(sender_uid, receiver_uid).await?;
+
+        if friendship.is_none() {
+            return Err(crate::models::errors::AppError::Forbidden("你们不是好友关系".to_string()));
+        }
+
+        // 2. 检查黑名单（只有对方拉黑自己才阻止发送）
+        if let Some(friend) = friendship {
+            // 判断谁是发送者，谁是接收者
+            if friend.uid == sender_uid && friend.to_uid == receiver_uid {
+                // sender_uid对应uid字段，receiver_uid对应to_uid字段
+                // 检查接收者是否拉黑了发送者（to_is_blacklist）
+                if friend.to_is_blacklist == Some(1) {
+                    return Err(crate::models::errors::AppError::Forbidden("您已被对方拉黑".to_string()));
+                }
+                // 自己拉黑对方不影响发送
+            } else if friend.uid == receiver_uid && friend.to_uid == sender_uid {
+                // sender_uid对应to_uid字段，receiver_uid对应uid字段
+                // 检查接收者是否拉黑了发送者（is_blacklist）
+                if friend.is_blacklist == Some(1) {
+                    return Err(crate::models::errors::AppError::Forbidden("您已被对方拉黑".to_string()));
+                }
+                // 自己拉黑对方不影响发送
+            } else {
+                // 数据不一致，好友关系中的uid不匹配
+                return Err(crate::models::errors::AppError::NotFound("好友关系数据不一致".to_string()));
+            }
+        }
 
         Ok(())
     }
