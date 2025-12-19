@@ -283,6 +283,14 @@ pub struct GroupChatRequest {
     pub gid: String,// 群聊id
 }
 
+// 置顶状态请求模型
+#[derive(Deserialize, Serialize)]
+pub struct PinnedRequest {
+    pub id: String,
+    pub chat_type: String,
+    pub is_pinned: bool
+}
+
 // 私聊历史请求模型
 #[derive(Deserialize, Serialize)]
 pub struct PrivateHistoryRequest {

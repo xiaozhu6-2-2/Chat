@@ -461,6 +461,84 @@ pub async fn group_requests(
     }))
 }
 
+pub async fn get_group_requestlist(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>
+) -> AppResult<Json<GroupRequestListResponse>> {
+    // 1. 从 claims 中获取用户账号
+    let user_account = &claims.sub;
+
+    // 2. 通过账号查找用户信息，获取 uid
+    let user = state.db_pool.find_user_by_account(user_account).await?;
+
+    // 3. 获取用户加入的所有群聊
+    let user_groups = state.db_pool.find_groups_by_user(&user.uid).await?;
+
+    // 4. 获取用户在其中是群主或管理员的群聊
+    let mut managed_groups = Vec::new();
+    for group_membership in user_groups {
+        // 查找用户在该群中的成员信息
+        if let Ok(member) = state.db_pool.find_member(&group_membership.gid, &user.uid).await {
+            if let Some(member_info) = member {
+                // 检查是否是群主或管理员
+                let role_str = member_info.role.to_enum_string();
+                if role_str == "owner" || role_str == "admin" {
+                    managed_groups.push(group_membership.gid);
+                }
+            }
+        }
+    }
+
+    // 5. 获取所有管理群聊的申请记录
+    let mut all_requests = Vec::new();
+    for gid in managed_groups {
+        let group_requests = state.db_pool.find_all_requests_by_group(&gid).await?;
+        all_requests.extend(group_requests);
+    }
+
+    // 6. 转换为响应格式
+    let mut request_items: Vec<GroupRequestItem> = Vec::new();
+    for req in all_requests {
+        // 获取群组信息
+        let group = state.db_pool.find_group_by_gid(&req.gid).await?
+            .ok_or_else(|| AppError::NotFound(format!("群组{}不存在", req.gid)))?;
+
+        // 获取申请者信息
+        let sender_info = state.db_pool.find_user_by_uid(&req.applicant_uid).await.ok();
+        let sender_name = sender_info.as_ref().map(|u| &u.username).cloned().unwrap_or_default();
+        let sender_avatar = sender_info.as_ref().and_then(|u| u.avatar.clone()).unwrap_or_default();
+
+        let request_item = GroupRequestItem {
+            req_id: req.req_id,
+            gid: req.gid,
+            group_name: group.group_name.clone(),
+            group_avatar: group.group_avatar.clone().unwrap_or_default(),
+            sender_uid: req.applicant_uid,
+            sender_name,
+            sender_avatar,
+            apply_text: req.apply_text,
+            create_time: req.create_time
+                .map(|dt| dt.timestamp())
+                .unwrap_or(0),
+            status: Some(req.status).to_optional_string().unwrap_or_default(),
+        };
+
+        request_items.push(request_item);
+    }
+
+    // 7. 按创建时间倒序排序
+    request_items.sort_by(|a, b| b.create_time.cmp(&a.create_time));
+
+    // 8. 计算总数
+    let total = request_items.len() as i64;
+
+    // 9. 返回响应
+    Ok(Json(GroupRequestListResponse {
+        requests: request_items,
+        total,
+    }))
+}
+
 pub async fn handle_group_request(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,

@@ -473,7 +473,11 @@ pub struct GroupChatResponse {
     pub remark: String,                // 群组名称或用户自定义备注
 }
 
-
+// 置顶状态响应模型
+#[derive(Serialize, Deserialize)]
+pub struct PinnedResponse {
+    pub success: bool
+}
 
 // 私聊消息载荷模型
 #[derive(Serialize, Deserialize)]

@@ -2,11 +2,12 @@ use axum::Extension;
 use axum::{extract::State, Json};
 
 use crate::models::others::Claims;
-use crate::models::requests::{GroupChatRequest, PrivateChatRequest};
+use crate::models::requests::{GroupChatRequest, PinnedRequest, PrivateChatRequest};
 use crate::models::{errors::AppResult, responses::ChatListResponse};
-use crate::models::responses::{ChatItem, ChatType, GroupChatResponse, PrivateChatResponse};
+use crate::models::responses::{ChatItem, ChatType, GroupChatResponse, PinnedResponse, PrivateChatResponse};
 use crate::state::AppState;
 use crate::models::repository::{PrivateChatRepository, GroupChatRepository, UserRepository, FriendshipRepository, GroupMessageRepository};
+use crate::models::errors::AppError;
 use chrono::Utc;
 
 pub async fn get_chat_list(
@@ -310,4 +311,54 @@ pub async fn get_group_chat(
         avatar,
         remark: remark.to_string(),
     }))
+}
+
+pub async fn update_ispinned(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<PinnedRequest>,
+) -> AppResult<Json<PinnedResponse>> {
+    // 1. 从 claims 中获取用户账号
+    let user_account = &claims.sub;
+
+    // 2. 通过账号查找用户信息，获取 uid
+    let user = state.db_pool.find_user_by_account(user_account).await?;
+    let user_uid = user.uid;
+
+    // 3. 根据 chat_type 分别处理
+    match payload.chat_type.as_str() {
+        "private" => {
+            // 私聊会话置顶
+            // 获取私聊会话信息
+            let private_chat = state.db_pool.find_chat_by_pid(&payload.id).await?
+                .ok_or_else(|| AppError::NotFound("私聊会话不存在".to_string()))?;
+
+            // 验证用户是否是该会话的参与者
+            if private_chat.uid1 != user_uid && private_chat.uid2 != user_uid {
+                return Err(AppError::Forbidden("您不是该会话的参与者".to_string()));
+            }
+
+            // 更新置顶状态
+            state.db_pool.update_pin_status(&payload.id, &user_uid, payload.is_pinned).await?;
+        },
+        "group" => {
+            // 群聊会话置顶
+            // 验证用户是否是群成员
+            let member = state.db_pool.find_member(&payload.id, &user_uid).await?
+                .ok_or_else(|| AppError::NotFound("您不是该群成员".to_string()))?;
+
+            // 创建更新后的成员信息
+            let mut updated_member = member;
+            updated_member.is_pinned = if payload.is_pinned { Some(1) } else { Some(0) };
+
+            // 保存更新
+            state.db_pool.save_member(updated_member).await?;
+        },
+        _ => {
+            return Err(AppError::BadRequest("无效的会话类型，必须是 'private' 或 'group'".to_string()));
+        }
+    }
+
+    // 4. 返回成功响应
+    Ok(Json(PinnedResponse { success: true }))
 }
