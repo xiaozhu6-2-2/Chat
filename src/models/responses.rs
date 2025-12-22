@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 pub struct RegisterResponse {
     pub success: bool,
+    pub token: String,     // JWT令牌
 }
 
 // 登录响应模型

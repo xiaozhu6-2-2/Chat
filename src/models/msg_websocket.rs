@@ -104,5 +104,21 @@ pub enum ServerMessage {
     MessageError {
         temp_message_id: String,
         error: String,
+    },
+    // 好友请求通知
+    FriendRequestNotification {
+        
+    },
+    // 好友请求结果通知
+    FriendRequestResultNotification {
+        
+    },
+    // 群聊邀请通知
+    GroupInvitationNotification {
+        
+    },
+    // 群聊申请结果通知
+    GroupRequestResultNotification {
+        
     }
 }
