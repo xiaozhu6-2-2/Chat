@@ -134,6 +134,8 @@ pub struct FriendRequestResponse {
     pub req_id: String,
     pub sender_uid: String,
     pub receiver_uid: String,
+    pub receiver_name: String,
+    pub receiver_avatar: Option<String>,
     pub apply_text: Option<String>,
     pub create_time: i64,
     pub status: Option<String>,

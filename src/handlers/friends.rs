@@ -342,11 +342,16 @@ pub async fn send_friend_request(
     // 8. 插入数据库
     state.db_pool.save_friend_request(friend_request.clone()).await?;
 
-    // 9. 返回响应
+    // 9. 获取接收者信息
+    let receiver_user = state.db_pool.find_user_by_uid(&friend_request.receiver_uid).await?;
+
+    // 10. 返回响应
     let response = FriendRequestResponse {
         req_id: friend_request.req_id,
         sender_uid: friend_request.sender_uid,
         receiver_uid: friend_request.receiver_uid,
+        receiver_name: receiver_user.username,
+        receiver_avatar: receiver_user.avatar,
         apply_text: friend_request.apply_text,
         create_time: friend_request.create_time.map(|dt| dt.timestamp()).unwrap_or(0),
         status: Some(ReqStatus::Pending).to_optional_string(),
