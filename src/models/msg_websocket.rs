@@ -19,7 +19,7 @@ pub struct MesPayload {
 
     // 消息
     pub content_type: Option<String>,// 消息类型
-    pub details: Option<String>,// 消息内容
+    pub detail: Option<String>,// 消息内容
 
     // 实时状态信息
     pub is_announcement: bool,// 是否是群聊公告

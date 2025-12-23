@@ -113,7 +113,7 @@ pub async fn handle_private_chat(
         // 检查是否为包含file_id的媒体类型
         if matches!(content_type.as_str(), "file" | "image" | "voice" | "video" | "emoji") {
             // 从消息内容中提取file_id
-            let file_id = payload.details.as_ref()
+            let file_id = payload.detail.as_ref()
                 .ok_or_else(|| AppError::BadRequest(
                     format!("{}消息缺少文件ID", content_type)
                 ))?
@@ -155,7 +155,7 @@ pub async fn handle_private_chat(
 
     // 8. 构建消息实体（send_time设为None，让数据库使用默认值）
     // 先克隆需要使用的字段
-    let content = payload.details.clone().unwrap_or_default();
+    let content = payload.detail.clone().unwrap_or_default();
     let content_type = payload.content_type.clone();
     let temp_message_id = payload.message_id.clone().unwrap_or_default();
     let message = PrivateMessage {
@@ -176,7 +176,7 @@ pub async fn handle_private_chat(
     if let Some(content_type) = &payload.content_type {
         // 检查是否为包含file_id的媒体类型
         if matches!(content_type.as_str(), "file" | "image" | "voice" | "video" | "emoji") {
-            if let Some(file_id) = &payload.details {
+            if let Some(file_id) = &payload.detail {
                 // 为接收者授予Share权限（包含View和Download）
                 state.db_pool
                     .grant_file_permission(
@@ -274,7 +274,7 @@ pub async fn handle_group_chat(
         // 检查是否为包含file_id的媒体类型
         if matches!(content_type.as_str(), "file" | "image" | "voice" | "video" | "emoji") {
             // 从消息内容中提取file_id
-            let file_id = payload.details.as_ref()
+            let file_id = payload.detail.as_ref()
                 .ok_or_else(|| AppError::BadRequest(
                     format!("群聊{}消息缺少文件ID", content_type)
                 ))?
@@ -299,7 +299,7 @@ pub async fn handle_group_chat(
 
     // 6. 构建群聊消息实体（send_time设为None，让数据库使用默认值）
     // 先克隆需要使用的字段
-    let content = payload.details.clone().unwrap_or_default();
+    let content = payload.detail.clone().unwrap_or_default();
     let content_type = payload.content_type.clone();
     let mentioned_uids = payload.mentioned_uids.clone();
     let quote_msg_id = payload.quote_msg_id.clone();
@@ -334,7 +334,7 @@ pub async fn handle_group_chat(
     if let Some(content_type) = &payload.content_type {
         // 检查是否为包含file_id的媒体类型
         if matches!(content_type.as_str(), "file" | "image" | "voice" | "video" | "emoji") {
-            if let Some(file_id) = &payload.details {
+            if let Some(file_id) = &payload.detail {
                 // 为整个群组授予Share权限（群组成员通过群组成员身份自动获得访问权限）
                 state.db_pool
                     .grant_file_permission(
