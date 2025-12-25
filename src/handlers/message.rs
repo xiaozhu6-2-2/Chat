@@ -212,8 +212,26 @@ pub async fn get_group_history(
         return Err(AppError::Forbidden(format!("用户 {} 不是群聊 {} 的成员", current_user.uid, payload.gid)));
     }
 
-    // 获取消息总数
-    let total_messages = state.db_pool.get_message_count_by_group(&payload.gid).await?;
+    let member = membership.unwrap();
+
+    // 获取用户入群时间，如果没有则使用群组创建时间
+    let join_time = member.join_time
+        .or(group_chat.create_time)
+        .ok_or_else(|| AppError::NotFound("入群时间缺失".to_string()))?;
+
+    // 获取所有群聊消息
+    let all_messages = state.db_pool.find_messages_by_group(&payload.gid).await?;
+
+    // 过滤出入群时间之后的消息
+    let filtered_messages: Vec<_> = all_messages
+        .into_iter()
+        .filter(|msg| {
+            msg.send_time.map_or(false, |t| t >= join_time)
+        })
+        .collect();
+
+    // 获取过滤后的消息总数
+    let total_messages = filtered_messages.len() as i64;
 
     // 计算总页数（向上取整）
     let total_pages = if total_messages == 0 {
@@ -230,12 +248,15 @@ pub async fn get_group_history(
         });
     }
 
-    // 直接分页查询群聊消息
-    let paginated_messages = state.db_pool.find_messages_by_group_with_pagination(
-        &payload.gid,
-        payload.limit,
-        payload.offset
-    ).await?;
+    // 手动分页
+    let start_index = (payload.offset * payload.limit) as usize;
+    let end_index = std::cmp::min(start_index + payload.limit as usize, filtered_messages.len());
+
+    let paginated_messages = if start_index < filtered_messages.len() {
+        filtered_messages[start_index..end_index].to_vec()
+    } else {
+        Vec::new()
+    };
 
     // 收集所有发送者UID
     let sender_uids: std::collections::HashSet<String> = paginated_messages

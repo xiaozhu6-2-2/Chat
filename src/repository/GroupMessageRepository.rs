@@ -124,7 +124,7 @@ impl GroupMessageRepository for MySqlPool {
                 is_announcement
             FROM group_message
             WHERE gid = ?
-            ORDER BY send_time ASC
+            ORDER BY send_time DESC
             LIMIT ? OFFSET ?",
             gid,
             limit,
@@ -151,7 +151,7 @@ impl GroupMessageRepository for MySqlPool {
                 quote_msg_id,
                 is_announcement
             FROM group_message WHERE gid = ? AND send_time BETWEEN ? AND ?
-            ORDER BY send_time ASC",
+            ORDER BY send_time DESC",
             gid,
             start,
             end
