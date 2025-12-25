@@ -8,6 +8,7 @@ use crate::models::entities::{ReqStatus, OptionalEnumExt, EnumConvertible, Assoc
 use crate::models::{errors::{AppResult, AppError}, responses::{SearchGroupResponse, SearchGroupItem}, responses::GroupCardResponse, requests::SearchGroupRequest, requests::GroupCardRequest};
 use crate::models::repository::{GroupChatRepository, GroupMessageRepository, UserRepository, FileRepository};
 use crate::state::AppState;
+use crate::utils::trans_logic::send_group_request_notification;
 use log::{info, error};
 
 pub async fn create_group(
@@ -330,7 +331,26 @@ pub async fn send_group_request(
     let saved_request = state.db_pool.find_group_request_by_id(&req_id).await?
         .ok_or_else(|| AppError::DatabaseFailure(sqlx::Error::RowNotFound))?;
 
-    // 10. 构建响应
+    let create_time = saved_request.create_time
+        .ok_or_else(|| AppError::NotFound("申请时间戳缺失".to_string()))?
+        .timestamp();
+
+    // 10. 通过 WebSocket 向群主和管理员发送群聊申请通知
+    send_group_request_notification(
+        req_id.clone(),
+        payload.gid.clone(),
+        group.group_name.clone(),
+        group.group_avatar.clone().unwrap_or_default(),
+        user.uid.clone(),
+        user.username.clone(),
+        user.avatar.clone().unwrap_or_default(),
+        payload.apply_text.clone(),
+        create_time,
+        ReqStatus::Pending.to_string(),
+        state.clone(),
+    ).await?;
+
+    // 11. 构建响应
     Ok(Json(GroupRequestResponse {
         req_id,
         gid: payload.gid,

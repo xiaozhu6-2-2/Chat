@@ -1,13 +1,14 @@
 use axum::Extension;
 use axum::{extract::State, Json};
 
-use crate::models::entities::{OptionalEnumExt, ReqStatus, Friends, PrivateChat};
+use crate::models::entities::{ReqStatus, Friends, PrivateChat, OptionalEnumExt};
 use crate::models::others::Claims;
 use crate::models::repository::{UserRepository, FriendshipRepository};
 use crate::models::requests::{FriendRequestRequest, RemoveFriendRequest, RespondFriendRequestRequest, UpdateFriendRemarkBlacklistGroupByRequest};
 use crate::models::responses::{FriendListResponse, FriendRequestItem, FriendRequestListResponse, FriendRequestResponse, RemoveFriendResponse, RespondFriendRequestResponse, UpdateFriendRemarkBlacklistGroupByResponse};
 use crate::models::{errors::AppResult, responses::SearchUserResponse, responses::FriendProfileResponse, requests::SearchUserRequest, requests::FriendProfileRequest};
 use crate::state::AppState;
+use crate::utils::trans_logic::{send_friend_request_notification, send_friend_request_result_notification, send_friend_deleted_notification};
 
 pub async fn search_user(
     State(state): State<AppState>,
@@ -328,10 +329,15 @@ pub async fn send_friend_request(
     let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
     let req_id = snowflake.next_id()?.to_string();
 
+    // 保存用户信息供后续使用
+    let sender_uid = current_user.uid.clone();
+    let sender_name = current_user.username.clone();
+    let sender_avatar = current_user.avatar.clone().unwrap_or_default();
+
     // 7. 创建 FriendRequest 记录
     let friend_request = crate::models::entities::FriendRequest {
         req_id,
-        sender_uid: current_user.uid,
+        sender_uid,
         receiver_uid: payload.receiver_id.clone(), // receiver_id 直接就是 uid
         status: ReqStatus::Pending,
         apply_text: Some(payload.message),
@@ -345,7 +351,28 @@ pub async fn send_friend_request(
     // 9. 获取接收者信息
     let receiver_user = state.db_pool.find_user_by_uid(&friend_request.receiver_uid).await?;
 
-    // 10. 返回响应
+    // 10. 获取数据库生成的时间戳
+    let saved_request = state.db_pool.find_friend_request_by_id(&friend_request.req_id).await?
+        .ok_or_else(|| crate::models::errors::AppError::NotFound("请求保存失败".to_string()))?;
+    let create_time = saved_request.create_time
+        .ok_or_else(|| crate::models::errors::AppError::NotFound("请求时间戳缺失".to_string()))?
+        .timestamp();
+
+    // 11. 通过 WebSocket 向接收者发送好友请求通知
+    send_friend_request_notification(
+        friend_request.receiver_uid.clone(),
+        friend_request.req_id.clone(),
+        friend_request.sender_uid.clone(),
+        sender_name,
+        sender_avatar,
+        friend_request.receiver_uid.clone(),
+        friend_request.apply_text.clone().unwrap_or_default(),
+        create_time,
+        ReqStatus::Pending.to_string(),
+        state.clone(),
+    ).await?;
+
+    // 12. 返回响应
     let response = FriendRequestResponse {
         req_id: friend_request.req_id,
         sender_uid: friend_request.sender_uid,
@@ -472,6 +499,19 @@ pub async fn respond_friend_request(
                 private_chat
             ).await?;
 
+            // 通过 WebSocket 向发送者发送接受结果通知
+            send_friend_request_result_notification(
+                friend_request.sender_uid.clone(),
+                friend_request.req_id.clone(),
+                "accept".to_string(),
+                Some(fid.clone()),
+                Some(current_user.uid.clone()),
+                Some(current_user.username.clone()),
+                current_user.avatar.clone(),
+                Some(handle_time.timestamp()),
+                state.clone(),
+            ).await?;
+
             // 返回成功响应，包含另一位用户的 ID 和好友关系 ID
             Ok(Json(RespondFriendRequestResponse {
                 uid: friend_request.sender_uid,
@@ -485,6 +525,19 @@ pub async fn respond_friend_request(
                 &payload.req_id,
                 "rejected",
                 handle_time
+            ).await?;
+
+            // 通过 WebSocket 向发送者发送拒绝结果通知
+            send_friend_request_result_notification(
+                friend_request.sender_uid.clone(),
+                friend_request.req_id.clone(),
+                "reject".to_string(),
+                None,  // fid
+                None,  // uid
+                None,  // username
+                None,  // avatar
+                Some(handle_time.timestamp()),
+                state.clone(),
             ).await?;
 
             // 返回拒绝响应，三个字段都返回 "Rejected"
@@ -601,10 +654,25 @@ pub async fn remove_friend(
         ));
     }
 
-    // 5. 删除好友关系及其相关的私聊会话和消息
+    // 5. 确定对方用户的 UID
+    let target_uid = if friendship.uid == current_user.uid {
+        friendship.to_uid
+    } else {
+        friendship.uid
+    };
+
+    // 6. 删除好友关系及其相关的私聊会话和消息
     state.db_pool.delete_friendship_with_chat(&payload.fid).await?;
 
-    // 6. 返回成功响应
+    // 7. 通过 WebSocket 向对方发送好友删除通知
+    send_friend_deleted_notification(
+        target_uid,
+        friendship.fid,
+        current_user.uid,
+        state.clone(),
+    ).await?;
+
+    // 8. 返回成功响应
     Ok(Json(RemoveFriendResponse { 
         success: true 
     }))

@@ -107,18 +107,52 @@ pub enum ServerMessage {
     },
     // 好友请求通知
     FriendRequestNotification {
-        
+        req_id: String,
+        sender_uid: String,
+        sender_name: String,
+        sender_avatar: String,
+        receiver_uid: String,
+        apply_text: String,
+        create_time: i64,
+        status: String,
     },
     // 好友请求结果通知
     FriendRequestResultNotification {
-        
+        req_id: String,
+        action: String, // "accept" | "reject" | "ignore"
+        fid: Option<String>,
+        uid: Option<String>,
+        username: Option<String>,
+        avatar: Option<String>,
+        timestamp: Option<i64>,
     },
-    // 群聊邀请通知
-    GroupInvitationNotification {
-        
+    // 好友删除通知
+    FriendDeletedNotification {
+        fid: String,
+        uid: String,
+        timestamp: Option<i64>,
+    },
+    // 群聊申请通知
+    GroupRequestNotification {
+        req_id: String,
+        gid: String,
+        group_name: String,
+        group_avatar: String,
+        applicant_uid: String,
+        applicant_name: String,
+        applicant_avatar: String,
+        apply_text: String,
+        create_time: i64,
+        status: String,
     },
     // 群聊申请结果通知
     GroupRequestResultNotification {
-        
+        req_id: String,
+        action: String, // "accept" | "reject"
+        gid: Option<String>,
+        group_name: Option<String>,
+        group_avatar: Option<String>,
+        group_intro: Option<String>,
+        timestamp: Option<i64>,
     }
 }
