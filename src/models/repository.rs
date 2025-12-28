@@ -339,6 +339,14 @@ pub trait FileRepository: Send + Sync {
         required_level: AccessLevel,
     ) -> AppResult<bool>;
 
+    /// 撤销文件权限（按访问类型和目标ID删除）
+    async fn revoke_file_permission(
+        &self,
+        file_id: &str,
+        access_type: AccessTarget,
+        target_id: &str,
+    ) -> AppResult<u64>;
+
     // ==================== 文件关联管理 (file_association) ====================
 
     /// 创建文件关联

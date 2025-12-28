@@ -649,3 +649,10 @@ pub struct GroupOnlineResponse {
     pub online_group_members: Vec<OnlineGroupMemberItem>,
     pub total: i64,
 }
+
+// 撤回消息响应模型
+#[derive(Serialize, Deserialize)]
+pub struct RevokeMessageResponse {
+    pub success: bool,
+}
+

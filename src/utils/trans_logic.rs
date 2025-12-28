@@ -831,3 +831,84 @@ pub async fn send_group_request_notification(
 
     Ok(())
 }
+
+// 发送私聊消息撤回通知
+pub async fn send_private_message_revoked_notification(
+    target_uid: String,
+    message_id: String,
+    chat_id: String,
+    operator_uid: String,
+    state: AppState,
+) -> AppResult<()> {
+    let notification = ServerMessage::MessageRevokedNotification {
+        message_id,
+        chat_id,
+        chat_type: "private".to_string(),
+        operator_uid,
+        timestamp: chrono::Utc::now().timestamp(),
+    };
+
+    let notification_msg = serde_json::to_string(&notification)
+        .map_err(|e| AppError::SerializeFailure(e.to_string()))?;
+
+    let target_user = state.db_pool.find_user_by_uid(&target_uid).await?;
+    let target_account = target_user.account;
+
+    if let Some(tx) = state.connection_pool.get(&target_account) {
+        let tx = tx.value().clone();
+        if tx.send(Message::Text(notification_msg.into())).is_err() {
+            error!("发送私聊消息撤回通知到用户 {} 失败", target_uid);
+        } else {
+            info!("成功发送私聊消息撤回通知到用户 {}", target_uid);
+        }
+    } else {
+        warn!("用户 {} 未在线，跳过私聊消息撤回通知", target_uid);
+    }
+
+    Ok(())
+}
+
+// 发送群聊消息撤回通知（给群组所有成员）
+pub async fn send_group_message_revoked_notification(
+    gid: String,
+    message_id: String,
+    operator_uid: String,
+    state: AppState,
+) -> AppResult<()> {
+    let notification = ServerMessage::MessageRevokedNotification {
+        message_id,
+        chat_id: gid.clone(),
+        chat_type: "group".to_string(),
+        operator_uid: operator_uid.clone(),
+        timestamp: chrono::Utc::now().timestamp(),
+    };
+
+    let notification_msg = serde_json::to_string(&notification)
+        .map_err(|e| AppError::SerializeFailure(e.to_string()))?;
+
+    // 获取群组的所有成员
+    let members = state.db_pool.find_members_by_group(&gid).await?;
+
+    let mut sent_count = 0;
+    for member in members {
+        match state.db_pool.find_user_by_uid(&member.uid).await {
+            Ok(member_user) => {
+                if let Some(tx) = state.connection_pool.get(&member_user.account) {
+                    let tx = tx.value().clone();
+                    if tx.send(Message::Text(notification_msg.clone().into())).is_err() {
+                        error!("发送群聊消息撤回通知到成员 {} 失败", member.uid);
+                    } else {
+                        sent_count += 1;
+                    }
+                }
+            }
+            Err(e) => {
+                error!("查找成员 {} 信息失败: {}", member.uid, e);
+            }
+        }
+    }
+
+    info!("成功发送群聊消息撤回通知到 {} 个成员", sent_count);
+
+    Ok(())
+}

@@ -359,4 +359,10 @@ pub struct GroupOnlineRequest {
     pub gid: String,
 }
 
-
+// 撤回消息请求模型
+#[derive(Deserialize, Serialize)]
+pub struct RevokeMessageRequest {
+    pub message_id: String,       // 消息ID
+    pub chat_id: String,          // 会话ID
+    pub chat_type: String,        // 会话类型: "private" 或 "group"
+}

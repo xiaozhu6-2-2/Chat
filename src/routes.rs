@@ -47,6 +47,7 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/message/group_history", post(handlers::message::get_group_history))// 获取群聊会话历史消息
         .route("/auth/message/read", post(handlers::message::mark_msg_read))// 设置消息为已读
         .route("/auth/message/read_count", post(handlers::message::fetch_group_read))// 获取群聊已读状态
+        .route("/auth/message/revoke", post(handlers::message::revoke_message))// 撤回消息
 
         .route("/auth/friends/search", post(handlers::friends::search_user))// 搜索用户
         .route("/auth/friends/profile", post(handlers::friends::get_friend_profile))// 获取好友资料

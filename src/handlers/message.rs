@@ -3,11 +3,13 @@ use axum::{extract::State, Json};
 
 use crate::models::others::Claims;
 use crate::models::errors::{AppResult, AppError};
-use crate::models::responses::{FetchGroupReadResponse, GroupReadCountItem, GroupHistoryResponse, GroupMessageItem, GroupMessagePayload, PrivateHistoryResponse, PrivateMessageItem, PrivateMessagePayload, ReadResponse};
-use crate::models::requests::{FetchGroupReadRequest, GroupHistoryRequest, PrivateHistoryRequest, ReadRequest};
+use crate::models::responses::{FetchGroupReadResponse, GroupReadCountItem, GroupHistoryResponse, GroupMessageItem, GroupMessagePayload, PrivateHistoryResponse, PrivateMessageItem, PrivateMessagePayload, ReadResponse, RevokeMessageResponse};
+use crate::models::requests::{FetchGroupReadRequest, GroupHistoryRequest, PrivateHistoryRequest, ReadRequest, RevokeMessageRequest};
 use crate::models::entities::{PrivateMsgType, GroupMsgType};
-use crate::models::repository::{FriendshipRepository, PrivateChatRepository, UserRepository, GroupChatRepository, GroupMessageRepository};
+use crate::models::repository::{FriendshipRepository, PrivateChatRepository, UserRepository, GroupChatRepository, GroupMessageRepository, FileRepository};
+use crate::models::entities::{AssociationType, AccessTarget};
 use crate::state::AppState;
+use crate::utils::trans_logic::{send_private_message_revoked_notification, send_group_message_revoked_notification};
 
 pub async fn get_private_history(
     State(state): State<AppState>,
@@ -487,4 +489,158 @@ pub async fn fetch_group_read(
     Ok(Json(FetchGroupReadResponse {
         read_counts,
     }))
+}
+
+pub async fn revoke_message(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<RevokeMessageRequest>,
+) -> AppResult<Json<RevokeMessageResponse>> {
+    // 通过 account 获取当前用户信息
+    let current_user = state.db_pool.find_user_by_account(&claims.sub).await?;
+
+    match payload.chat_type.as_str() {
+        "private" => {
+            // 验证私聊会话是否存在
+            let private_chat = state.db_pool.find_chat_by_pid(&payload.chat_id).await?;
+            let private_chat = match private_chat {
+                Some(chat) => chat,
+                None => {
+                    return Err(AppError::NotFound(format!("私聊会话 {} 不存在", payload.chat_id)));
+                }
+            };
+
+            // 验证用户是否属于这个私聊
+            if current_user.uid != private_chat.uid1 && current_user.uid != private_chat.uid2 {
+                return Err(AppError::Forbidden(format!("用户 {} 不是私聊会话 {} 的参与者", current_user.uid, payload.chat_id)));
+            }
+
+            // 查找私聊消息 - 使用 PrivateChatRepository trait
+            let message = PrivateChatRepository::find_message_by_id(&state.db_pool, &payload.message_id).await?;
+            let message = match message {
+                Some(msg) => msg,
+                None => {
+                    return Err(AppError::NotFound(format!("消息 {} 不存在", payload.message_id)));
+                }
+            };
+
+            // 验证消息是否属于该私聊会话
+            if message.pid != payload.chat_id {
+                return Err(AppError::BadRequest("消息不属于该私聊会话".to_string()));
+            }
+
+            // 验证是否是消息发送者
+            if message.sender_uid != current_user.uid {
+                return Err(AppError::Forbidden("只能撤回自己发送的消息".to_string()));
+            }
+
+            // 标记消息为已撤回 - 使用 PrivateChatRepository trait
+            PrivateChatRepository::mark_message_as_revoked(&state.db_pool, &payload.message_id).await?;
+
+            // 删除与该消息关联的文件关联
+            let _ = FileRepository::batch_delete_associations_by_target(
+                &state.db_pool,
+                AssociationType::PrivateMessage,
+                &payload.message_id,
+            ).await;
+
+            // 确定对方用户ID
+            let target_uid = if current_user.uid == private_chat.uid1 {
+                private_chat.uid2
+            } else {
+                private_chat.uid1
+            };
+
+            // 发送撤回通知给对方
+            send_private_message_revoked_notification(
+                target_uid,
+                payload.message_id,
+                payload.chat_id,
+                current_user.uid,
+                state.clone(),
+            ).await?;
+
+            Ok(Json(RevokeMessageResponse {
+                success: true,
+            }))
+        }
+        "group" => {
+            // 验证群聊是否存在
+            let group_chat = state.db_pool.find_group_by_gid(&payload.chat_id).await?;
+            let group_chat = match group_chat {
+                Some(chat) => chat,
+                None => {
+                    return Err(AppError::NotFound(format!("群聊 {} 不存在", payload.chat_id)));
+                }
+            };
+
+            // 检查用户是否在群聊中
+            let membership = state.db_pool.find_member(&payload.chat_id, &current_user.uid).await?;
+            if membership.is_none() {
+                return Err(AppError::Forbidden(format!("用户 {} 不是群聊 {} 的成员", current_user.uid, payload.chat_id)));
+            }
+
+            // 查找群聊消息 - 使用 GroupMessageRepository trait
+            let message = GroupMessageRepository::find_message_by_id(&state.db_pool, &payload.message_id).await?;
+            let message = match message {
+                Some(msg) => msg,
+                None => {
+                    return Err(AppError::NotFound(format!("消息 {} 不存在", payload.message_id)));
+                }
+            };
+
+            // 验证消息是否属于该群聊会话
+            if message.gid != payload.chat_id {
+                return Err(AppError::BadRequest("消息不属于该群聊会话".to_string()));
+            }
+
+            // 验证是否是消息发送者
+            if message.sender_uid != current_user.uid {
+                return Err(AppError::Forbidden("只能撤回自己发送的消息".to_string()));
+            }
+
+            // 标记消息为已撤回 - 使用 GroupMessageRepository trait
+            GroupMessageRepository::mark_message_as_revoked(&state.db_pool, &payload.message_id).await?;
+
+            // 获取与该消息关联的所有文件
+            let file_associations = FileRepository::find_files_by_association(
+                &state.db_pool,
+                AssociationType::GroupMessage,
+                &payload.message_id,
+            ).await?;
+
+            // 删除文件关联并撤销群组文件权限
+            for file_assoc in file_associations {
+                // 撤销该群组对此文件的访问权限
+                let _ = FileRepository::revoke_file_permission(
+                    &state.db_pool,
+                    &file_assoc.file_id,
+                    AccessTarget::Group,
+                    &payload.chat_id,  // 群组ID
+                ).await;
+            }
+
+            // 批量删除文件关联
+            let _ = FileRepository::batch_delete_associations_by_target(
+                &state.db_pool,
+                AssociationType::GroupMessage,
+                &payload.message_id,
+            ).await;
+
+            // 发送撤回通知给群聊所有成员（除操作者自己）
+            send_group_message_revoked_notification(
+                payload.chat_id,
+                payload.message_id,
+                current_user.uid,
+                state.clone(),
+            ).await?;
+
+            Ok(Json(RevokeMessageResponse {
+                success: true,
+            }))
+        }
+        _ => {
+            Err(AppError::BadRequest("无效的聊天类型，必须是 'private' 或 'group'".to_string()))
+        }
+    }
 }

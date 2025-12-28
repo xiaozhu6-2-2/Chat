@@ -154,5 +154,13 @@ pub enum ServerMessage {
         group_avatar: Option<String>,
         group_intro: Option<String>,
         timestamp: Option<i64>,
+    },
+    // 消息撤回通知
+    MessageRevokedNotification {
+        message_id: String,
+        chat_id: String,
+        chat_type: String,  // "private" | "group"
+        operator_uid: String,
+        timestamp: i64,
     }
 }
