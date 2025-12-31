@@ -139,7 +139,7 @@ pub async fn update_user_avatar(
     // 8. 为所有人授予头像文件的下载权限（target_id为None表示所有人可见）
     state.db_pool.grant_file_permission(
         &payload.file_id,
-        AccessTarget::User,
+        AccessTarget::Public,
         None,  // None表示所有人可见
         AccessLevel::Download,
         &user_uid,

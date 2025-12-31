@@ -995,11 +995,11 @@ pub async fn set_group_avatar(
     ).await?;
 
     // 7. 设置群组文件权限为所有人可见
-    // 为新头像文件授权所有人查看权限（target_id为None表示所有人可见）
+    // 为新头像文件授权所有人查看权限（使用Public）
     state.db_pool.grant_file_permission(
         &payload.group_avatar,
-        AccessTarget::User,
-        None,  // None表示所有人可见
+        AccessTarget::Public,
+        None,  // Public类型不需要target_id
         AccessLevel::Download,
         &user.uid,
         None  // 永不过期
