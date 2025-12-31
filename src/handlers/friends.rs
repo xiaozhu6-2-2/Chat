@@ -49,9 +49,8 @@ pub async fn search_user(
             }
         }
 
-        // 2. Account 精准搜索（如果查询是字母数字组合且长度合适）
-        let is_alphanumeric_query = payload.query.chars().all(|c| c.is_ascii_alphanumeric());
-        if is_alphanumeric_query && payload.query.len() >= 3 {
+        // 2. Account 精准搜索（长度 >= 3 时执行，支持邮箱格式）
+        if payload.query.len() >= 3 {
             if let Ok(user) = state.db_pool.find_user_by_account(&payload.query).await {
                 // 避免重复添加相同用户
                 if !seen_uids.contains(&user.uid) {
