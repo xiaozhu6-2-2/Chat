@@ -77,7 +77,7 @@ impl GroupMessageRepository for MySqlPool {
 
         let find_message=sqlx::query_as!(
             GroupMessage,
-            "SELECT 
+            "SELECT
                 msg_id,
                 gid,
                 content,
@@ -88,7 +88,8 @@ impl GroupMessageRepository for MySqlPool {
                 mentioned_uids,
                 quote_msg_id,
                 is_announcement
-            FROM group_message WHERE gid = ?",
+            FROM group_message WHERE gid = ?
+            ORDER BY send_time DESC",
             gid
         ).fetch_all(self).await?;
 
