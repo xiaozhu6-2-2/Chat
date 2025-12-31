@@ -26,12 +26,61 @@ pub async fn create_group(
     let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
     let gid = snowflake.next_id()?.to_string();
 
+    // 3. 如果提供了群头像，验证头像文件
+    let avatar = if let Some(avatar_file_id) = &payload.avatar {
+        if !avatar_file_id.is_empty() {
+            // 验证文件是否存在
+            let metadata = state.db_pool.find_file_metadata_by_id(avatar_file_id).await?;
+            let file_meta = metadata.ok_or_else(|| AppError::NotFound("头像文件不存在".to_string()))?;
+
+            // 验证文件类型必须是图片
+            if !file_meta.file_type.eq_ignore_ascii_case("image") {
+                return Err(AppError::BadRequest("头像必须是图片类型".to_string()));
+            }
+
+            // 验证用户对文件的访问权限（至少需要View权限）
+            let has_permission = state.db_pool.verify_file_permission(
+                avatar_file_id,
+                &user.uid,
+                AccessLevel::View
+            ).await?;
+
+            if !has_permission {
+                return Err(AppError::Forbidden("没有权限访问该头像文件".to_string()));
+            }
+
+            // 创建文件关联
+            state.db_pool.create_file_association(
+                avatar_file_id,
+                AssociationType::GroupAvatar,
+                &gid,
+                &user.uid,
+            ).await?;
+
+            // 为所有人授予头像文件的下载权限（Public）
+            state.db_pool.grant_file_permission(
+                avatar_file_id,
+                AccessTarget::Public,
+                None,
+                AccessLevel::Download,
+                &user.uid,
+                None,
+            ).await?;
+
+            Some(avatar_file_id.clone())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     // 创建群组实体
     let group = crate::models::entities::GroupChat {
         gid: gid.clone(),
         group_name: payload.group_name.clone(),
         manager_uid: user.uid.clone(),
-        group_avatar: payload.avatar.clone(),
+        group_avatar: avatar,
         group_intro: payload.group_intro.clone(),
         create_time: None,  // 让数据库自动生成时间
     };

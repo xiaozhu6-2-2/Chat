@@ -167,5 +167,47 @@ pub enum ServerMessage {
     MessageReadNotification {
         chat_id: String,      // 聊天ID（私聊为 pid）
         read_time: i64,      // 已读时间戳（该时间之前的消息均已读）
+    },
+    // 成员被踢出群通知
+    MemberKickedNotification {
+        gid: String,          // 群组ID
+        operator_uid: String, // 操作者用户ID
+        kicked_uid: String,   // 被踢成员用户ID
+        timestamp: i64,       // 时间戳
+    },
+    // 群组解散通知
+    GroupDisbandedNotification {
+        gid: String,          // 群组ID
+        operator_uid: String, // 操作者用户ID（群主）
+        timestamp: i64,       // 时间戳
+    },
+    // 退出群组通知
+    ExitGroupNotification {
+        gid: String,          // 群组ID
+        uid: String,          // 退出成员用户ID
+        timestamp: i64,       // 时间戳
+    },
+    // 角色变更通知
+    RoleChangedNotification {
+        gid: String,          // 群组ID
+        uid: String,          // 被修改角色的成员用户ID
+        new_role: String,     // 新角色 "admin" | "member"
+        operator_uid: String, // 操作者用户ID
+        timestamp: i64,       // 时间戳
+    },
+    // 群主转让通知
+    GroupOwnerTransferNotification {
+        gid: String,              // 群组ID
+        old_owner_uid: String,    // 原群主用户ID
+        new_owner_uid: String,    // 新群主用户ID
+        timestamp: i64,           // 时间戳
+    },
+    // 成员禁言/解禁通知
+    MemberMuteChangedNotification {
+        gid: String,          // 群组ID
+        uid: String,          // 被禁言/解禁成员用户ID
+        muted: bool,          // 是否禁言
+        operator_uid: String, // 操作者用户ID
+        timestamp: i64,       // 时间戳
     }
 }

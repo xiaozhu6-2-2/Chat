@@ -948,3 +948,243 @@ pub async fn send_private_message_read_notification(
 
     Ok(())
 }
+
+// 发送成员被踢出群通知（只发给被踢出的成员）
+pub async fn send_member_kicked_notification(
+    kicked_uid: String,
+    gid: String,
+    operator_uid: String,
+    state: AppState,
+) -> AppResult<()> {
+    let notification = ServerMessage::MemberKickedNotification {
+        gid,
+        operator_uid,
+        kicked_uid: kicked_uid.clone(),
+        timestamp: chrono::Utc::now().timestamp(),
+    };
+
+    let notification_msg = serde_json::to_string(&notification)
+        .map_err(|e| AppError::SerializeFailure(e.to_string()))?;
+
+    // 获取被踢出成员的account
+    let kicked_user = state.db_pool.find_user_by_uid(&kicked_uid).await?;
+    let kicked_account = kicked_user.account;
+
+    // 获取tx
+    let tx = state.connection_pool.get(&kicked_account).map(|guard| {
+        guard.value().clone()
+    });
+
+    // 发送消息
+    if let Some(tx) = tx {
+        tx.send(Message::Text(notification_msg.into()))
+            .map_err(|e| AppError::MpcsSenderFailure(e.to_string()))?;
+        info!("成功发送成员被踢出通知到用户 {}", kicked_uid);
+    } else {
+        warn!("用户 {} 未在线，跳过成员被踢出通知", kicked_uid);
+    }
+
+    Ok(())
+}
+
+// 发送群组解散通知（给所有群成员）
+pub async fn send_group_disbanded_notification(
+    gid: String,
+    operator_uid: String,
+    state: AppState,
+) -> AppResult<()> {
+    let notification = ServerMessage::GroupDisbandedNotification {
+        gid: gid.clone(),
+        operator_uid: operator_uid.clone(),
+        timestamp: chrono::Utc::now().timestamp(),
+    };
+
+    let notification_msg = serde_json::to_string(&notification)
+        .map_err(|e| AppError::SerializeFailure(e.to_string()))?;
+
+    // 获取群组的所有成员
+    let members = state.db_pool.find_members_by_group(&gid).await?;
+
+    let mut sent_count = 0;
+    for member in members {
+        match state.db_pool.find_user_by_uid(&member.uid).await {
+            Ok(member_user) => {
+                if let Some(tx) = state.connection_pool.get(&member_user.account) {
+                    let tx = tx.value().clone();
+                    if tx.send(Message::Text(notification_msg.clone().into())).is_err() {
+                        error!("发送群组解散通知到成员 {} 失败", member.uid);
+                    } else {
+                        sent_count += 1;
+                    }
+                }
+            }
+            Err(e) => {
+                error!("查找成员 {} 信息失败: {}", member.uid, e);
+            }
+        }
+    }
+
+    info!("成功发送群组解散通知到 {} 个成员", sent_count);
+
+    Ok(())
+}
+
+// 发送退出群组通知（只发给退出的人员）
+pub async fn send_exit_group_notification(
+    uid: String,
+    gid: String,
+    state: AppState,
+) -> AppResult<()> {
+    let notification = ServerMessage::ExitGroupNotification {
+        gid,
+        uid: uid.clone(),
+        timestamp: chrono::Utc::now().timestamp(),
+    };
+
+    let notification_msg = serde_json::to_string(&notification)
+        .map_err(|e| AppError::SerializeFailure(e.to_string()))?;
+
+    // 获取退出成员的account
+    let exit_user = state.db_pool.find_user_by_uid(&uid).await?;
+    let exit_account = exit_user.account;
+
+    // 获取tx
+    let tx = state.connection_pool.get(&exit_account).map(|guard| {
+        guard.value().clone()
+    });
+
+    // 发送消息
+    if let Some(tx) = tx {
+        tx.send(Message::Text(notification_msg.into()))
+            .map_err(|e| AppError::MpcsSenderFailure(e.to_string()))?;
+        info!("成功发送退出群组通知到用户 {}", uid);
+    } else {
+        warn!("用户 {} 未在线，跳过退出群组通知", uid);
+    }
+
+    Ok(())
+}
+
+// 发送角色变更通知（只发给被操作人）
+pub async fn send_role_changed_notification(
+    target_uid: String,
+    gid: String,
+    new_role: String,
+    operator_uid: String,
+    state: AppState,
+) -> AppResult<()> {
+    let notification = ServerMessage::RoleChangedNotification {
+        gid,
+        uid: target_uid.clone(),
+        new_role,
+        operator_uid,
+        timestamp: chrono::Utc::now().timestamp(),
+    };
+
+    let notification_msg = serde_json::to_string(&notification)
+        .map_err(|e| AppError::SerializeFailure(e.to_string()))?;
+
+    // 获取被操作成员的account
+    let target_user = state.db_pool.find_user_by_uid(&target_uid).await?;
+    let target_account = target_user.account;
+
+    // 获取tx
+    let tx = state.connection_pool.get(&target_account).map(|guard| {
+        guard.value().clone()
+    });
+
+    // 发送消息
+    if let Some(tx) = tx {
+        tx.send(Message::Text(notification_msg.into()))
+            .map_err(|e| AppError::MpcsSenderFailure(e.to_string()))?;
+        info!("成功发送角色变更通知到用户 {}", target_uid);
+    } else {
+        warn!("用户 {} 未在线，跳过角色变更通知", target_uid);
+    }
+
+    Ok(())
+}
+
+// 发送群主转让通知（只发给新、旧群主）
+pub async fn send_group_owner_transfer_notification(
+    old_owner_uid: String,
+    new_owner_uid: String,
+    gid: String,
+    state: AppState,
+) -> AppResult<()> {
+    let notification = ServerMessage::GroupOwnerTransferNotification {
+        gid: gid.clone(),
+        old_owner_uid: old_owner_uid.clone(),
+        new_owner_uid: new_owner_uid.clone(),
+        timestamp: chrono::Utc::now().timestamp(),
+    };
+
+    let notification_msg = serde_json::to_string(&notification)
+        .map_err(|e| AppError::SerializeFailure(e.to_string()))?;
+
+    let mut sent_count = 0;
+
+    // 发送给原群主
+    if let Ok(old_owner) = state.db_pool.find_user_by_uid(&old_owner_uid).await {
+        if let Some(tx) = state.connection_pool.get(&old_owner.account) {
+            let tx = tx.value().clone();
+            if tx.send(Message::Text(notification_msg.clone().into())).is_ok() {
+                sent_count += 1;
+            }
+        }
+    }
+
+    // 发送给新群主
+    if let Ok(new_owner) = state.db_pool.find_user_by_uid(&new_owner_uid).await {
+        if let Some(tx) = state.connection_pool.get(&new_owner.account) {
+            let tx = tx.value().clone();
+            if tx.send(Message::Text(notification_msg.clone().into())).is_ok() {
+                sent_count += 1;
+            }
+        }
+    }
+
+    info!("成功发送群主转让通知到 {} 个成员", sent_count);
+
+    Ok(())
+}
+
+// 发送成员禁言/解禁通知（只发给被操作人）
+pub async fn send_member_mute_changed_notification(
+    target_uid: String,
+    gid: String,
+    muted: bool,
+    operator_uid: String,
+    state: AppState,
+) -> AppResult<()> {
+    let notification = ServerMessage::MemberMuteChangedNotification {
+        gid,
+        uid: target_uid.clone(),
+        muted,
+        operator_uid,
+        timestamp: chrono::Utc::now().timestamp(),
+    };
+
+    let notification_msg = serde_json::to_string(&notification)
+        .map_err(|e| AppError::SerializeFailure(e.to_string()))?;
+
+    // 获取被操作成员的account
+    let target_user = state.db_pool.find_user_by_uid(&target_uid).await?;
+    let target_account = target_user.account;
+
+    // 获取tx
+    let tx = state.connection_pool.get(&target_account).map(|guard| {
+        guard.value().clone()
+    });
+
+    // 发送消息
+    if let Some(tx) = tx {
+        tx.send(Message::Text(notification_msg.into()))
+            .map_err(|e| AppError::MpcsSenderFailure(e.to_string()))?;
+        info!("成功发送禁言变更通知到用户 {}", target_uid);
+    } else {
+        warn!("用户 {} 未在线，跳过禁言变更通知", target_uid);
+    }
+
+    Ok(())
+}
