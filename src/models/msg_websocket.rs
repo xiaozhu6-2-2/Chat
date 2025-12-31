@@ -162,5 +162,10 @@ pub enum ServerMessage {
         chat_type: String,  // "private" | "group"
         operator_uid: String,
         timestamp: i64,
+    },
+    // 私聊消息已读通知
+    MessageReadNotification {
+        chat_id: String,      // 聊天ID（私聊为 pid）
+        read_time: i64,      // 已读时间戳（该时间之前的消息均已读）
     }
 }

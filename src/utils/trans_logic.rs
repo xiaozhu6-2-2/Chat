@@ -912,3 +912,39 @@ pub async fn send_group_message_revoked_notification(
 
     Ok(())
 }
+
+// 发送私聊消息已读通知
+pub async fn send_private_message_read_notification(
+    sender_uid: String,       // 消息发送者（需要通知的人）
+    chat_id: String,          // 私聊会话ID (pid)
+    read_time: i64,           // 已读时间戳
+    state: AppState,
+) -> AppResult<()> {
+    let notification = ServerMessage::MessageReadNotification {
+        chat_id,
+        read_time,
+    };
+
+    let notification_msg = serde_json::to_string(&notification)
+        .map_err(|e| AppError::SerializeFailure(e.to_string()))?;
+
+    // 获取消息发送者的account
+    let sender_user = state.db_pool.find_user_by_uid(&sender_uid).await?;
+    let sender_account = sender_user.account;
+
+    // 获取tx
+    let tx = state.connection_pool.get(&sender_account).map(|guard| {
+        guard.value().clone()
+    });
+
+    // 发送消息
+    if let Some(tx) = tx {
+        tx.send(Message::Text(notification_msg.into()))
+            .map_err(|e| AppError::MpcsSenderFailure(e.to_string()))?;
+        info!("成功发送私聊消息已读通知到用户 {}", sender_uid);
+    } else {
+        warn!("用户 {} 未在线，跳过私聊消息已读通知", sender_uid);
+    }
+
+    Ok(())
+}

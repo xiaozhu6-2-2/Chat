@@ -9,7 +9,7 @@ use crate::models::entities::{PrivateMsgType, GroupMsgType};
 use crate::models::repository::{FriendshipRepository, PrivateChatRepository, UserRepository, GroupChatRepository, GroupMessageRepository, FileRepository};
 use crate::models::entities::{AssociationType, AccessTarget};
 use crate::state::AppState;
-use crate::utils::trans_logic::{send_private_message_revoked_notification, send_group_message_revoked_notification};
+use crate::utils::trans_logic::{send_private_message_revoked_notification, send_group_message_revoked_notification, send_private_message_read_notification};
 
 pub async fn get_private_history(
     State(state): State<AppState>,
@@ -402,11 +402,26 @@ pub async fn mark_msg_read(
                 return Err(AppError::Forbidden(format!("用户 {} 不是私聊会话 {} 的参与者", current_user.uid, payload.chat_id)));
             }
 
+            // 确定对方用户ID（消息发送者）
+            let sender_uid = if current_user.uid == private_chat.uid1 {
+                private_chat.uid2.clone()
+            } else {
+                private_chat.uid1.clone()
+            };
+
             // 批量标记私聊消息为已读（只标记对方发送的消息）
             let _affected_rows = state.db_pool.mark_messages_as_read_by_chat_and_time(
                 &payload.chat_id,
                 &current_user.uid,
                 timestamp
+            ).await?;
+
+            // 发送已读通知给消息发送者（对方）
+            send_private_message_read_notification(
+                sender_uid,
+                payload.chat_id,
+                payload.timestamp,
+                state.clone(),
             ).await?;
         }
         "group" => {
