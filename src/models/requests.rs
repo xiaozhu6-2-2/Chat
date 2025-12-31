@@ -366,3 +366,11 @@ pub struct RevokeMessageRequest {
     pub chat_id: String,          // 会话ID
     pub chat_type: String,        // 会话类型: "private" 或 "group"
 }
+
+// 显示已读人员请求模型
+#[derive(Deserialize, Serialize)]
+pub struct ShowReadersRequest {
+    pub message_id: String,       // 消息ID
+    pub chat_id: String,          // 会话ID
+    pub chat_type: String,        // 会话类型: "private" 或 "group"
+}

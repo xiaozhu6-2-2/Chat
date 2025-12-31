@@ -656,3 +656,18 @@ pub struct RevokeMessageResponse {
     pub success: bool,
 }
 
+// 已读人员信息模型
+#[derive(Serialize, Deserialize)]
+pub struct ReaderInfo {
+    pub uid: String,           // 用户ID
+    pub username: String,      // 用户名
+    pub avatar: String,        // 头像
+}
+
+// 显示已读人员响应模型
+#[derive(Serialize, Deserialize)]
+pub struct ShowReadersResponse {
+    pub readers: Vec<ReaderInfo>,  // 已读人员列表
+    pub total: i64,                 // 已读人数
+}
+

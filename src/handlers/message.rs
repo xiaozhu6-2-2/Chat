@@ -3,8 +3,8 @@ use axum::{extract::State, Json};
 
 use crate::models::others::Claims;
 use crate::models::errors::{AppResult, AppError};
-use crate::models::responses::{FetchGroupReadResponse, GroupReadCountItem, GroupHistoryResponse, GroupMessageItem, GroupMessagePayload, PrivateHistoryResponse, PrivateMessageItem, PrivateMessagePayload, ReadResponse, RevokeMessageResponse};
-use crate::models::requests::{FetchGroupReadRequest, GroupHistoryRequest, PrivateHistoryRequest, ReadRequest, RevokeMessageRequest};
+use crate::models::responses::{FetchGroupReadResponse, GroupReadCountItem, GroupHistoryResponse, GroupMessageItem, GroupMessagePayload, PrivateHistoryResponse, PrivateMessageItem, PrivateMessagePayload, ReadResponse, RevokeMessageResponse, ShowReadersResponse, ReaderInfo};
+use crate::models::requests::{FetchGroupReadRequest, GroupHistoryRequest, PrivateHistoryRequest, ReadRequest, RevokeMessageRequest, ShowReadersRequest};
 use crate::models::entities::{PrivateMsgType, GroupMsgType};
 use crate::models::repository::{FriendshipRepository, PrivateChatRepository, UserRepository, GroupChatRepository, GroupMessageRepository, FileRepository};
 use crate::models::entities::{AssociationType, AccessTarget};
@@ -637,6 +637,131 @@ pub async fn revoke_message(
 
             Ok(Json(RevokeMessageResponse {
                 success: true,
+            }))
+        }
+        _ => {
+            Err(AppError::BadRequest("无效的聊天类型，必须是 'private' 或 'group'".to_string()))
+        }
+    }
+}
+
+pub async fn show_readers(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<ShowReadersRequest>,
+) -> AppResult<Json<ShowReadersResponse>> {
+    // 获取当前用户信息
+    let current_user = state.db_pool.find_user_by_account(&claims.sub).await?;
+
+    match payload.chat_type.as_str() {
+        "private" => {
+            // 验证私聊会话是否存在
+            let private_chat = state.db_pool.find_chat_by_pid(&payload.chat_id).await?;
+            let private_chat = match private_chat {
+                Some(chat) => chat,
+                None => {
+                    return Err(AppError::NotFound(format!("私聊会话 {} 不存在", payload.chat_id)));
+                }
+            };
+
+            // 验证用户是否属于这个私聊
+            if current_user.uid != private_chat.uid1 && current_user.uid != private_chat.uid2 {
+                return Err(AppError::Forbidden(format!("用户 {} 不是私聊会话 {} 的参与者", current_user.uid, payload.chat_id)));
+            }
+
+            // 查找私聊消息
+            let message = PrivateChatRepository::find_message_by_id(&state.db_pool, &payload.message_id).await?;
+            let message = match message {
+                Some(msg) => msg,
+                None => {
+                    return Err(AppError::NotFound(format!("消息 {} 不存在", payload.message_id)));
+                }
+            };
+
+            // 验证消息是否属于该私聊会话
+            if message.pid != payload.chat_id {
+                return Err(AppError::BadRequest("消息不属于该私聊会话".to_string()));
+            }
+
+            // 获取已读该消息的用户ID列表
+            let read_user_ids = state.db_pool.find_read_users_by_message(&payload.message_id).await?;
+
+            // 私聊消息，已读用户只能是消息接收者（对方）
+            let target_uid = if message.sender_uid == private_chat.uid1 {
+                private_chat.uid2.clone()
+            } else {
+                private_chat.uid1.clone()
+            };
+
+            // 检查对方是否已读
+            let readers = if read_user_ids.contains(&target_uid) {
+                // 查询对方用户信息
+                if let Ok(target_user) = state.db_pool.find_user_by_uid(&target_uid).await {
+                    vec![ReaderInfo {
+                        uid: target_user.uid.clone(),
+                        username: target_user.username.clone(),
+                        avatar: target_user.avatar.clone().unwrap_or_default(),
+                    }]
+                } else {
+                    vec![]
+                }
+            } else {
+                vec![]
+            };
+
+            Ok(Json(ShowReadersResponse {
+                total: readers.len() as i64,
+                readers,
+            }))
+        }
+        "group" => {
+            // 验证群聊是否存在
+            let group_chat = state.db_pool.find_group_by_gid(&payload.chat_id).await?;
+            let group_chat = match group_chat {
+                Some(chat) => chat,
+                None => {
+                    return Err(AppError::NotFound(format!("群聊 {} 不存在", payload.chat_id)));
+                }
+            };
+
+            // 检查用户是否在群聊中
+            let membership = state.db_pool.find_member(&payload.chat_id, &current_user.uid).await?;
+            if membership.is_none() {
+                return Err(AppError::Forbidden(format!("用户 {} 不是群聊 {} 的成员", current_user.uid, payload.chat_id)));
+            }
+
+            // 查找群聊消息
+            let message = GroupMessageRepository::find_message_by_id(&state.db_pool, &payload.message_id).await?;
+            let message = match message {
+                Some(msg) => msg,
+                None => {
+                    return Err(AppError::NotFound(format!("消息 {} 不存在", payload.message_id)));
+                }
+            };
+
+            // 验证消息是否属于该群聊会话
+            if message.gid != payload.chat_id {
+                return Err(AppError::BadRequest("消息不属于该群聊会话".to_string()));
+            }
+
+            // 获取已读该消息的用户ID列表
+            let read_user_ids = state.db_pool.find_read_users_by_message(&payload.message_id).await?;
+
+            // 查询所有已读用户的详细信息
+            let mut readers = Vec::new();
+            for uid in read_user_ids {
+                if let Ok(user) = state.db_pool.find_user_by_uid(&uid).await {
+                    readers.push(ReaderInfo {
+                        uid: user.uid.clone(),
+                        username: user.username.clone(),
+                        avatar: user.avatar.clone().unwrap_or_default(),
+                    });
+                }
+            }
+
+            Ok(Json(ShowReadersResponse {
+                total: readers.len() as i64,
+                readers,
             }))
         }
         _ => {

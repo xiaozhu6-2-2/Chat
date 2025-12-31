@@ -994,13 +994,13 @@ pub async fn set_group_avatar(
         &user.uid
     ).await?;
 
-    // 7. 设置群组文件权限
-    // 为新头像文件授权群组成员查看权限
+    // 7. 设置群组文件权限为所有人可见
+    // 为新头像文件授权所有人查看权限（target_id为None表示所有人可见）
     state.db_pool.grant_file_permission(
         &payload.group_avatar,
-        AccessTarget::Group,
-        Some(payload.gid.clone()),
-        AccessLevel::Download,  // 群组成员可查看头像
+        AccessTarget::User,
+        None,  // None表示所有人可见
+        AccessLevel::Download,
         &user.uid,
         None  // 永不过期
     ).await?;
