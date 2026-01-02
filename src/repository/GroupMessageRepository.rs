@@ -306,19 +306,40 @@ impl GroupMessageRepository for MySqlPool {
 
     // 获取用户未读消息数量
     async fn get_unread_message_count_by_group(&self, gid: &str, uid: &str) -> AppResult<i32> {
-        let count = sqlx::query!(
-            "SELECT COUNT(*) as count
-            FROM group_message gm
-            LEFT JOIN group_message_read gmr
-                ON gm.msg_id = gmr.msg_id
-                AND gm.gid = gmr.gid
-                AND gmr.uid = ?
-            WHERE gm.gid = ? AND gmr.msg_id IS NULL",
-            uid,
-            gid
-        ).fetch_one(self).await?;
+        // 首先获取成员信息以得到入群时间
+        use crate::models::repository::GroupChatRepository;
+        let member_info = self.find_member(gid, uid).await?;
 
-        Ok(count.count as i32)
+        match member_info {
+            Some(member) => {
+                // 获取入群时间，如果没有则使用群组创建时间
+                let group_info = self.find_group_by_gid(gid).await?;
+                let join_time = member.join_time
+                    .or(group_info.and_then(|g| g.create_time))
+                    .map(|dt| dt.timestamp())
+                    .unwrap_or(0);
+
+                let count = sqlx::query!(
+                    "SELECT COUNT(*) as count
+                    FROM group_message gm
+                    LEFT JOIN group_message_read gmr
+                        ON gm.msg_id = gmr.msg_id
+                        AND gm.gid = gmr.gid
+                        AND gmr.uid = ?
+                    WHERE gm.gid = ?
+                        AND gmr.msg_id IS NULL
+                        AND gm.sender_uid != ?
+                        AND gm.send_time >= ?",
+                    uid,
+                    gid,
+                    uid,
+                    join_time
+                ).fetch_one(self).await?;
+
+                Ok(count.count as i32)
+            }
+            None => Ok(0)
+        }
     }
 
     // 查找群聊的最新消息
