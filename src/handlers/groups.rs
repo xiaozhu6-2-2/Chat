@@ -10,6 +10,7 @@ use crate::models::repository::{GroupChatRepository, GroupMessageRepository, Use
 use crate::state::AppState;
 use crate::utils::trans_logic::{
     send_group_request_notification,
+    send_group_request_result_notification,
     send_member_kicked_notification,
     send_group_disbanded_notification,
     send_exit_group_notification,
@@ -658,7 +659,18 @@ pub async fn handle_group_request(
     ).await?;
 
     // 8. 如果是接受申请，将用户加入群组
-    if payload.action == "accept" {
+    let (gid, group_name, group_avatar, group_intro) = if payload.action == "accept" {
+        // 获取群组信息
+        let group = state.db_pool.find_group_by_gid(&request.gid).await?
+            .ok_or_else(|| AppError::NotFound(format!("群组{}不存在", request.gid)))?;
+
+        let group_info = (
+            Some(group.gid.clone()),
+            Some(group.group_name.clone()),
+            group.group_avatar.clone(),
+            group.group_intro.clone(),
+        );
+
         let member = crate::models::entities::GroupMember {
             uid: request.applicant_uid.clone(),
             gid: request.gid.clone(),
@@ -691,9 +703,26 @@ pub async fn handle_group_request(
                 }
             }
         }
-    }
 
-    // 9. 返回成功响应（空响应体，只返回状态码）
+        group_info
+    } else {
+        // 拒绝申请，不需要群组信息
+        (None, None, None, None)
+    };
+
+    // 9. 发送申请结果通知给申请人
+    send_group_request_result_notification(
+        request.applicant_uid.clone(),
+        payload.req_id.clone(),
+        payload.action.clone(),
+        gid,
+        group_name,
+        group_avatar,
+        group_intro,
+        state.clone(),
+    ).await?;
+
+    // 10. 返回成功响应（空响应体，只返回状态码）
     Ok(Json(GroupRespondResponse {
         success: true,
     }))

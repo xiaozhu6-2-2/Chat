@@ -1188,3 +1188,50 @@ pub async fn send_member_mute_changed_notification(
 
     Ok(())
 }
+
+// 发送群聊申请结果通知（只发给申请人）
+pub async fn send_group_request_result_notification(
+    applicant_uid: String,
+    req_id: String,
+    action: String,
+    gid: Option<String>,
+    group_name: Option<String>,
+    group_avatar: Option<String>,
+    group_intro: Option<String>,
+    state: AppState,
+) -> AppResult<()> {
+    // 构建群聊申请结果通知消息
+    let notification = ServerMessage::GroupRequestResultNotification {
+        req_id,
+        action,
+        gid,
+        group_name,
+        group_avatar,
+        group_intro,
+        timestamp: Some(chrono::Utc::now().timestamp()),
+    };
+
+    // 转换为Message
+    let notification_msg = serde_json::to_string(&notification)
+        .map_err(|e| AppError::SerializeFailure(e.to_string()))?;
+
+    // 获取申请人（原始请求发起者）的account
+    let applicant_user = state.db_pool.find_user_by_uid(&applicant_uid).await?;
+    let applicant_account = applicant_user.account;
+
+    // 获取tx
+    let tx = state.connection_pool.get(&applicant_account).map(|guard| {
+        guard.value().clone()
+    });
+
+    // 发送消息
+    if let Some(tx) = tx {
+        tx.send(Message::Text(notification_msg.into()))
+            .map_err(|e| AppError::MpcsSenderFailure(e.to_string()))?;
+        info!("成功发送群聊申请结果通知到用户 {}", applicant_uid);
+    } else {
+        warn!("用户 {} 未在线，跳过群聊申请结果通知", applicant_uid);
+    }
+
+    Ok(())
+}
