@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use sqlx::MySqlPool;
 use async_trait::async_trait;
 
-use crate::models::errors::AppResult;
+use crate::models::errors::{AppError, AppResult};
 use crate::models::repository::GroupMessageRepository;
 use crate::models::entities::{GroupMessage, GroupMsgType, EnumConvertible};
 
@@ -313,11 +313,10 @@ impl GroupMessageRepository for MySqlPool {
         match member_info {
             Some(member) => {
                 // 获取入群时间，如果没有则使用群组创建时间
-                let group_info = self.find_group_by_gid(gid).await?;
-                let join_time = member.join_time
-                    .or(group_info.and_then(|g| g.create_time))
-                    .map(|dt| dt.timestamp())
-                    .unwrap_or(0);
+                let join_time = match member.join_time {
+                    Some(join_time) => join_time,
+                    None => return Err(AppError::BadRequest("Member join time is missing".to_string())),
+                };
 
                 let count = sqlx::query!(
                     "SELECT COUNT(*) as count

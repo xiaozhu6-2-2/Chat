@@ -719,8 +719,8 @@ impl FileRepository for MySqlPool {
             let query = format!(
                 r#"
                 SELECT
-                    permission_id, file_id, access_type as `access_type: AccessTarget`, target_id,
-                    permission_level as `permission_level: AccessLevel`, granted_by,
+                    permission_id, file_id, access_type, target_id,
+                    permission_level, granted_by,
                     granted_at, expires_at
                 FROM file_permission
                 WHERE file_id = ?
@@ -740,12 +740,28 @@ impl FileRepository for MySqlPool {
                 placeholders
             );
 
-            let mut query_builder = sqlx::query_as::<_, FilePermission>(&query).bind(file_id);
+            let mut query_builder = sqlx::query(&query).bind(file_id);
             for group_id in &group_ids {
                 query_builder = query_builder.bind(group_id);
             }
 
-            if let Some(group_perm) = query_builder.fetch_optional(self).await? {
+            if let Some(row) = query_builder.fetch_optional(self).await? {
+                // 手动获取字段并转换为枚举
+                let access_type_str: String = row.try_get("access_type")?;
+                let permission_level_str: String = row.try_get("permission_level")?;
+
+                let group_perm = FilePermission {
+                    permission_id: row.try_get("permission_id")?,
+                    file_id: row.try_get("file_id")?,
+                    access_type: AccessTarget::from_enum_string(&access_type_str)
+                        .ok_or_else(|| AppError::InternalError(format!("Invalid access_type: {}", access_type_str)))?,
+                    target_id: row.try_get("target_id")?,
+                    permission_level: AccessLevel::from_enum_string(&permission_level_str)
+                        .ok_or_else(|| AppError::InternalError(format!("Invalid permission_level: {}", permission_level_str)))?,
+                    granted_by: row.try_get("granted_by")?,
+                    granted_at: row.try_get("granted_at")?,
+                    expires_at: row.try_get("expires_at")?,
+                };
                 return Ok(check_permission_level(group_perm.permission_level, required_level));
             }
         }
