@@ -700,70 +700,41 @@ impl FileRepository for MySqlPool {
         }
 
         // 6. 检查 group 权限（用户所属的群组权限）
-        // 首先获取用户加入的所有群组
-        let user_groups = sqlx::query!(
-            "
-            SELECT gm.gid
-            FROM group_member gm
-            WHERE gm.uid = ?
-            ",
+        if let Some(group_perm) = sqlx::query_as!(
+            FilePermission,
+            r#"
+            SELECT
+                fp.permission_id,
+                fp.file_id,
+                fp.access_type as `access_type: AccessTarget`,
+                fp.target_id,
+                fp.permission_level as `permission_level: AccessLevel`,
+                fp.granted_by,
+                fp.granted_at,
+                fp.expires_at
+            FROM file_permission fp
+            INNER JOIN group_member gm ON fp.target_id = gm.gid
+            WHERE fp.file_id = ?
+              AND fp.access_type = 'group'
+              AND gm.uid = ?
+              AND (fp.expires_at IS NULL OR fp.expires_at > UTC_TIMESTAMP())
+            ORDER BY
+                CASE fp.permission_level
+                    WHEN 'manage' THEN 4
+                    WHEN 'share' THEN 3
+                    WHEN 'download' THEN 2
+                    WHEN 'view' THEN 1
+                    ELSE 0
+                END DESC
+            LIMIT 1
+            "#,
+            file_id,
             user_uid
         )
-        .fetch_all(self)
-        .await?;
-
-        if !user_groups.is_empty() {
-            let group_ids: Vec<String> = user_groups.iter().map(|g| g.gid.clone()).collect();
-            let placeholders = group_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-
-            let query = format!(
-                r#"
-                SELECT
-                    permission_id, file_id, access_type, target_id,
-                    permission_level, granted_by,
-                    granted_at, expires_at
-                FROM file_permission
-                WHERE file_id = ?
-                AND access_type = 'group'
-                AND target_id IN ({})
-                AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
-                ORDER BY
-                    CASE permission_level
-                        WHEN 'manage' THEN 4
-                        WHEN 'share' THEN 3
-                        WHEN 'download' THEN 2
-                        WHEN 'view' THEN 1
-                        ELSE 0
-                    END DESC
-                LIMIT 1
-                "#,
-                placeholders
-            );
-
-            let mut query_builder = sqlx::query(&query).bind(file_id);
-            for group_id in &group_ids {
-                query_builder = query_builder.bind(group_id);
-            }
-
-            if let Some(row) = query_builder.fetch_optional(self).await? {
-                // 手动获取字段并转换为枚举
-                let access_type_str: String = row.try_get("access_type")?;
-                let permission_level_str: String = row.try_get("permission_level")?;
-
-                let group_perm = FilePermission {
-                    permission_id: row.try_get("permission_id")?,
-                    file_id: row.try_get("file_id")?,
-                    access_type: AccessTarget::from_enum_string(&access_type_str)
-                        .ok_or_else(|| AppError::InternalError(format!("Invalid access_type: {}", access_type_str)))?,
-                    target_id: row.try_get("target_id")?,
-                    permission_level: AccessLevel::from_enum_string(&permission_level_str)
-                        .ok_or_else(|| AppError::InternalError(format!("Invalid permission_level: {}", permission_level_str)))?,
-                    granted_by: row.try_get("granted_by")?,
-                    granted_at: row.try_get("granted_at")?,
-                    expires_at: row.try_get("expires_at")?,
-                };
-                return Ok(check_permission_level(group_perm.permission_level, required_level));
-            }
+        .fetch_optional(self)
+        .await?
+        {
+            return Ok(check_permission_level(group_perm.permission_level, required_level));
         }
 
         // 7. 检查 friend 权限（用户是某个授权者的好友）
