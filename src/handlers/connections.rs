@@ -174,25 +174,34 @@ async fn handle_websocket(
     let last_activity_for_timeout = Arc::clone(&last_activity);
 
     // WebSocket写任务(监听专用信道，并向 WebSocket 发送消息)
-    let send_task = tokio::spawn(async move {
+    let mut send_task = tokio::spawn(async move {
         send_task_spawn(rx, sender).await
     });
 
     // WebSocket读任务(监听 WebSocket 接收消息)
-    let recv_task = tokio::spawn(async move{
+    let mut recv_task = tokio::spawn(async move{
         recv_task_spawn(receiver, last_activity_for_recv, state_for_recv, account_for_recv).await
     });
 
     // 超时机制
-    let timeout_task = tokio::spawn(async move{
+    let mut timeout_task = tokio::spawn(async move{
         timeout_task_spawn(last_activity_for_timeout, account_for_timeout, state_for_timeout).await
     });
 
-    // 结束连接:当读任务或者写任务任意一个结束时，结束连接
+    // 结束连接:当读任务或者写任务任意一个结束时，终止其他两个任务
     tokio::select! {
-        _ = send_task => {},
-        _ = recv_task => {},
-        _ = timeout_task => {}
+        _ = &mut send_task => {
+            recv_task.abort();
+            timeout_task.abort();
+        },
+        _ = &mut recv_task => {
+            send_task.abort();
+            timeout_task.abort();
+        },
+        _ = &mut timeout_task => {
+            send_task.abort();
+            recv_task.abort();
+        }
     }
 
     // 向好友发送下线通知

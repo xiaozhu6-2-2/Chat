@@ -41,11 +41,14 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/chat/list", get(handlers::chat::get_chat_list))// 获取会话列表
         .route("/auth/chat/soloprivate", post(handlers::chat::get_private_chat))// 获取指定私聊会话
         .route("/auth/chat/sologroup", post(handlers::chat::get_group_chat))// 获取指定群聊会话
+        .route("/auth/chat/updateIsPinned", post(handlers::chat::update_ispinned))// 会话置顶状态
 
         .route("/auth/message/private_history", post(handlers::message::get_private_history))// 获取私聊会话历史消息
         .route("/auth/message/group_history", post(handlers::message::get_group_history))// 获取群聊会话历史消息
         .route("/auth/message/read", post(handlers::message::mark_msg_read))// 设置消息为已读
         .route("/auth/message/read_count", post(handlers::message::fetch_group_read))// 获取群聊已读状态
+        .route("/auth/message/show_readers", post(handlers::message::show_readers))// 显示已读人员
+        .route("/auth/message/revoke", post(handlers::message::revoke_message))// 撤回消息
 
         .route("/auth/friends/search", post(handlers::friends::search_user))// 搜索用户
         .route("/auth/friends/profile", post(handlers::friends::get_friend_profile))// 获取好友资料
@@ -64,7 +67,7 @@ pub fn create_routes() -> Router<AppState> {
         .route("/auth/groups/send_group_request", post(handlers::groups::send_group_request))// 发送加入群聊申请
         .route("/auth/groups/get_request_list", get(handlers::groups::get_request_list))//查看群聊申请列表（用户）
         .route("/auth/groups/group_requests", post(handlers::groups::group_requests))// 获取群聊的申请列表
-        // .route("/auth/groups/group_request_list", post(handlers::groups::get_group_requestlist))// 获取群聊的申请列表
+        .route("/auth/groups/group_request_list", get(handlers::groups::get_group_requestlist))// 获取群聊的申请列表
         .route("/auth/groups/respond", post(handlers::groups::handle_group_request))// 处理加入群聊申请
         .route("/auth/groups/leave", post(handlers::groups::leave_group))// 退出群聊
         .route("/auth/groups/kick_member", post(handlers::groups::kick_member))// 踢出群成员

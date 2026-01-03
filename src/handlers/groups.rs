@@ -8,6 +8,16 @@ use crate::models::entities::{ReqStatus, OptionalEnumExt, EnumConvertible, Assoc
 use crate::models::{errors::{AppResult, AppError}, responses::{SearchGroupResponse, SearchGroupItem}, responses::GroupCardResponse, requests::SearchGroupRequest, requests::GroupCardRequest};
 use crate::models::repository::{GroupChatRepository, GroupMessageRepository, UserRepository, FileRepository};
 use crate::state::AppState;
+use crate::utils::trans_logic::{
+    send_group_request_notification,
+    send_group_request_result_notification,
+    send_member_kicked_notification,
+    send_group_disbanded_notification,
+    send_exit_group_notification,
+    send_role_changed_notification,
+    send_group_owner_transfer_notification,
+    send_member_mute_changed_notification,
+};
 use log::{info, error};
 
 pub async fn create_group(
@@ -25,20 +35,72 @@ pub async fn create_group(
     let snowflake = crate::utils::snowflake::Snowflake::new(1, None)?;
     let gid = snowflake.next_id()?.to_string();
 
-    // 创建群组实体
+    // 3. 如果提供了群头像，先验证头像文件（不创建关联）
+    let avatar_file_id = if let Some(avatar_file_id) = &payload.avatar {
+        if !avatar_file_id.is_empty() {
+            // 验证文件是否存在
+            let metadata = state.db_pool.find_file_metadata_by_id(avatar_file_id).await?;
+            let file_meta = metadata.ok_or_else(|| AppError::NotFound("头像文件不存在".to_string()))?;
+
+            // 验证文件类型必须是图片
+            if !file_meta.file_type.eq_ignore_ascii_case("image") {
+                return Err(AppError::BadRequest("头像必须是图片类型".to_string()));
+            }
+
+            // 验证用户对文件的访问权限（至少需要View权限）
+            let has_permission = state.db_pool.verify_file_permission(
+                avatar_file_id,
+                &user.uid,
+                AccessLevel::View
+            ).await?;
+
+            if !has_permission {
+                return Err(AppError::Forbidden("没有权限访问该头像文件".to_string()));
+            }
+
+            Some(avatar_file_id.clone())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // 4. 创建群组实体
     let group = crate::models::entities::GroupChat {
         gid: gid.clone(),
         group_name: payload.group_name.clone(),
         manager_uid: user.uid.clone(),
-        group_avatar: payload.avatar.clone(),
+        group_avatar: avatar_file_id.clone(),
         group_intro: payload.group_intro.clone(),
         create_time: None,  // 让数据库自动生成时间
     };
 
-    // 保存群组到数据库
+    // 5. 保存群组到数据库（先保存群组，确保群组存在）
     state.db_pool.save_group(group).await?;
 
-    // 创建群主成员记录
+    // 6. 群组保存成功后，再创建文件关联和授予权限
+    if let Some(avatar_file_id) = avatar_file_id {
+        // 创建文件关联
+        state.db_pool.create_file_association(
+            &avatar_file_id,
+            AssociationType::GroupAvatar,
+            &gid,
+            &user.uid,
+        ).await?;
+
+        // 为所有人授予头像文件的下载权限（Public）
+        state.db_pool.grant_file_permission(
+            &avatar_file_id,
+            AccessTarget::Public,
+            None,
+            AccessLevel::Download,
+            &user.uid,
+            None,
+        ).await?;
+    }
+
+    // 7. 创建群主成员记录
     let manager_member = crate::models::entities::GroupMember {
         uid: user.uid.clone(),
         gid: gid.clone(),
@@ -52,10 +114,10 @@ pub async fn create_group(
         is_pinned: Some(0),
     };
 
-    // 保存群主成员信息
+    // 8. 保存群主成员信息
     state.db_pool.save_member(manager_member).await?;
 
-    // 新增：检查创建者是否在线，如果是则启动群聊监听
+    // 9. 检查创建者是否在线，如果是则启动群聊监听
     if let Some(tx) = state.connection_pool.get(&user.account) {
         // 创建者在线，启动监听
         if let Err(e) = state.group_task_manager.add_listener(
@@ -71,11 +133,11 @@ pub async fn create_group(
         }
     }
 
-    // 从数据库查询群组信息以获取创建时间
+    // 10. 从数据库查询群组信息以获取创建时间
     let created_group = state.db_pool.find_group_by_gid(&gid).await?
         .ok_or_else(|| AppError::DatabaseFailure(sqlx::Error::RowNotFound))?;
 
-    // 返回响应
+    // 11. 返回响应
     Ok(Json(CreateGroupResponse {
         gid,
         created_at: created_group.create_time
@@ -330,7 +392,26 @@ pub async fn send_group_request(
     let saved_request = state.db_pool.find_group_request_by_id(&req_id).await?
         .ok_or_else(|| AppError::DatabaseFailure(sqlx::Error::RowNotFound))?;
 
-    // 10. 构建响应
+    let create_time = saved_request.create_time
+        .ok_or_else(|| AppError::NotFound("申请时间戳缺失".to_string()))?
+        .timestamp();
+
+    // 10. 通过 WebSocket 向群主和管理员发送群聊申请通知
+    send_group_request_notification(
+        req_id.clone(),
+        payload.gid.clone(),
+        group.group_name.clone(),
+        group.group_avatar.clone().unwrap_or_default(),
+        user.uid.clone(),
+        user.username.clone(),
+        user.avatar.clone().unwrap_or_default(),
+        payload.apply_text.clone(),
+        create_time,
+        ReqStatus::Pending.to_string(),
+        state.clone(),
+    ).await?;
+
+    // 11. 构建响应
     Ok(Json(GroupRequestResponse {
         req_id,
         gid: payload.gid,
@@ -421,13 +502,13 @@ pub async fn group_requests(
         return Err(AppError::BadRequest("只有群主或管理员可以查看申请列表".to_string()));
     }
 
-    // 3. 获取该群组的所有待处理申请（数据库层面已过滤）
-    let pending_requests = state.db_pool.find_pending_requests_by_group(&payload.gid).await?;
+    // 3. 获取该群组的所有申请记录（包括已处理的）
+    let all_requests = state.db_pool.find_all_requests_by_group(&payload.gid).await?;
 
     // 4. 转换为响应格式
     let mut request_items: Vec<GroupRequestItem> = Vec::new();
 
-    for req in pending_requests {
+    for req in all_requests {
         // 获取发送者信息
         let sender_info = state.db_pool.find_user_by_uid(&req.applicant_uid).await.ok().and_then(|x| Some(x));
         let sender_name = sender_info.as_ref().map(|u| &u.username).cloned().unwrap_or_default();
@@ -455,6 +536,84 @@ pub async fn group_requests(
     let total = request_items.len() as i64;
 
     // 6. 返回响应
+    Ok(Json(GroupRequestListResponse {
+        requests: request_items,
+        total,
+    }))
+}
+
+pub async fn get_group_requestlist(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>
+) -> AppResult<Json<GroupRequestListResponse>> {
+    // 1. 从 claims 中获取用户账号
+    let user_account = &claims.sub;
+
+    // 2. 通过账号查找用户信息，获取 uid
+    let user = state.db_pool.find_user_by_account(user_account).await?;
+
+    // 3. 获取用户加入的所有群聊
+    let user_groups = state.db_pool.find_groups_by_user(&user.uid).await?;
+
+    // 4. 获取用户在其中是群主或管理员的群聊
+    let mut managed_groups = Vec::new();
+    for group_membership in user_groups {
+        // 查找用户在该群中的成员信息
+        if let Ok(member) = state.db_pool.find_member(&group_membership.gid, &user.uid).await {
+            if let Some(member_info) = member {
+                // 检查是否是群主或管理员
+                let role_str = member_info.role.to_enum_string();
+                if role_str == "owner" || role_str == "admin" {
+                    managed_groups.push(group_membership.gid);
+                }
+            }
+        }
+    }
+
+    // 5. 获取所有管理群聊的申请记录
+    let mut all_requests = Vec::new();
+    for gid in managed_groups {
+        let group_requests = state.db_pool.find_all_requests_by_group(&gid).await?;
+        all_requests.extend(group_requests);
+    }
+
+    // 6. 转换为响应格式
+    let mut request_items: Vec<GroupRequestItem> = Vec::new();
+    for req in all_requests {
+        // 获取群组信息
+        let group = state.db_pool.find_group_by_gid(&req.gid).await?
+            .ok_or_else(|| AppError::NotFound(format!("群组{}不存在", req.gid)))?;
+
+        // 获取申请者信息
+        let sender_info = state.db_pool.find_user_by_uid(&req.applicant_uid).await.ok();
+        let sender_name = sender_info.as_ref().map(|u| &u.username).cloned().unwrap_or_default();
+        let sender_avatar = sender_info.as_ref().and_then(|u| u.avatar.clone()).unwrap_or_default();
+
+        let request_item = GroupRequestItem {
+            req_id: req.req_id,
+            gid: req.gid,
+            group_name: group.group_name.clone(),
+            group_avatar: group.group_avatar.clone().unwrap_or_default(),
+            sender_uid: req.applicant_uid,
+            sender_name,
+            sender_avatar,
+            apply_text: req.apply_text,
+            create_time: req.create_time
+                .map(|dt| dt.timestamp())
+                .unwrap_or(0),
+            status: Some(req.status).to_optional_string().unwrap_or_default(),
+        };
+
+        request_items.push(request_item);
+    }
+
+    // 7. 按创建时间倒序排序
+    request_items.sort_by(|a, b| b.create_time.cmp(&a.create_time));
+
+    // 8. 计算总数
+    let total = request_items.len() as i64;
+
+    // 9. 返回响应
     Ok(Json(GroupRequestListResponse {
         requests: request_items,
         total,
@@ -500,7 +659,18 @@ pub async fn handle_group_request(
     ).await?;
 
     // 8. 如果是接受申请，将用户加入群组
-    if payload.action == "accept" {
+    let (gid, group_name, group_avatar, group_intro) = if payload.action == "accept" {
+        // 获取群组信息
+        let group = state.db_pool.find_group_by_gid(&request.gid).await?
+            .ok_or_else(|| AppError::NotFound(format!("群组{}不存在", request.gid)))?;
+
+        let group_info = (
+            Some(group.gid.clone()),
+            Some(group.group_name.clone()),
+            group.group_avatar.clone(),
+            group.group_intro.clone(),
+        );
+
         let member = crate::models::entities::GroupMember {
             uid: request.applicant_uid.clone(),
             gid: request.gid.clone(),
@@ -533,9 +703,26 @@ pub async fn handle_group_request(
                 }
             }
         }
-    }
 
-    // 9. 返回成功响应（空响应体，只返回状态码）
+        group_info
+    } else {
+        // 拒绝申请，不需要群组信息
+        (None, None, None, None)
+    };
+
+    // 9. 发送申请结果通知给申请人
+    send_group_request_result_notification(
+        request.applicant_uid.clone(),
+        payload.req_id.clone(),
+        payload.action.clone(),
+        gid,
+        group_name,
+        group_avatar,
+        group_intro,
+        state.clone(),
+    ).await?;
+
+    // 10. 返回成功响应（空响应体，只返回状态码）
     Ok(Json(GroupRespondResponse {
         success: true,
     }))
@@ -583,7 +770,14 @@ pub async fn leave_group(
         info!("取消用户 {} 群聊 {} 监听成功", user.uid, payload.gid);
     }
 
-    // 7. 返回成功响应
+    // 7. 发送退出群组通知
+    send_exit_group_notification(
+        user.uid.clone(),
+        payload.gid.clone(),
+        state.clone(),
+    ).await?;
+
+    // 8. 返回成功响应
     Ok(Json(LeaveGroupResponse {
         success: true,
     }))
@@ -648,7 +842,15 @@ pub async fn kick_member(
         info!("取消被踢用户 {} 群聊 {} 监听成功", payload.uid, payload.gid);
     }
 
-    // 9. 返回响应
+    // 9. 发送被踢出通知
+    send_member_kicked_notification(
+        payload.uid.clone(),
+        payload.gid.clone(),
+        operator.uid.clone(),
+        state.clone(),
+    ).await?;
+
+    // 10. 返回响应
     Ok(Json(KickMemberResponse {
         success: true,
     }))
@@ -701,7 +903,14 @@ pub async fn disband_group(
         info!("清理群组 {} 的广播频道成功", payload.gid);
     }
 
-    // 7. 返回成功响应
+    // 7. 发送群组解散通知
+    send_group_disbanded_notification(
+        payload.gid.clone(),
+        user.uid.clone(),
+        state.clone(),
+    ).await?;
+
+    // 8. 返回成功响应
     Ok(Json(DisbandGroupResponse {
         success: true,
     }))
@@ -791,10 +1000,10 @@ pub async fn set_group(
     }
 
     if let Some(current_avatar) = group.group_avatar {
-        if current_avatar != payload.group_avater {
+        if current_avatar != payload.group_avatar {
             has_changes = true;
         }
-    } else if !payload.group_avater.is_empty() {
+    } else if !payload.group_avatar.is_empty() {
         has_changes = true;
     }
 
@@ -815,7 +1024,7 @@ pub async fn set_group(
         gid: payload.gid.clone(),
         group_name: payload.group_name.clone(),
         manager_uid: group.manager_uid,
-        group_avatar: Some(payload.group_avater.clone()),
+        group_avatar: Some(payload.group_avatar.clone()),
         group_intro: Some(payload.group_intro.clone()),
         create_time: group.create_time, // 保持原有创建时间
     };
@@ -852,7 +1061,7 @@ pub async fn set_group_avatar(
 
     // 4. 验证文件ID有效性
     let has_permission = state.db_pool.verify_file_permission(
-        &payload.group_avater,
+        &payload.group_avatar,
         &user.uid,
         AccessLevel::Download,  // 至少需要下载权限
     ).await?;
@@ -862,11 +1071,11 @@ pub async fn set_group_avatar(
     }
 
     // 4.1 验证文件类型是否为图像
-    let file_metadata = state.db_pool.find_file_metadata_by_id(&payload.group_avater).await?
+    let file_metadata = state.db_pool.find_file_metadata_by_id(&payload.group_avatar).await?
         .ok_or_else(|| AppError::NotFound("文件不存在".to_string()))?;
 
     // 检查文件类型是否为图像
-    let is_image = file_metadata.file_type.starts_with("image/");
+    let is_image = file_metadata.file_type.starts_with("image");
 
     if !is_image {
         return Err(AppError::BadRequest("只能使用图像文件作为群头像".to_string()));
@@ -890,19 +1099,19 @@ pub async fn set_group_avatar(
 
     // 6. 创建新的文件关联
     state.db_pool.create_file_association(
-        &payload.group_avater,
+        &payload.group_avatar,
         AssociationType::GroupAvatar,
         &payload.gid,
         &user.uid
     ).await?;
 
-    // 7. 设置群组文件权限
-    // 为新头像文件授权群组成员查看权限
+    // 7. 设置群组文件权限为所有人可见
+    // 为新头像文件授权所有人查看权限（使用Public）
     state.db_pool.grant_file_permission(
-        &payload.group_avater,
-        AccessTarget::Group,
-        Some(payload.gid.clone()),
-        AccessLevel::Download,  // 群组成员可查看头像
+        &payload.group_avatar,
+        AccessTarget::Public,
+        None,  // Public类型不需要target_id
+        AccessLevel::Download,
         &user.uid,
         None  // 永不过期
     ).await?;
@@ -912,7 +1121,7 @@ pub async fn set_group_avatar(
         gid: group.gid.clone(),
         group_name: group.group_name.clone(),
         manager_uid: group.manager_uid.clone(),
-        group_avatar: Some(payload.group_avater.clone()),  // 更新头像
+        group_avatar: Some(payload.group_avatar.clone()),  // 更新头像
         group_intro: group.group_intro.clone(),
         create_time: group.create_time,  // 保持原有创建时间
     };
@@ -1126,7 +1335,15 @@ pub async fn transfer_ownership(
     // 提交事务
     tx.commit().await?;
 
-    // 8. 返回成功响应
+    // 8. 发送群主转让通知
+    send_group_owner_transfer_notification(
+        user.uid.clone(),
+        payload.uid.clone(),
+        payload.gid.clone(),
+        state.clone(),
+    ).await?;
+
+    // 9. 返回成功响应
     Ok(Json(TransferOwnershipResponse {
         success: true,
     }))
@@ -1183,7 +1400,16 @@ pub async fn set_admin(
     // 提交事务
     tx.commit().await?;
 
-    // 9. 返回成功响应
+    // 9. 发送角色变更通知
+    send_role_changed_notification(
+        payload.uid.clone(),
+        payload.gid.clone(),
+        "admin".to_string(),
+        user.uid.clone(),
+        state.clone(),
+    ).await?;
+
+    // 10. 返回成功响应
     Ok(Json(SettingAdminResponse {
         success: true,
     }))
@@ -1240,7 +1466,16 @@ pub async fn remove_admin(
     // 提交事务
     tx.commit().await?;
 
-    // 9. 返回成功响应
+    // 9. 发送角色变更通知
+    send_role_changed_notification(
+        payload.uid.clone(),
+        payload.gid.clone(),
+        "member".to_string(),
+        user.uid.clone(),
+        state.clone(),
+    ).await?;
+
+    // 10. 返回成功响应
     Ok(Json(RemovingAdminResponse {
         success: true,
     }))
@@ -1366,7 +1601,16 @@ pub async fn ban_member(
     // 10. 保存禁言记录
     state.db_pool.add_mute_record(mute_record).await?;
 
-    // 11. 返回成功响应
+    // 11. 发送禁言通知
+    send_member_mute_changed_notification(
+        payload.uid.clone(),
+        payload.gid.clone(),
+        true,
+        user.uid.clone(),
+        state.clone(),
+    ).await?;
+
+    // 12. 返回成功响应
     Ok(Json(BanningMemberResponse {
         success: true,
     }))
@@ -1406,7 +1650,16 @@ pub async fn remove_mute_admin(
     // 5. 解除禁言（将 mute_duration 设置为 0）
     state.db_pool.remove_mute(&mute_record.ban_id).await?;
 
-    // 6. 返回成功响应
+    // 6. 发送解禁通知
+    send_member_mute_changed_notification(
+        payload.uid.clone(),
+        payload.gid.clone(),
+        false,
+        user.uid.clone(),
+        state.clone(),
+    ).await?;
+
+    // 7. 返回成功响应
     Ok(Json(RemoveMuteResponse {
         success: true,
     }))

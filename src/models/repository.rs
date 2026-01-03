@@ -133,6 +133,8 @@ pub trait GroupChatRepository: Send + Sync {
     async fn find_group_request_by_id(&self, req_id: &str) -> AppResult<Option<GroupJoinRequest>>;
     // 查找群聊未处理申请
     async fn find_pending_requests_by_group(&self, gid: &str) -> AppResult<Vec<GroupJoinRequest>>;
+    // 查找群聊所有申请记录
+    async fn find_all_requests_by_group(&self, gid: &str) -> AppResult<Vec<GroupJoinRequest>>;
     // 查找用户的群聊申请记录
     async fn find_requests_by_user(&self, uid: &str) -> AppResult<Vec<GroupJoinRequest>>;
     // 更新群聊申请状态
@@ -336,6 +338,14 @@ pub trait FileRepository: Send + Sync {
         user_uid: &str,
         required_level: AccessLevel,
     ) -> AppResult<bool>;
+
+    /// 撤销文件权限（按访问类型和目标ID删除）
+    async fn revoke_file_permission(
+        &self,
+        file_id: &str,
+        access_type: AccessTarget,
+        target_id: &str,
+    ) -> AppResult<u64>;
 
     // ==================== 文件关联管理 (file_association) ====================
 

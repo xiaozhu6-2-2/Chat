@@ -3,7 +3,7 @@ use axum::{extract::State, Json};
 
 use crate::models::entities::{Gender, OptionalEnumExt, AssociationType, AccessLevel, AccessTarget};
 use crate::models::others::Claims;
-use crate::models::repository::{UserRepository, FileRepository, FriendshipRepository};
+use crate::models::repository::{UserRepository, FileRepository};
 use crate::models::requests::UserAvatarRequest;
 use crate::models::responses::{UserAvatarResponse, UserTokenResponse};
 use crate::models::{errors::AppResult, responses::UserInfoResponse, responses::UserInfoUpdateResponse, responses::FetchProfileResponse, requests::UserInfoUpdateRequest, requests::FetchProfileRequest};
@@ -136,19 +136,15 @@ pub async fn update_user_avatar(
         &user_uid,  // 创建者是当前用户
     ).await?;
 
-    // 8. 为所有好友授予文件的下载权限
-    let friendships = state.db_pool.find_friendship_by_uid(&user_uid).await?;
-    for friendship in friendships {
-        let friend_uid = if friendship.uid == user_uid { friendship.to_uid } else { friendship.uid };
-        state.db_pool.grant_file_permission(
-            &payload.file_id,
-            AccessTarget::User,
-            Some(friend_uid),
-            AccessLevel::Download,
-            &user_uid,
-            None,  // 永不过期
-        ).await?;
-    }
+    // 8. 为所有人授予头像文件的下载权限（target_id为None表示所有人可见）
+    state.db_pool.grant_file_permission(
+        &payload.file_id,
+        AccessTarget::Public,
+        None,  // None表示所有人可见
+        AccessLevel::Download,
+        &user_uid,
+        None,  // 永不过期
+    ).await?;
 
     // 9. 更新用户表的avatar字段（存储file_id）
     let mut updated_user = user;

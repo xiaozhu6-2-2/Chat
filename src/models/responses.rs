@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 pub struct RegisterResponse {
     pub success: bool,
+    pub token: String,     // JWT令牌
 }
 
 // 登录响应模型
@@ -133,6 +134,8 @@ pub struct FriendRequestResponse {
     pub req_id: String,
     pub sender_uid: String,
     pub receiver_uid: String,
+    pub receiver_name: String,
+    pub receiver_avatar: Option<String>,
     pub apply_text: Option<String>,
     pub create_time: i64,
     pub status: Option<String>,
@@ -473,7 +476,11 @@ pub struct GroupChatResponse {
     pub remark: String,                // 群组名称或用户自定义备注
 }
 
-
+// 置顶状态响应模型
+#[derive(Serialize, Deserialize)]
+pub struct PinnedResponse {
+    pub success: bool
+}
 
 // 私聊消息载荷模型
 #[derive(Serialize, Deserialize)]
@@ -559,7 +566,7 @@ pub struct GroupHistoryResponse {
 // 标记已读响应模型
 #[derive(Serialize, Deserialize)]
 pub struct ReadResponse {
-
+    pub success: bool,
 }
 
 // 群聊已读数量项模型
@@ -642,3 +649,25 @@ pub struct GroupOnlineResponse {
     pub online_group_members: Vec<OnlineGroupMemberItem>,
     pub total: i64,
 }
+
+// 撤回消息响应模型
+#[derive(Serialize, Deserialize)]
+pub struct RevokeMessageResponse {
+    pub success: bool,
+}
+
+// 已读人员信息模型
+#[derive(Serialize, Deserialize)]
+pub struct ReaderInfo {
+    pub uid: String,           // 用户ID
+    pub username: String,      // 用户名
+    pub avatar: String,        // 头像
+}
+
+// 显示已读人员响应模型
+#[derive(Serialize, Deserialize)]
+pub struct ShowReadersResponse {
+    pub readers: Vec<ReaderInfo>,  // 已读人员列表
+    pub total: i64,                 // 已读人数
+}
+

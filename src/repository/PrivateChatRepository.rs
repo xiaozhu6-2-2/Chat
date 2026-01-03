@@ -200,7 +200,7 @@ impl PrivateChatRepository for MySqlPool {
                 type as `mes_type: PrivateMsgType`
             FROM private_message
             WHERE pid = ?
-            ORDER BY send_time ASC",
+            ORDER BY send_time DESC",
             pid
         ).fetch_all(self).await?;
 

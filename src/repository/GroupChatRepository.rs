@@ -396,6 +396,27 @@ impl GroupChatRepository for MySqlPool {
 
         Ok(find_request)
     }
+
+    // 查找群聊所有申请记录
+    async fn find_all_requests_by_group(&self, gid: &str) -> AppResult<Vec<GroupJoinRequest>>{
+
+        let find_request=sqlx::query_as!(
+            GroupJoinRequest,
+            "SELECT
+                req_id,
+                gid,
+                applicant_uid,
+                approver_uid,
+                status  as `status: ReqStatus`,
+                apply_text,
+                create_time,
+                handle_time
+            FROM group_join_request WHERE gid = ? ORDER BY create_time DESC",
+            gid
+        ).fetch_all(self).await?;
+
+        Ok(find_request)
+    }
     // 查找用户的群聊申请记录
     async fn find_requests_by_user(&self, uid: &str) -> AppResult<Vec<GroupJoinRequest>>{
         let find_request=sqlx::query_as!(

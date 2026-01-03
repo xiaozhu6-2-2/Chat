@@ -19,7 +19,7 @@ pub struct MesPayload {
 
     // 消息
     pub content_type: Option<String>,// 消息类型
-    pub details: Option<String>,// 消息内容
+    pub detail: Option<String>,// 消息内容
 
     // 实时状态信息
     pub is_announcement: bool,// 是否是群聊公告
@@ -104,5 +104,110 @@ pub enum ServerMessage {
     MessageError {
         temp_message_id: String,
         error: String,
+    },
+    // 好友请求通知
+    FriendRequestNotification {
+        req_id: String,
+        sender_uid: String,
+        sender_name: String,
+        sender_avatar: String,
+        receiver_uid: String,
+        apply_text: String,
+        create_time: i64,
+        status: String,
+    },
+    // 好友请求结果通知
+    FriendRequestResultNotification {
+        req_id: String,
+        action: String, // "accept" | "reject" | "ignore"
+        fid: Option<String>,
+        uid: Option<String>,
+        username: Option<String>,
+        avatar: Option<String>,
+        timestamp: Option<i64>,
+    },
+    // 好友删除通知
+    FriendDeletedNotification {
+        fid: String,
+        uid: String,
+        timestamp: Option<i64>,
+    },
+    // 群聊申请通知
+    GroupRequestNotification {
+        req_id: String,
+        gid: String,
+        group_name: String,
+        group_avatar: String,
+        applicant_uid: String,
+        applicant_name: String,
+        applicant_avatar: String,
+        apply_text: String,
+        create_time: i64,
+        status: String,
+    },
+    // 群聊申请结果通知
+    GroupRequestResultNotification {
+        req_id: String,
+        action: String, // "accept" | "reject"
+        gid: Option<String>,
+        group_name: Option<String>,
+        group_avatar: Option<String>,
+        group_intro: Option<String>,
+        timestamp: Option<i64>,
+    },
+    // 消息撤回通知
+    MessageRevokedNotification {
+        message_id: String,
+        chat_id: String,
+        chat_type: String,  // "private" | "group"
+        operator_uid: String,
+        timestamp: i64,
+    },
+    // 私聊消息已读通知
+    MessageReadNotification {
+        chat_id: String,      // 聊天ID（私聊为 pid）
+        read_time: i64,      // 已读时间戳（该时间之前的消息均已读）
+    },
+    // 成员被踢出群通知
+    MemberKickedNotification {
+        gid: String,          // 群组ID
+        operator_uid: String, // 操作者用户ID
+        kicked_uid: String,   // 被踢成员用户ID
+        timestamp: i64,       // 时间戳
+    },
+    // 群组解散通知
+    GroupDisbandedNotification {
+        gid: String,          // 群组ID
+        operator_uid: String, // 操作者用户ID（群主）
+        timestamp: i64,       // 时间戳
+    },
+    // 退出群组通知
+    ExitGroupNotification {
+        gid: String,          // 群组ID
+        uid: String,          // 退出成员用户ID
+        timestamp: i64,       // 时间戳
+    },
+    // 角色变更通知
+    RoleChangedNotification {
+        gid: String,          // 群组ID
+        uid: String,          // 被修改角色的成员用户ID
+        new_role: String,     // 新角色 "admin" | "member"
+        operator_uid: String, // 操作者用户ID
+        timestamp: i64,       // 时间戳
+    },
+    // 群主转让通知
+    GroupOwnerTransferNotification {
+        gid: String,              // 群组ID
+        old_owner_uid: String,    // 原群主用户ID
+        new_owner_uid: String,    // 新群主用户ID
+        timestamp: i64,           // 时间戳
+    },
+    // 成员禁言/解禁通知
+    MemberMuteChangedNotification {
+        gid: String,          // 群组ID
+        uid: String,          // 被禁言/解禁成员用户ID
+        muted: bool,          // 是否禁言
+        operator_uid: String, // 操作者用户ID
+        timestamp: i64,       // 时间戳
     }
 }

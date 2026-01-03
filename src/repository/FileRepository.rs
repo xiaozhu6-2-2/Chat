@@ -806,6 +806,33 @@ impl FileRepository for MySqlPool {
         Ok(false)
     }
 
+    /// 撤销文件权限（按访问类型和目标ID删除）
+    async fn revoke_file_permission(
+        &self,
+        file_id: &str,
+        access_type: AccessTarget,
+        target_id: &str,
+    ) -> AppResult<u64> {
+        let result = sqlx::query!(
+            r#"
+            DELETE FROM file_permission
+            WHERE file_id = ? AND access_type = ? AND target_id = ?
+            "#,
+            file_id,
+            match access_type {
+                AccessTarget::User => "user",
+                AccessTarget::Friend => "friend",
+                AccessTarget::Group => "group",
+                AccessTarget::Public => "public",
+            },
+            target_id
+        )
+        .execute(self)
+        .await?;
+
+        Ok(result.rows_affected())
+    }
+
     // ==================== 文件关联管理 (file_association) ====================
 
     /// 创建文件关联

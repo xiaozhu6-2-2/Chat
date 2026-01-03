@@ -79,7 +79,7 @@ pub async fn register(
     // 插入SQL
     state.db_pool.insert_user(User {
         uid: uid.to_string(),
-        account: account,
+        account: account.clone(),
         password: password_hash,
         username: payload.username,
         gender: Option::<Gender>::from_optional_string(Some(payload.gender)),
@@ -91,7 +91,12 @@ pub async fn register(
 
     }).await?;
 
-    Ok(Json(RegisterResponse { success: true }))
+    let token = generate_jwt(&account)?;
+
+    Ok(Json(RegisterResponse {
+        success: true,
+        token: token
+     }))
 }
 
 // 登录处理函数

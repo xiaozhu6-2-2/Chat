@@ -200,7 +200,7 @@ pub struct MemberSettingRequest {
 pub struct SettingGroupRequest {
     pub gid: String,            // 群组ID
     pub group_name: String,     // 群名称
-    pub group_avater: String,   // 群头像URL
+    pub group_avatar: String,   // 群头像URL
     pub group_intro: String,    // 群简介
 }
 
@@ -208,7 +208,7 @@ pub struct SettingGroupRequest {
 #[derive(Deserialize, Serialize)]
 pub struct GroupAvatarRequest {
     pub gid: String,            // 群组ID
-    pub group_avater: String,   // 群头像
+    pub group_avatar: String,   // 群头像
 }
 
 // 获取群公告请求模型
@@ -283,6 +283,14 @@ pub struct GroupChatRequest {
     pub gid: String,// 群聊id
 }
 
+// 置顶状态请求模型
+#[derive(Deserialize, Serialize)]
+pub struct PinnedRequest {
+    pub id: String,
+    pub chat_type: String,
+    pub is_pinned: bool
+}
+
 // 私聊历史请求模型
 #[derive(Deserialize, Serialize)]
 pub struct PrivateHistoryRequest {
@@ -351,4 +359,18 @@ pub struct GroupOnlineRequest {
     pub gid: String,
 }
 
+// 撤回消息请求模型
+#[derive(Deserialize, Serialize)]
+pub struct RevokeMessageRequest {
+    pub message_id: String,       // 消息ID
+    pub chat_id: String,          // 会话ID
+    pub chat_type: String,        // 会话类型: "private" 或 "group"
+}
 
+// 显示已读人员请求模型
+#[derive(Deserialize, Serialize)]
+pub struct ShowReadersRequest {
+    pub message_id: String,       // 消息ID
+    pub chat_id: String,          // 会话ID
+    pub chat_type: String,        // 会话类型: "private" 或 "group"
+}
