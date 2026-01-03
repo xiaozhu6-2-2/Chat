@@ -344,7 +344,7 @@ pub async fn get_group_history(
             let read_count = read_count_map.get(&msg.msg_id).cloned().unwrap_or(0);
 
             GroupMessageItem {
-                message_type: "Group".to_string(),
+                message_type: "MesGroup".to_string(),
                 payload: GroupMessagePayload {
                     message_id: msg.msg_id.clone(),
                     chat_id: msg.gid.clone(),
