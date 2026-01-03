@@ -131,18 +131,18 @@ tracing = "0.1"             # 日志
 └──────────────────────────────┬──────────────────────────────┘
                                │
 ┌──────────────────────────────▼──────────────────────────────┐
-│                   处理器层 (Handlers)                        │
-│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐     │
-│  │  auth  │ │  user  │ │friends │ │ groups │ │ message│     │
-│  └────────┘ └────────┘ └────────┘ └────────┘ └────────┘     │
+│                   处理器层 (Handlers)                         │
+│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐  │
+│  │  auth  │ │  user  │ │friends │ │ groups │ │ message│  │
+│  └────────┘ └────────┘ └────────┘ └────────┘ └────────┘  │
 └──────────────────────────────┬──────────────────────────────┘
                                │
 ┌──────────────────────────────▼──────────────────────────────┐
 │                  业务逻辑层 (Business Logic)                  │
-│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐ │
-│  │  消息传输逻辑    │  │  群聊监听管理    │  │  文件处理      │  │
-│  │  trans_logic   │  │  group_manager │  │  file_utils    │ │
-│  └────────────────┘  └────────────────┘  └────────────────┘ │
+│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐│
+│  │  消息传输逻辑  │  │  群聊监听管理  │  │  文件处理      ││
+│  │  trans_logic   │  │  group_manager │  │  file_utils    ││
+│  └────────────────┘  └────────────────┘  └────────────────┘│
 └──────────────────────────────┬──────────────────────────────┘
                                │
 ┌──────────────────────────────▼──────────────────────────────┐
@@ -155,10 +155,10 @@ tracing = "0.1"             # 日志
                                │
 ┌──────────────────────────────▼──────────────────────────────┐
 │                      数据存储层                               │
-│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐ │
-│  │  MySQL 8.0     │  │  Redis 6.0     │  │  文件系统       │ │
-│  │  (持久化数据)   │  │  (在线状态)      │  │  (上传文件)    │  │
-│  └────────────────┘  └────────────────┘  └────────────────┘ │
+│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐│
+│  │  MySQL 8.0     │  │  Redis 6.0     │  │  文件系统      ││
+│  │  (持久化数据)  │  │  (在线状态)    │  │  (上传文件)    ││
+│  └────────────────┘  └────────────────┘  └────────────────┘│
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -495,7 +495,7 @@ pub async fn handle_private_chat(
 
 **位置:** [src/handlers/file.rs](src/handlers/file.rs), [src/repository/FileRepository.rs](src/repository/FileRepository.rs)
 
-#### 三表设计
+#### 四表设计
 
 ```sql
 -- 1. 物理文件存储表（去重）
@@ -519,6 +519,7 @@ CREATE TABLE file_metadata (
     display_name VARCHAR(256),
     file_type VARCHAR(50),
     upload_time DATETIME,
+    last_access_time DATETIME,
     download_count BIGINT DEFAULT 0,
     file_status ENUM('active', 'deleted', 'archived')
 );
@@ -531,9 +532,42 @@ CREATE TABLE file_permission (
     target_id VARCHAR(64),
     permission_level ENUM('view', 'download', 'share', 'manage'),
     granted_by VARCHAR(64),
+    granted_at DATETIME,
     expires_at DATETIME
 );
+
+-- 4. 文件与业务实体的关联表
+CREATE TABLE file_association (
+    association_id VARCHAR(64) PRIMARY KEY,
+    file_id VARCHAR(64),
+    association_type ENUM(
+        'private_message',   -- 私聊消息
+        'group_message',     -- 群聊消息
+        'user_avatar',       -- 用户头像
+        'group_avatar',      -- 群头像
+        'post_attachment'    -- 帖子附件
+    ),
+    associated_id VARCHAR(64),           -- 关联对象ID（消息ID/用户ID/群组ID等）
+    creator_uid VARCHAR(64),             -- 创建此关联的用户ID
+    created_at DATETIME
+);
 ```
+
+**四表职责分工：**
+
+| 表名 | 职责 | 关键字段 |
+|------|------|----------|
+| `file_storage` | 物理文件存储，基于SHA-256去重 | `file_hash`, `reference_count` |
+| `file_metadata` | 逻辑文件元数据，支持软删除 | `file_id`, `owner_uid`, `file_status` |
+| `file_permission` | ACL权限控制，支持细粒度授权 | `access_type`, `permission_level` |
+| `file_association` | 文件与业务实体的关联关系 | `association_type`, `associated_id` |
+
+**关联类型：**
+- `private_message` - 私聊消息中的文件
+- `group_message` - 群聊消息中的文件
+- `user_avatar` - 用户头像
+- `group_avatar` - 群头像
+- `post_attachment` - 帖子附件（预留）
 
 #### 文件上传流程
 
@@ -595,6 +629,16 @@ pub async fn upload_file(
             &current_user.uid,
             None
         ).await?;
+
+        // 7. 如果文件是作为消息附件上传，创建文件关联
+        if let Some(association) = &payload.association {
+            state.db_pool.create_file_association(
+                &file_id,
+                association.association_type,
+                &association.associated_id,
+                &current_user.uid
+            ).await?;
+        }
     }
 
     Ok(Json(UploadResponse { file_id, ... }))
