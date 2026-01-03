@@ -379,11 +379,13 @@ impl GroupMessageRepository for MySqlPool {
                 AND gmr.uid = ?
             WHERE gm.gid = ?
                 AND gm.send_time <= ?
-                AND gmr.msg_id IS NULL",
+                AND gmr.msg_id IS NULL
+                AND gm.sender_uid != ?",
             uid,
             uid,
             gid,
-            timestamp
+            timestamp,
+            uid
         ).execute(&mut *tx).await?;
 
         tx.commit().await?;
