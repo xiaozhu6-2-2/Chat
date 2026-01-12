@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use sqlx::MySqlPool;
 use async_trait::async_trait;
 
-use crate::models::errors::AppResult;
+use crate::models::errors::{AppResult, AppError};
 use crate::models::repository::GroupMessageRepository;
 use crate::models::entities::{GroupMessage, GroupMsgType, EnumConvertible};
 
@@ -312,12 +312,9 @@ impl GroupMessageRepository for MySqlPool {
 
         match member_info {
             Some(member) => {
-                // 获取入群时间，如果没有则使用群组创建时间
-                let group_info = self.find_group_by_gid(gid).await?;
+                // 获取入群时间，如果没有入群时间则返回错误
                 let join_time = member.join_time
-                    .or(group_info.and_then(|g| g.create_time))
-                    .map(|dt| dt.timestamp())
-                    .unwrap_or(0);
+                    .ok_or_else(|| AppError::BadRequest(format!("用户 {} 在群组 {} 中缺少入群时间", uid, gid)))?;
 
                 let count = sqlx::query!(
                     "SELECT COUNT(*) as count
@@ -329,7 +326,7 @@ impl GroupMessageRepository for MySqlPool {
                     WHERE gm.gid = ?
                         AND gmr.msg_id IS NULL
                         AND gm.sender_uid != ?
-                        AND gm.send_time >= ?",
+                        AND (gm.send_time IS NULL OR gm.send_time >= ?)",
                     uid,
                     gid,
                     uid,
@@ -382,11 +379,13 @@ impl GroupMessageRepository for MySqlPool {
                 AND gmr.uid = ?
             WHERE gm.gid = ?
                 AND gm.send_time <= ?
-                AND gmr.msg_id IS NULL",
+                AND gmr.msg_id IS NULL
+                AND gm.sender_uid != ?",
             uid,
             uid,
             gid,
-            timestamp
+            timestamp,
+            uid
         ).execute(&mut *tx).await?;
 
         tx.commit().await?;

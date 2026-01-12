@@ -202,8 +202,8 @@ fn generate_jwt(account: &str) -> AppResult<String> {
         .map_err(|e| AppError::TokenGenerationFailure(e.to_string()))?
         .as_secs() as usize;
     
-    // 计算过期时间：当前时间 + 1小时
-    let exp = now + 3600; 
+    // 计算过期时间：当前时间 + 24小时
+    let exp = now + 86400; 
     
     // 创建信息声明
     let claims = Claims {
